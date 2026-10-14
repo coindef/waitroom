@@ -8,16 +8,21 @@ Two Claude Code plugins for the dead time while a coding agent works.
 /plugin install wait-review --marketplace coindef/Plugin
 ```
 
-Answer `y` to add the marketplace, then press Enter to accept the user scope.
-That is the whole install — the plugin is active in that session straight away,
-and in every session after it. Nothing to configure, no key, no service, and
-nothing written to your repository.
+Answer `y` to add the marketplace, then Enter to accept the user scope. That is
+the whole install — the plugin is active in that session straight away, and in
+every session after it. Nothing to configure, no key, no service, and nothing
+written to your repository.
 
-The second mod is the same line again:
+**Once the marketplace is added it is called `wait-mods`**, so the second mod,
+and anything you install later, goes by that name rather than by the repository:
 
 ```
-/plugin install bet-on-your-agent --marketplace coindef/Plugin
+/plugin install bet-on-your-agent@wait-mods
 ```
+
+Using `--marketplace coindef/Plugin` a second time answers
+`Plugin "..." not found in any marketplace`, because that flag takes the name a
+marketplace was added under, and the add step has already happened.
 
 Start with `wait-review` if you only want one.
 
