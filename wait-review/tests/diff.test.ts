@@ -6,6 +6,7 @@ import {
   globToRegExp,
   isIgnored,
   mergeHunks,
+  reviewable,
   nextHunk,
   parseDiff,
   parseIgnore,
@@ -13,7 +14,6 @@ import {
   sidePath,
   sortHunks,
   tally,
-  toRepoPath,
   trimHunk,
 } from '../hooks/diff'
 
@@ -148,7 +148,7 @@ test('a trimmed hunk still parses as the one hunk it is', async () => {
 test('a rescan keeps what the person already decided', async () => {
   const reviewed = hunk({ id: 'a@1', path: 'a.ts', status: 'ok' })
   const fresh = hunk({ id: 'b@1', path: 'a.ts' })
-  const merged = mergeHunks([reviewed], [hunk({ id: 'a@1', path: 'a.ts' }), fresh], ['a.ts'])
+  const merged = mergeHunks([reviewed], [hunk({ id: 'a@1', path: 'a.ts' }), fresh])
 
   expect(merged).toHaveLength(2)
   expect(merged.find(one => one.id === 'a@1')?.status).toBe('ok')
@@ -159,11 +159,11 @@ test('a rescan drops hunks the agent has since reverted', async () => {
   const stale = hunk({ id: 'a@1', path: 'a.ts', status: 'ok' })
   const other = hunk({ id: 'z@1', path: 'untouched.ts', status: 'flagged' })
 
-  const merged = mergeHunks([stale, other], [], ['a.ts'])
+  const merged = mergeHunks([stale, other], [])
 
-  // a.ts was asked about and answered with nothing, so its card goes; a file
-  // the scan never asked about keeps its cards.
-  expect(merged.map(one => one.id)).toEqual(['z@1'])
+  // The scan reads the whole repository, so finding nothing left means there
+  // is nothing left to review.
+  expect(merged).toEqual([])
 })
 
 test('the queue offers what is pending before what was put off', async () => {
@@ -196,12 +196,12 @@ test('the queue reads a file top to bottom, one file at a time', async () => {
 
 test('a merge leaves the queue in reading order however the scans arrived', async () => {
   const merged = mergeHunks(
-    [hunk({ id: 'z', path: 'z.ts', start: 1, status: 'ok' })],
+    [hunk({ id: 'a2', path: 'a.ts', start: 70, status: 'ok' })],
     [hunk({ id: 'a2', path: 'a.ts', start: 70 }), hunk({ id: 'a1', path: 'a.ts', start: 2 })],
-    ['a.ts'],
   )
 
-  expect(merged.map(one => one.id)).toEqual(['a1', 'a2', 'z'])
+  expect(merged.map(one => one.id)).toEqual(['a1', 'a2'])
+  expect(merged[1]?.status).toBe('ok')
 })
 
 test('a capped queue drops the oldest hunks, not every late-alphabet file', async () => {
@@ -209,7 +209,7 @@ test('a capped queue drops the oldest hunks, not every late-alphabet file', asyn
     hunk({ id: 'a', path: 'a.ts', start: 1 }),
     hunk({ id: 'z', path: 'z.ts', start: 1 }),
   ]
-  const merged = mergeHunks([], found, ['a.ts', 'z.ts'], 1)
+  const merged = mergeHunks([], found, 1)
 
   // One survives, and it is the newest found rather than the alphabetical first.
   expect(merged).toHaveLength(1)
@@ -324,33 +324,11 @@ test('a hunk for a spaced path is keyed on the name without the tab', async () =
   expect(found[0]?.id.startsWith('dir a/f.txt@')).toBe(true)
 })
 
-test('an absolute path from a tool becomes the path git prints', async () => {
-  // Edit and Write carry absolute paths; git prints relative ones. A rescan can
-  // only recognise or retire a hunk when the two spellings agree.
-  expect(toRepoPath('/home/user/Plugin', '/home/user/Plugin/hooks/diff.ts')).toBe('hooks/diff.ts')
-  expect(toRepoPath('/home/user/Plugin/', '/home/user/Plugin/a.ts')).toBe('a.ts')
-  expect(toRepoPath('/home/user/Plugin', 'hooks/diff.ts')).toBe('hooks/diff.ts')
-  expect(toRepoPath('C:\\work\\repo', 'C:\\work\\repo\\src\\a.ts')).toBe('src/a.ts')
-})
-
-test('a path outside the repository is left absolute, so the scan can skip it', async () => {
-  expect(toRepoPath('/home/user/Plugin', '/etc/passwd')).toBe('/etc/passwd')
-})
-
-test('a rescan retires a reverted hunk once both sides speak git paths', async () => {
-  // The regression this guards: with an absolute path on the card and a
-  // relative one in the scan, nothing ever matched and every hunk was kept.
-  const card = hunk({ id: 'a@1', path: 'hooks/diff.ts', status: 'ok' })
-  const asked = [toRepoPath('/home/user/Plugin', '/home/user/Plugin/hooks/diff.ts')]
-
-  expect(mergeHunks([card], [], asked)).toEqual([])
-})
-
 test('a rescan that finds the same hunk does not hold it twice', async () => {
   const card = hunk({ id: 'a@1', path: 'hooks/diff.ts', status: 'ok' })
   const again = hunk({ id: 'a@1', path: 'hooks/diff.ts' })
 
-  const merged = mergeHunks([card], [again], ['hooks/diff.ts'])
+  const merged = mergeHunks([card], [again])
 
   expect(merged).toHaveLength(1)
   expect(merged[0]?.status).toBe('ok')
@@ -383,4 +361,22 @@ test('a hunk with no note reads exactly as it did before notes existed', async (
   const plain = reviewNote([hunk({ id: '1', path: 'a.ts' })])
 
   expect(plain).not.toContain('they said')
+})
+
+test('work already uncommitted when the session began is not the agent\'s review', async () => {
+  const mine = hunk({ id: 'mine@1', path: 'src/wip.ts' })
+  const theirs = hunk({ id: 'theirs@1', path: 'src/auth.ts' })
+
+  const offered = reviewable([mine, theirs], [], ['mine@1'])
+
+  expect(offered.map(one => one.id)).toEqual(['theirs@1'])
+})
+
+test('an ignored file is left out however it came to be written', async () => {
+  const lock = hunk({ id: 'l@1', path: 'package-lock.json' })
+  const code = hunk({ id: 'c@1', path: 'src/a.ts' })
+
+  const offered = reviewable([lock, code], parseIgnore(DEFAULT_IGNORE), [])
+
+  expect(offered.map(one => one.id)).toEqual(['c@1'])
 })

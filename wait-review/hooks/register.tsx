@@ -1,26 +1,24 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Decision, Hunk, HunkStatus, Touch } from '../types'
+import type { Decision, Hunk, HunkStatus } from '../types'
 import {
   DEFAULT_IGNORE,
-  isIgnored,
   mergeHunks,
   nextHunk,
   parseDiff,
   parseIgnore,
+  reviewable,
   reviewNote,
   tally,
-  toRepoPath,
   trimHunk,
 } from './diff'
 
 const PANE = 'wait-review'
 
 const hunks = atom({ plugin: 'wait-review', key: 'hunks' } as const, [] as Hunk[])
-const touches = atom({ plugin: 'wait-review', key: 'touches' } as const, [] as Touch[])
-const turn = atom({ plugin: 'wait-review', key: 'turn' } as const, 0)
 const busy = atom({ plugin: 'wait-review', key: 'busy' } as const, false)
+const preexisting = atom({ plugin: 'wait-review', key: 'preexisting' } as const, [] as string[])
 const base = atom({ plugin: 'wait-review', key: 'base' } as const, null as string | null)
 const lastDecision = atom(
   { plugin: 'wait-review', key: 'lastDecision' } as const,
@@ -30,11 +28,12 @@ const noting = atom({ plugin: 'wait-review', key: 'noting' } as const, null as s
 
 /** Rows the pane spends on its own counts, path, buttons and footer. */
 const CHROME_ROWS = 9
-/** Paths per `git diff`, so a long queue cannot overrun the argument list. */
-const PATHS_PER_CALL = 60
+/** Untracked files diffed one by one per scan, so a stray folder cannot stall it. */
+const UNTRACKED_LIMIT = 40
+/** Hunk ids remembered as pre-session, enough for any working tree worth reading. */
+const SNAPSHOT_LIMIT = 2000
 
 type Config = {
-  settleTurns: number
   contextLines: number
   autoOpen: boolean
   attachFlags: boolean
@@ -75,21 +74,6 @@ const showStatus = async ($: EngineInterface) => {
 const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string) =>
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
-/**
- * Anchors the review to the commit the session started on, once.
- *
- * A commit made later must not take its own changes out of the queue, because
- * a commit is not a review. Idempotent because `session.start` fires again on
- * every hot reload while `$.state` survives it: re-anchoring there would move
- * the base onto a commit made since, which is the very thing this prevents.
- */
-const anchorBase = async ($: EngineInterface) => {
-  if ((await read($, base)) !== null) return
-  const found = await runGit($, ['rev-parse', 'HEAD'])
-  const sha = found?.exitCode === 0 ? found.stdout.trim() : ''
-  if (sha !== '') await update($, base, () => sha)
-}
-
 /** The repository root, or undefined where the session is not in a repository. */
 const repoRoot = async ($: EngineInterface): Promise<string | undefined> => {
   const found = await runGit($, ['rev-parse', '--show-toplevel'])
@@ -99,75 +83,83 @@ const repoRoot = async ($: EngineInterface): Promise<string | undefined> => {
 }
 
 /**
- * Re-reads the diff of every settled path and merges it into the queue.
+ * Every hunk in the repository right now, against the session's anchor.
  *
- * Every settled path is rescanned, not only the newly settled ones, so a hunk
- * the agent has since rewritten comes back for review under its new id and one
- * it reverted leaves the queue.
+ * The whole diff rather than a list of files the agent was seen to touch: an
+ * agent may write a file through any tool, and a shell heredoc leaves no Edit
+ * call to watch. git is the only witness that cannot be fooled.
  */
-const scan = async ($: EngineInterface, config: Config) => {
+const scanRepo = async ($: EngineInterface, config: Config): Promise<Hunk[]> => {
   const root = await repoRoot($)
-  if (root === undefined) return
+  if (root === undefined) return []
 
-  const now = await read($, turn)
   const anchor = await read($, base)
-  const touched = await read($, touches)
-  // git prints paths relative to the root and the tools carry absolute ones,
-  // so everything below this line speaks git's spelling.
-  const ready = [
-    ...new Set(
-      touched
-        .filter(one => now - one.turn >= config.settleTurns)
-        .map(one => toRepoPath(root, one.path))
-        .filter(path => !path.startsWith('/') && !path.startsWith('../')),
-    ),
-  ]
-  if (ready.length === 0) return
-
-  const found: Hunk[] = []
   const unified = `--unified=${config.contextLines}`
+  const found: Hunk[] = []
 
-  for (let at = 0; at < ready.length; at += PATHS_PER_CALL) {
-    const batch = ready.slice(at, at + PATHS_PER_CALL)
-
-    // Against the session's own starting commit, so work the agent committed
-    // mid-session is still waiting to be read.
-    let diff = anchor === null
+  // Against the session's own starting commit, so work the agent committed
+  // mid-session is still waiting to be read.
+  let diff =
+    anchor === null
       ? undefined
-      : await runGit($, ['diff', anchor, '--no-color', '--no-prefix', unified, '--', ...batch], root)
-    // The anchor can stop resolving under a rebase or a reset; HEAD still does.
-    if (!diff || diff.exitCode !== 0) {
-      diff = await runGit($, ['diff', 'HEAD', '--no-color', '--no-prefix', unified, '--', ...batch], root)
-    }
-    // A repository with no commits yet has neither.
-    if (!diff || diff.exitCode !== 0) {
-      diff = await runGit($, ['diff', '--no-color', '--no-prefix', unified, '--', ...batch], root)
-    }
-    if (diff?.exitCode === 0) found.push(...parseDiff(diff.stdout))
+      : await runGit($, ['diff', anchor, '--no-color', '--no-prefix', unified], root)
+  // The anchor can stop resolving under a rebase or a reset; HEAD still does.
+  if (!diff || diff.exitCode !== 0) {
+    diff = await runGit($, ['diff', 'HEAD', '--no-color', '--no-prefix', unified], root)
+  }
+  // A repository with no commits yet has neither.
+  if (!diff || diff.exitCode !== 0) {
+    diff = await runGit($, ['diff', '--no-color', '--no-prefix', unified], root)
+  }
+  if (diff?.exitCode === 0) found.push(...parseDiff(diff.stdout))
 
-    // A file the agent created is untracked: no blob on either side, so plain
-    // `git diff` says nothing about it at all.
-    const others = await runGit($, ['ls-files', '--others', '--exclude-standard', '--', ...batch], root)
-    const untracked = (others?.stdout ?? '').split('\n').map(line => line.trim()).filter(Boolean)
-    for (const path of untracked) {
-      // --no-index exits 1 when the two sides differ, which is the point here.
-      const one = await runGit($, [
-        'diff', '--no-color', '--no-prefix', unified, '--no-index', '--', '/dev/null', path,
-      ], root)
-      if (one && one.exitCode <= 1) found.push(...parseDiff(one.stdout))
-    }
+  // A file the agent created is untracked: no blob on either side, so plain
+  // `git diff` says nothing about it at all.
+  const others = await runGit($, ['ls-files', '--others', '--exclude-standard'], root)
+  const untracked = (others?.stdout ?? '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .slice(0, UNTRACKED_LIMIT)
+  for (const path of untracked) {
+    // --no-index exits 1 when the two sides differ, which is the point here.
+    const one = await runGit(
+      $,
+      ['diff', '--no-color', '--no-prefix', unified, '--no-index', '--', '/dev/null', path],
+      root,
+    )
+    if (one && one.exitCode <= 1) found.push(...parseDiff(one.stdout))
   }
 
-  await update($, hunks, old => mergeHunks(old, found, ready))
+  return found
 }
 
-const noteTouch = async ($: EngineInterface, path: string | undefined, ignore: readonly string[]) => {
-  if (path === undefined || path === '') return
-  if (isIgnored(path, ignore)) return
-  const now = await read($, turn)
-  await update($, touches, old =>
-    [...old.filter(one => one.path !== path), { path, turn: now }].slice(-300),
-  )
+/**
+ * Takes the session's anchor and its snapshot of what was already dirty, once.
+ *
+ * Both together and both guarded, because `session.start` fires again on every
+ * hot reload while `$.state` survives it: re-anchoring would move the base onto
+ * a commit made since, and re-snapshotting would file the agent's own work as
+ * pre-existing and empty the queue.
+ */
+const beginSession = async ($: EngineInterface, config: Config) => {
+  if ((await read($, base)) !== null) return
+  const found = await runGit($, ['rev-parse', 'HEAD'])
+  const sha = found?.exitCode === 0 ? found.stdout.trim() : ''
+  if (sha === '') return
+  await update($, base, () => sha)
+
+  // What was uncommitted before the agent touched anything is the person's own
+  // work in progress, not a review the agent owes them.
+  const already = await scanRepo($, config)
+  await update($, preexisting, () => already.map(one => one.id).slice(0, SNAPSHOT_LIMIT))
+}
+
+/** Re-reads the repository and merges what it finds into the queue. */
+const scan = async ($: EngineInterface, config: Config) => {
+  const before = await read($, preexisting)
+  const found = reviewable(await scanRepo($, config), config.ignore, before)
+  await update($, hunks, old => mergeHunks(old, found))
 }
 
 const mark = async ($: EngineInterface, id: string, status: HunkStatus) => {
@@ -237,7 +229,6 @@ const dropFile = async ($: EngineInterface, path: string) => {
 
 export const register: Register = (on, options) => {
   const config: Config = {
-    settleTurns: whole(options.settleTurns, 0),
     contextLines: whole(options.contextLines, 3),
     autoOpen: options.autoOpen !== false,
     attachFlags: options.attachFlags !== false,
@@ -249,9 +240,9 @@ export const register: Register = (on, options) => {
   }
 
   on('session.start', async ($, e, next) => {
-    // Anchored before anything else here: the review is wrong without it, and
-    // registering a command or opening a pane is not worth losing it to.
-    await anchorBase($)
+    // Taken before anything else here: the review is wrong without the anchor
+    // and the snapshot, and neither is worth losing to a command registration.
+    await beginSession($, config)
     await $.command.register({
       name: 'wait-review',
       description: 'Open the wait-review pane and re-read the diff Claude has written so far',
@@ -275,31 +266,8 @@ export const register: Register = (on, options) => {
     }
   })
 
-  // One hook per tool so `e` narrows to that tool's own input.
-  on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
-    const ran = await next(e)
-    if (!ran.deny && !ran.isError) await noteTouch($, e.file_path, config.ignore)
-
-    return ran
-  }).catch(($, e, next) => next(e))
-
-  on('tool.call', { tool: 'Write' }, async ($, e, next) => {
-    const ran = await next(e)
-    if (!ran.deny && !ran.isError) await noteTouch($, e.file_path, config.ignore)
-
-    return ran
-  }).catch(($, e, next) => next(e))
-
-  on('tool.call', { tool: 'NotebookEdit' }, async ($, e, next) => {
-    const ran = await next(e)
-    if (!ran.deny && !ran.isError) await noteTouch($, e.notebook_path, config.ignore)
-
-    return ran
-  }).catch(($, e, next) => next(e))
-
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
-    await update($, turn, now => now + 1)
     await update($, busy, () => true)
     await showStatus($)
 

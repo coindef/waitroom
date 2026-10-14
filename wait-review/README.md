@@ -27,10 +27,10 @@ the diff has been reviewed at no dedicated review cost.
 
 ## What it does
 
-- Watches `Edit`, `Write` and `NotebookEdit` and remembers which files Claude
-  touched, and when.
-- At the end of each turn, re-reads `git diff` for those files and queues each
-  hunk as its own review card.
+- At the end of each turn, reads the repository's whole diff against the commit
+  the session started on, and queues each hunk as its own review card.
+- Leaves out whatever was already uncommitted when the session began, so your
+  own work in progress is never offered as the agent's review.
 - Shows one card at a time in a pane, in reading order — each file together,
   top of the file first. Press `o` (looks right), `f` (flag), `l` (later),
   `x` (skip the rest of this file), `u` (undo the last call).
@@ -57,17 +57,15 @@ Set these in the config menu, or under `pluginConfigs` in settings.
 
 | Option | Default | What it means |
 | --- | --- | --- |
-| `settleTurns` | `0` | Turns a file must go untouched before its hunks are offered. `0` offers them at the end of the turn that wrote them. |
 | `ignore` | built-in list | Comma-separated globs whose hunks are never queued. Empty uses the built-in list. |
 | `contextLines` | `3` | Lines of context around each hunk (`git --unified`). |
 | `autoOpen` | `true` | Open the pane when the session starts. |
 | `attachFlags` | `true` | Attach flagged hunks to your next message. |
 
-`settleTurns: 0` is a safe default because a hunk's id is a hash of its own
-text. When Claude rewrites a region you already marked reviewed, the id changes
-and the hunk returns to the queue as a new card, so surfacing eagerly costs
-nothing. Raise it to `1` or `2` if you would rather read each region once the
-agent has clearly moved on.
+A hunk's id is a hash of its own text. When Claude rewrites a region you already
+marked reviewed the id changes, so the hunk returns to the queue as a new card
+rather than staying silently approved — and a hunk it reverted, or you
+committed, leaves the queue on the next scan.
 
 ## Files it leaves alone
 
@@ -84,6 +82,19 @@ __snapshots__/ *.snap *.min.js *.min.css *.map
 Set `ignore` to your own comma-separated globs to replace that list. `*` stays
 inside one path segment, `**` crosses them, and a leading `**/` matches a
 relative or an absolute spelling of the same file.
+
+## Why it reads git rather than watching edits
+
+It used to build the queue from `Edit`, `Write` and `NotebookEdit` calls. That
+was wrong, and only using it showed how wrong: an agent that writes through a
+shell heredoc, `sed` or a script makes no such call, so nothing was ever queued
+and the pane sat empty through a session that rewrote eight files. Some agents
+are told to prefer the shell for edits, which made the mod useless for them.
+
+git is the only witness that cannot be fooled, so the scan reads the whole
+repository diff and does not care how a file came to be written. The cost is
+that your own uncommitted work would be in that diff too, which is what the
+session-start snapshot is for.
 
 ## Where the pane goes
 
@@ -137,7 +148,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 43 tests
+claude plugin test .         # 44 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,
@@ -147,9 +158,8 @@ the hooks module; `types/index.d.ts` is the state contract that
 
 `tests/flow.test.ts` drives the whole loop through the engine with git answered
 by the test — `$.process.run` is an event like any other — so the scan is
-exercised rather than mocked away: Claude writes a file, the turn lands, the
-hunk queues, it is flagged with a reason, and the reason turns up in the context
-attached to the next prompt.
+exercised rather than mocked away. Its first test makes no tool call at all,
+which is the regression for the bug above.
 
 Run a working copy without installing it:
 

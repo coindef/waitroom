@@ -17,9 +17,6 @@ export const hash = (text: string): string => {
 
 const HUNK_HEAD = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/
 
-/** Absolute by POSIX root or by Windows drive. */
-const ABSOLUTE = /^([A-Za-z]:[\\/]|[\\/])/
-
 /**
  * The file name off a `---` or `+++` line.
  *
@@ -34,21 +31,6 @@ export const sidePath = (rest: string): string => {
   return name.length > 1 && name.startsWith('"') && name.endsWith('"')
     ? name.slice(1, -1)
     : name
-}
-
-/**
- * The path as git names it: relative to the repository root, `/` separated.
- *
- * `Edit` and `Write` carry absolute paths while git prints relative ones, so
- * without this the two never compare equal and a rescan can neither recognise
- * a hunk it already holds nor drop one the agent reverted.
- */
-export const toRepoPath = (root: string, path: string): string => {
-  const slashed = path.replace(/\\/g, '/')
-  if (!ABSOLUTE.test(path)) return slashed
-  const base = root.replace(/\\/g, '/').replace(/\/$/, '') + '/'
-
-  return slashed.startsWith(base) ? slashed.slice(base.length) : slashed
 }
 
 /** A body line git writes inside a hunk: context, added, removed, or the no-newline marker. */
@@ -176,23 +158,30 @@ export const sortHunks = (list: readonly Hunk[]): Hunk[] =>
 /**
  * Merges a fresh scan into the queue, keeping what the person already decided.
  *
- * `scanned` is every path the scan asked git about, not every path it found, so
- * a file whose changes were all reverted has its stale hunks dropped rather
- * than kept forever.
+ * The scan reads the whole repository diff, so `found` is the whole truth: a
+ * hunk missing from it was reverted or committed away and leaves the queue,
+ * and one the agent rewrote returns under a new id, undecided.
  */
-export const mergeHunks = (
-  old: readonly Hunk[],
-  found: readonly Hunk[],
-  scanned: readonly string[],
-  limit = 400,
-): Hunk[] => {
+export const mergeHunks = (old: readonly Hunk[], found: readonly Hunk[], limit = 400): Hunk[] => {
   const decided = new Map(old.map(hunk => [hunk.id, hunk]))
-  const asked = new Set(scanned)
-  const kept = old.filter(hunk => !asked.has(hunk.path))
-  const merged = found.map(hunk => decided.get(hunk.id) ?? hunk)
-  // Cap newest-first so a huge diff drops old hunks, not every file late in
-  // the alphabet; order what survives for reading.
-  return sortHunks([...kept, ...merged].slice(-limit))
+
+  // Cap newest-first so a huge diff drops the tail rather than every file late
+  // in the alphabet; order what survives for reading.
+  return sortHunks(found.map(hunk => decided.get(hunk.id) ?? hunk).slice(-limit))
+}
+
+/**
+ * The hunks worth offering: not in an ignored file, and not already there
+ * before the session began.
+ */
+export const reviewable = (
+  found: readonly Hunk[],
+  ignore: readonly string[],
+  preexisting: readonly string[],
+): Hunk[] => {
+  const before = new Set(preexisting)
+
+  return found.filter(hunk => !before.has(hunk.id) && !isIgnored(hunk.path, ignore))
 }
 
 /** The hunk to show: the first one not yet decided, else the first put off. */

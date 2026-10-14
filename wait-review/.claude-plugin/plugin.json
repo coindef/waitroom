@@ -7,12 +7,6 @@
   },
   "types": "./types/index.d.ts",
   "userConfig": {
-    "settleTurns": {
-      "type": "number",
-      "default": 0,
-      "description": "Turns a file must go untouched before its hunks are offered for review. 0 offers them at the end of the turn that wrote them.",
-      "title": "Settle turns"
-    },
     "contextLines": {
       "type": "number",
       "default": 3,

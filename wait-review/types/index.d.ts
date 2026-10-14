@@ -44,9 +44,6 @@ export type Hunk = {
   note?: string
 }
 
-/** A file the agent wrote, and the turn it last wrote it in. */
-export type Touch = { path: string; turn: number }
-
 /** The last call the person made, kept so one press can take it back. */
 export type Decision = { id: string; from: HunkStatus }
 
@@ -54,9 +51,16 @@ declare module 'claude-code' {
   interface PluginState {
     'wait-review': {
       hunks: Hunk[]
-      touches: Touch[]
-      turn: number
       busy: boolean
+      /**
+       * Hunk ids that already existed when the session started.
+       *
+       * The queue is the whole repository diff, because an agent may write a
+       * file through any tool — a shell heredoc leaves no Edit call to watch.
+       * These are what was already uncommitted before the agent touched
+       * anything, so your own work in progress is never offered as its review.
+       */
+      preexisting: string[]
       /**
        * The commit the diff is taken against: HEAD as it stood when the session
        * started, not HEAD as it stands now.
