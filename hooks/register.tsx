@@ -180,6 +180,10 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
+    // A subagent's edits are recorded by the tool hooks whatever loop they ran
+    // in, and the main loop's own end scans them: scanning per subagent turn
+    // would only spend git processes.
+    if (e.agentId !== undefined) return done
     await update($, busy, () => false)
     await scan($, config)
     await showStatus($)
