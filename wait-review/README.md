@@ -121,8 +121,11 @@ into your message is the fallback.
 - **No git, no review.** The queue is built from `git diff HEAD`, so outside a
   repository the pane stays empty. Untracked files are picked up separately,
   via `git diff --no-index`.
-- **Uncommitted work only.** `HEAD` is the base, which is the right one while
-  the agent's work is uncommitted. Once you commit, those hunks leave the queue.
+- **The base is where the session started**, not current `HEAD`. An agent
+  commits on your behalf, often before you have read a line, and against
+  current `HEAD` that silently empties the queue of everything it just
+  committed. A commit is not a review, so the anchor is taken once at session
+  start; under a rebase or reset that loses it, the scan falls back to `HEAD`.
 - **It does not block anything.** Every hook that sits at a gating site passes
   the call through if the plugin itself fails, so a bug here can never swallow
   your prompt or an edit.
@@ -134,7 +137,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 41 tests
+claude plugin test .         # 42 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

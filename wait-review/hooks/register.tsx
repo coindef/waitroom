@@ -21,6 +21,7 @@ const hunks = atom({ plugin: 'wait-review', key: 'hunks' } as const, [] as Hunk[
 const touches = atom({ plugin: 'wait-review', key: 'touches' } as const, [] as Touch[])
 const turn = atom({ plugin: 'wait-review', key: 'turn' } as const, 0)
 const busy = atom({ plugin: 'wait-review', key: 'busy' } as const, false)
+const base = atom({ plugin: 'wait-review', key: 'base' } as const, null as string | null)
 const lastDecision = atom(
   { plugin: 'wait-review', key: 'lastDecision' } as const,
   null as Decision | null,
@@ -74,6 +75,18 @@ const showStatus = async ($: EngineInterface) => {
 const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string) =>
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
+/**
+ * Anchors the review to the commit the session started on.
+ *
+ * Called once, at session start: a commit made later must not take its own
+ * changes out of the queue, because a commit is not a review.
+ */
+const anchorBase = async ($: EngineInterface) => {
+  const found = await runGit($, ['rev-parse', 'HEAD'])
+  const sha = found?.exitCode === 0 ? found.stdout.trim() : ''
+  await update($, base, () => (sha === '' ? null : sha))
+}
+
 /** The repository root, or undefined where the session is not in a repository. */
 const repoRoot = async ($: EngineInterface): Promise<string | undefined> => {
   const found = await runGit($, ['rev-parse', '--show-toplevel'])
@@ -94,6 +107,7 @@ const scan = async ($: EngineInterface, config: Config) => {
   if (root === undefined) return
 
   const now = await read($, turn)
+  const anchor = await read($, base)
   const touched = await read($, touches)
   // git prints paths relative to the root and the tools carry absolute ones,
   // so everything below this line speaks git's spelling.
@@ -113,10 +127,16 @@ const scan = async ($: EngineInterface, config: Config) => {
   for (let at = 0; at < ready.length; at += PATHS_PER_CALL) {
     const batch = ready.slice(at, at + PATHS_PER_CALL)
 
-    // Working tree against the last commit: the agent's work is usually
-    // uncommitted, so HEAD is the base the person last saw.
-    let diff = await runGit($, ['diff', 'HEAD', '--no-color', '--no-prefix', unified, '--', ...batch], root)
-    // A repository with no commits yet has no HEAD to diff against.
+    // Against the session's own starting commit, so work the agent committed
+    // mid-session is still waiting to be read.
+    let diff = anchor === null
+      ? undefined
+      : await runGit($, ['diff', anchor, '--no-color', '--no-prefix', unified, '--', ...batch], root)
+    // The anchor can stop resolving under a rebase or a reset; HEAD still does.
+    if (!diff || diff.exitCode !== 0) {
+      diff = await runGit($, ['diff', 'HEAD', '--no-color', '--no-prefix', unified, '--', ...batch], root)
+    }
+    // A repository with no commits yet has neither.
     if (!diff || diff.exitCode !== 0) {
       diff = await runGit($, ['diff', '--no-color', '--no-prefix', unified, '--', ...batch], root)
     }
@@ -226,11 +246,14 @@ export const register: Register = (on, options) => {
   }
 
   on('session.start', async ($, e, next) => {
+    // Anchored before anything else here: the review is wrong without it, and
+    // registering a command or opening a pane is not worth losing it to.
+    await anchorBase($)
     await $.command.register({
       name: 'wait-review',
       description: 'Open the wait-review pane and re-read the diff Claude has written so far',
     })
-    if (config.autoOpen) void $.ui.open({ id: PANE, title: 'Wait review' })
+    if (config.autoOpen) void $.ui.open({ id: PANE, title: 'Wait review' }).catch(() => undefined)
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -239,7 +262,9 @@ export const register: Register = (on, options) => {
     await scan($, config)
     await showStatus($)
     const counts = tally(await read($, hunks))
-    const opened = await $.ui.open({ id: PANE, title: 'Wait review' })
+    const opened = await $.ui
+      .open({ id: PANE, title: 'Wait review' })
+      .catch(() => ({ isPlaced: false, reason: 'the engine would not place it' }) as const)
     const where = opened.isPlaced ? 'Review pane open.' : `Review pane waiting (${opened.reason}).`
 
     return {

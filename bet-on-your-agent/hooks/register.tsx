@@ -111,13 +111,13 @@ export const register: Register = (on, options) => {
       name: 'bet',
       description: 'How well you call your agent: Brier score and calibration',
     })
-    if (config.autoOpen) void $.ui.open({ id: PANE, title: 'Bet on your agent' })
+    if (config.autoOpen) void $.ui.open({ id: PANE, title: 'Bet on your agent' }).catch(() => undefined)
 
     return next(e)
   }).catch(($, e, next) => next(e))
 
   on('command.run', { command: 'bet' }, async $ => {
-    void $.ui.open({ id: PANE, title: 'Bet on your agent' })
+    void $.ui.open({ id: PANE, title: 'Bet on your agent' }).catch(() => undefined)
 
     return { text: asText(report(await loadTurns($))) }
   })

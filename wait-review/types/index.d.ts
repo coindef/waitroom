@@ -57,6 +57,15 @@ declare module 'claude-code' {
       touches: Touch[]
       turn: number
       busy: boolean
+      /**
+       * The commit the diff is taken against: HEAD as it stood when the session
+       * started, not HEAD as it stands now.
+       *
+       * An agent commits on your behalf, often before you have read a line, and
+       * against current HEAD that silently empties the queue of everything it
+       * just committed. Null where there was no commit to anchor to.
+       */
+      base: string | null
       lastDecision: Decision | null
       /**
        * The hunk a note is being typed for, or null.

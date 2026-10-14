@@ -36,6 +36,8 @@ const ran = (stdout: string) => ({
   },
 })
 
+const BASE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+
 /** Stands in for the engine, and for git. */
 const engineBottom = (on: On) => {
   mock.clock(on)
@@ -44,7 +46,8 @@ const engineBottom = (on: On) => {
   on('tool.call', { tool: 'Write' }, () => ({ result: {} as never }))
   on('process.run', ($, e) => {
     const argv = e.argv.join(' ')
-    if (argv.includes('rev-parse')) return ran(`${ROOT}\n`)
+    if (argv.includes('--show-toplevel')) return ran(`${ROOT}\n`)
+    if (argv.includes('rev-parse')) return ran(`${BASE}\n`)
     if (argv.includes('ls-files')) return ran('')
     if (argv.includes('diff')) return ran(DIFF)
 
@@ -213,6 +216,54 @@ test('a surface with no field offers no note, and still reviews', async ($, on) 
   expect(await ui.find({ key: 'note-open' })).toBeUndefined()
   // Reviewing still works; only the reason is unavailable.
   expect(await ui.find({ text: /1 flagged/ })).toBeDefined()
+
+  await ui.unmount()
+})
+
+test('a commit the agent makes mid-session does not empty the queue', async ($, on) => {
+  // git as it behaves once the agent has committed its own work: there is
+  // nothing against HEAD any more, but plenty against where the session began.
+  mock.clock(on)
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  on('command.register', ($$, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($$, e) => ({ text: e.answer }))
+  on('tool.call', { tool: 'Write' }, () => ({ result: {} as never }))
+  on('process.run', ($$, e) => {
+    const argv = e.argv.join(' ')
+    if (argv.includes('--show-toplevel')) return ran(`${ROOT}\n`)
+    if (argv.includes('rev-parse')) return ran(`${BASE}\n`)
+    if (argv.includes('ls-files')) return ran('')
+    if (argv.includes(`diff ${BASE}`)) return ran(DIFF)
+    // Against HEAD the committed work has vanished.
+    if (argv.includes('diff')) return ran('')
+
+    return ran('')
+  })
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'drop the retry', turnId: 'turn-5' })
+  await $.tool.call({ tool: 'Write', file_path: `${ROOT}/src/auth.ts`, content: 'x' })
+  await $.turn.complete({
+    turnId: 'turn-5',
+    answer: 'committed it',
+    durationMs: 30000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const ui = await $.ui.mount({
+    plugin: 'wait-review',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'wait-review',
+    props: PANE_PROPS,
+    viewport: { columns: 100, rows: 30 },
+  })
+
+  // A commit is not a review: the hunk is still waiting to be read.
+  expect(await ui.find({ text: /src\/auth\.ts/ })).toBeDefined()
+  expect(await ui.find({ text: /1 to read/ })).toBeDefined()
 
   await ui.unmount()
 })
