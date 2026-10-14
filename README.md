@@ -10,7 +10,8 @@ Two Claude Code plugins for the dead time while a coding agent works.
 
 Answer `y` to add the marketplace, then press Enter to accept the user scope.
 That is the whole install — the plugin is active in that session straight away,
-and in every session after it.
+and in every session after it. Nothing to configure, no key, no service, and
+nothing written to your repository.
 
 The second mod is the same line again:
 
@@ -18,8 +19,7 @@ The second mod is the same line again:
 /plugin install bet-on-your-agent --marketplace coindef/Plugin
 ```
 
-Start with `wait-review` if you only want one. Nothing is configured, nothing
-is written to your repository, and neither mod needs a key or a service.
+Start with `wait-review` if you only want one.
 
 ## The first minute
 
@@ -90,18 +90,25 @@ They compose rather than compete for room: **wait-review** takes the pane, and
 **bet-on-your-agent** takes the single row above the prompt. One asks what you
 make of what the agent wrote, the other what you expect from what it is writing.
 
-## If nothing happens at all
+## Two things you will see, neither of them a problem
 
-Plugins that hook the engine's own events are early access and behind a rollout
-switch. Where it is not yet on, a session reports it in the debug log
-(`claude --debug`) as
+**"4 userConfig options not yet set"**, printed by the installer. Informational:
+every option has a working default and the plugin runs on them. The debug log
+says so in as many words — `every option is its default`. Configure them if you
+want to change something, not to get started.
+
+**A short non-interactive run does not load the hooks.** Plugins that hook the
+engine's own events are early access, and the switch is fetched per process:
+sub-second, but a `claude -p` run can finish before it lands. In the debug log
+that reads
 
 ```
-<mod> not loaded: hooks modules are turned off for installed plugins in this process
+hooks module wait-review@wait-mods not loaded: ... flag fetch has not answered the rollout switch
+hooks module wait-review@wait-mods loaded (worker, environment 4, tier user); events: session.start,...
 ```
 
-That is the switch, not the mod: nothing in either plugin can turn it on, and
-both load by themselves once it reads on.
+— refused at first, then loaded under half a second later. Interactive sessions,
+which is where a pane and a prompt row mean anything, are unaffected.
 
 ## Developing
 
