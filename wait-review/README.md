@@ -169,7 +169,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 47 tests
+claude plugin test .         # 48 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

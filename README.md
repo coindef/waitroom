@@ -109,7 +109,7 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 47 tests
+claude plugin test     ./wait-review          # 48 tests
 
 claude plugin validate ./bet-on-your-agent
 claude plugin test     ./bet-on-your-agent    # 34 tests

@@ -327,3 +327,34 @@ test('a surface with no field offers no note, and still reviews', async ($, on) 
   expect(await ui.find({ text: /1 flagged/ })).toBeDefined()
   await ui.unmount()
 })
+
+test('the full review card is drawable on every surface', async ($, on) => {
+  // `drawn` rejects when a surface could not draw what the chain returned, so
+  // this is the check that the card's layout validates against each surface's
+  // own element table — not just the empty state.
+  const repo: Repo = { vsBase: '', vsHead: '', revParses: 0 }
+  engineBottom(on, repo)
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  repo.vsBase = AUTH_DIFF
+  repo.vsHead = AUTH_DIFF
+  await $.turn.start({ text: 'drop the retry', turnId: 'turn-9' })
+  await $.turn.complete({
+    turnId: 'turn-9',
+    answer: 'done',
+    durationMs: 30000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  for (const surface of ['terminal', 'desktop', 'mobile'] as const) {
+    const ui = await mountPane($, surface)
+
+    expect(await ui.drawn()).toMatchObject({ type: 'Box' })
+    // The diff itself is drawn as a diff, not as plain text.
+    expect(await ui.find({ type: 'Code' })).toBeDefined()
+    expect(await ui.find({ text: /line 10/ })).toBeDefined()
+
+    await ui.unmount()
+  }
+})
