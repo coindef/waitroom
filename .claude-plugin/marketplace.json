@@ -1,5 +1,5 @@
 {
-  "name": "wait-review",
+  "name": "wait-mods",
   "owner": {
     "name": "coindef"
   },
@@ -7,8 +7,13 @@
   "plugins": [
     {
       "name": "wait-review",
-      "source": ".",
+      "source": "./wait-review",
       "description": "Turns the wait while Claude works into incremental review of the diff it already wrote."
+    },
+    {
+      "name": "bet-on-your-agent",
+      "source": "./bet-on-your-agent",
+      "description": "Predict how a turn will go before it lands, and get scored on your calibration."
     }
   ]
 }

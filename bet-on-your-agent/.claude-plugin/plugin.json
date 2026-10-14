@@ -1,0 +1,17 @@
+{
+  "name": "bet-on-your-agent",
+  "version": "0.1.0",
+  "description": "Predict how a turn will go before it lands, and get scored on your calibration.",
+  "author": {
+    "name": "coindef"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "autoOpen": {
+      "type": "boolean",
+      "title": "Open pane at session start",
+      "default": true,
+      "description": "Open the betting pane when the session starts."
+    }
+  }
+}

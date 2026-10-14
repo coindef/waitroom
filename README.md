@@ -1,94 +1,63 @@
-# wait-review
+# wait-mods
 
-A Claude Code plugin that turns the wait while Claude works into incremental
-review of the diff it has already written.
+Two Claude Code plugins for the dead time while a coding agent works.
 
 ```
-/plugin install wait-review --marketplace coindef/Plugin
+/plugin install wait-review       --marketplace coindef/Plugin
+/plugin install bet-on-your-agent --marketplace coindef/Plugin
 ```
 
 (Answer `y` to add the marketplace, then pick a scope.)
 
-## Why this and not a loading-screen game
+| Mod | What it does |
+| --- | --- |
+| [**wait-review**](./wait-review) | Offers the diff the agent already wrote, one hunk at a time, and sends what you flag back with your next message. |
+| [**bet-on-your-agent**](./bet-on-your-agent) | Forecast how the turn will go while it runs, then get a Brier score and a calibration table. |
+
+## The idea behind both
 
 The cost of waiting on a coding agent is not boredom, it is context collapse. A
 90-second wait filled with something entertaining costs minutes of refocus on
 the way back, and any game with a win condition quietly teaches you to want the
-agent to be slow. You also cannot win on entertainment: the person already has
-a phone.
+agent to be slow. You also cannot win on entertainment: the person already has a
+phone.
 
-Meanwhile a real problem is getting worse. The agent writes code faster than
-anyone reads it, so a session ends with a 600-line diff nobody will ever review
-properly.
+So neither of these competes with a phone. Both spend the wait on something that
+is only available *during* the wait, needs no context switch to start, and can be
+abandoned mid-thought:
 
-So the wait is spent on the diff the agent already wrote. Same mental context,
-naturally chunked, interruptible at any moment, and at the end of the session
-the diff has been reviewed at no dedicated review cost.
+- **wait-review** spends it on the diff, because the agent now writes code
+  faster than anyone reads it and a session otherwise ends with a large diff
+  nobody reviewed.
+- **bet-on-your-agent** spends it on a forecast, because knowing how far to
+  trust the agent is the skill that matters most and is currently learned by
+  vibes.
 
-## What it does
-
-- Watches `Edit`, `Write` and `NotebookEdit` and remembers which files Claude
-  touched, and when.
-- At the end of each turn, re-reads `git diff` for those files and queues each
-  hunk as its own review card.
-- Shows one card at a time in a pane: the path, the hunk, and three buttons.
-  Press `o` (looks right), `f` (flag), `l` (later).
-- Keeps a count on the status line, so an unread diff is visible without
-  opening anything.
-- Sends what you flagged to Claude as review notes attached to your next
-  message, as the diff you were looking at when you flagged it.
-
-That last step closes the loop: you read during the wait, flag what is wrong,
-and the correction rides along with whatever you type next. No extra turn.
-
-## Commands
-
-| Command | What it does |
-| --- | --- |
-| `/wait-review` | Opens the pane and re-reads the diff now |
-
-## Settings
-
-Set these in the config menu, or under `pluginConfigs` in settings.
-
-| Option | Default | What it means |
-| --- | --- | --- |
-| `settleTurns` | `0` | Turns a file must go untouched before its hunks are offered. `0` offers them at the end of the turn that wrote them. |
-| `contextLines` | `3` | Lines of context around each hunk (`git --unified`). |
-| `autoOpen` | `true` | Open the pane when the session starts. |
-| `attachFlags` | `true` | Attach flagged hunks to your next message. |
-
-`settleTurns: 0` is a safe default because a hunk's id is a hash of its own
-text. When Claude rewrites a region you already marked reviewed, the id changes
-and the hunk returns to the queue as a new card, so surfacing eagerly costs
-nothing. Raise it to `1` or `2` if you would rather read each region once the
-agent has clearly moved on.
-
-## What it does not do
-
-- **No git, no review.** The queue is built from `git diff HEAD`, so outside a
-  repository the pane stays empty. Untracked files are picked up separately,
-  via `git diff --no-index`.
-- **Uncommitted work only.** `HEAD` is the base, which is the right one while
-  the agent's work is uncommitted. Once you commit, those hunks leave the queue.
-- **It does not block anything.** Every hook that sits at a gating site passes
-  the call through if the plugin itself fails, so a bug here can never swallow
-  your prompt or an edit.
+They compose: both open a pane during the same window, one asking what you make
+of what it wrote, the other what you expect next.
 
 ## Developing
 
-```
-claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 23 tests
-```
+Each mod is a self-contained plugin folder. From the repository root:
 
-The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,
-hunk trimming, queue merging) and is tested directly. `hooks/register.tsx` is
-the hooks module; `types/index.d.ts` is the state contract that
-`claude plugin validate` holds it to.
+```
+claude plugin validate ./wait-review
+claude plugin test     ./wait-review          # 23 tests
+
+claude plugin validate ./bet-on-your-agent
+claude plugin test     ./bet-on-your-agent    # 20 tests
+```
 
 Run a working copy without installing it:
 
 ```
-claude --plugin-dir /path/to/Plugin
+claude --plugin-dir /path/to/Plugin/wait-review
 ```
+
+Each mod keeps the logic that needs no engine in one plain module
+(`hooks/diff.ts`, `hooks/bet.ts`) so it can be tested directly, with the hooks
+module beside it and a `types/index.d.ts` state contract that
+`claude plugin validate` holds it to.
+
+`.claude-plugin/types/` inside a mod is written by the engine on each load and
+is not checked in.
