@@ -257,6 +257,25 @@ export const headline = (found: Report): string => {
   return 'Your forecasts match what happens.'
 }
 
+/** The column heading the calibration rows line up under. */
+export const CALIBRATION_HEAD = ' said     actual   turns'
+
+/**
+ * One calibration row, padded so a column of them lines up.
+ *
+ * Shared by the pane and the slash command so the two can never drift, and
+ * built as one padded string rather than laid out in boxes because a terminal
+ * aligns monospace text more reliably than it aligns flex children.
+ */
+export const calibrationLine = (row: CalibrationRow): string => {
+  const said = asPercent(row.said).padStart(5)
+  const actual = asPercent(row.actual).padStart(6)
+  const turns = String(row.turns).padStart(4)
+  const lean = row.lean === 'fair' ? '' : `   ${row.lean}confident`
+
+  return `${said} →  ${actual} ${turns}${lean}`
+}
+
 /** The report as the slash command prints it. */
 export const asText = (found: Report): string => {
   if (found.recorded === 0) return 'No turns recorded yet. Call the next one while it runs.'
@@ -274,13 +293,8 @@ export const asText = (found: Report): string => {
   ]
 
   if (found.rows.length > 0) {
-    lines.push('')
-    for (const row of found.rows) {
-      const note = row.lean === 'fair' ? '' : `  ${row.lean}confident`
-      lines.push(
-        `  said ${asPercent(row.said).padStart(4)}   actual ${asPercent(row.actual).padStart(4)}   (${row.turns})${note}`,
-      )
-    }
+    lines.push('', CALIBRATION_HEAD)
+    for (const row of found.rows) lines.push(calibrationLine(row))
   }
 
   if (found.misses.length > 0) {

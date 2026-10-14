@@ -107,6 +107,27 @@ review: 3 to read · /wait-review
 
 Running `/wait-review` places it at any width.
 
+## What the pane looks like
+
+```
+2 to read · 1 read                                   Claude is working
+
+src/auth/session.ts                                      file 1 of 2
+line 42 · +3 −1                            2 left here · 3 left
+────────────────────────────────────────────────────────────────────
+  42   const sent = await fetch(url)
+  43 - if (!sent.ok) return retry(url)
+  43 + if (!sent.ok) return undefined
+  44   return sent.json()
+
+o: Looks right   f: Flag   l: Later   x: Skip file
+```
+
+Each control carries its own key, so there is no legend to learn and nothing to
+click. The header says how much is left before you commit to reading: how many
+hunks in this file, how many in all, and which file of how many. Counts that are
+zero are left out rather than shown as zero.
+
 ## Saying why
 
 Flagging sends the hunk. Pressing `n` after it adds your reason, which arrives
@@ -148,7 +169,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 44 tests
+claude plugin test .         # 47 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

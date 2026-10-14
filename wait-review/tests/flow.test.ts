@@ -117,6 +117,13 @@ test('a file written with no Edit or Write call is still queued', async ($, on) 
   const ui = await mountPane($, 'terminal')
   expect(await ui.find({ text: /src\/auth\.ts/ })).toBeDefined()
   expect(await ui.find({ text: /1 to read/ })).toBeDefined()
+
+  // Every control carries its own key, so the pane teaches the keyboard
+  // instead of needing a legend.
+  const controls = await ui.findAll({ type: 'Button' })
+  expect(controls.map(one => one.props.hotkey)).toEqual(['o', 'f', 'l', 'x'])
+  expect(controls.every(one => one.props.plain === true)).toBe(true)
+
   await ui.unmount()
 })
 
@@ -136,7 +143,7 @@ test('work already uncommitted when the session began is never queued', async ($
   })
 
   const ui = await mountPane($, 'terminal')
-  expect(await ui.find({ text: /Nothing written yet/ })).toBeDefined()
+  expect(await ui.find({ text: /Nothing to read yet/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -211,7 +218,7 @@ test('a file the agent regenerates is never queued at all', async ($, on) => {
   })
 
   const ui = await mountPane($, 'terminal')
-  expect(await ui.find({ text: /Nothing written yet/ })).toBeDefined()
+  expect(await ui.find({ text: /Nothing to read yet/ })).toBeDefined()
   await ui.unmount()
 })
 

@@ -8,8 +8,10 @@ import {
   nextHunk,
   parseDiff,
   parseIgnore,
+  progressOf,
   reviewable,
   reviewNote,
+  summaryOf,
   tally,
   trimHunk,
 } from './diff'
@@ -26,8 +28,12 @@ const lastDecision = atom(
 )
 const noting = atom({ plugin: 'wait-review', key: 'noting' } as const, null as string | null)
 
-/** Rows the pane spends on its own counts, path, buttons and footer. */
-const CHROME_ROWS = 9
+/**
+ * Rows the pane spends on its own chrome: counts, path, location, the rule,
+ * the controls and the footers. Counted generously, since a hunk cut a little
+ * short reads better than one that overflows the pane.
+ */
+const CHROME_ROWS = 12
 /** Untracked files diffed one by one per scan, so a stray folder cannot stall it. */
 const UNTRACKED_LIMIT = 40
 /** Hunk ids remembered as pre-session, enough for any working tree worth reading. */
@@ -320,17 +326,18 @@ export const register: Register = (on, options) => {
     const counts = tally(list)
     const current = nextHunk(list)
     const flagged = last && list.find(one => one.id === last.id)?.status === 'flagged' ? last.id : null
+    const width = Math.max(20, e.props.bodyColumns)
 
+    const summary = summaryOf(list)
     const head = (
-      <Text dimColor>
-        {counts.pending} to read · {counts.reviewed} reviewed · {counts.flagged} flagged
-        {counts.dropped > 0 ? ` · ${counts.dropped} dropped` : ''}
-        {isBusy ? ' · Claude is working' : ''}
-      </Text>
+      <Box justifyContent="space-between">
+        <Text dimColor>{summary === '' ? 'nothing to read' : summary}</Text>
+        {isBusy && <Text color="claude">Claude is working</Text>}
+      </Box>
     )
 
     const undoButton = last && (
-      <Button key="undo" hotkey="u" dimColor onPress={() => undo($)}>
+      <Button key="undo" hotkey="u" plain dimColor onPress={() => undo($)}>
         Undo
       </Button>
     )
@@ -340,11 +347,9 @@ export const register: Register = (on, options) => {
     // and that is exactly when the reason still needs saying.
     const hasNote = flagged !== null && list.find(one => one.id === flagged)?.note !== undefined
     const noteOffer = flagged !== null && hasInput && (
-      <Box>
-        <Button key="note-open" hotkey="n" dimColor onPress={() => setNoting($, flagged)}>
-          {hasNote ? 'Edit note' : 'Say why'}
-        </Button>
-      </Box>
+      <Button key="note-open" hotkey="n" plain onPress={() => setNoting($, flagged)}>
+        {hasNote ? 'Edit note' : 'Say why'}
+      </Button>
     )
 
     // The note box is a mode and does not depend on a card being up, so it is
@@ -356,71 +361,106 @@ export const register: Register = (on, options) => {
       return (
         <Box flexDirection="column" gap={1}>
           {head}
-          <Text dimColor>{target?.path ?? 'that hunk'}</Text>
-          <Input
-            key="note-text"
-            label="Why is this wrong?"
-            placeholder="Enter on an empty box if the diff says it"
-            submitLabel="Attach"
-            autoFocus
-            onSubmit={value => saveNote($, noteFor, value)}
-          />
+          <Box flexDirection="column">
+            <Text wrap="truncate-start" bold>
+              {target?.path ?? 'that hunk'}
+            </Text>
+            <Input
+              key="note-text"
+              label="Why is this wrong?"
+              placeholder="Enter on an empty box if the diff says it"
+              submitLabel="Attach"
+              autoFocus
+              onSubmit={value => saveNote($, noteFor, value)}
+            />
+          </Box>
         </Box>
       )
     }
 
     if (!current) {
+      const isFresh = counts.reviewed === 0 && counts.dropped === 0 && counts.flagged === 0
+
       return (
         <Box flexDirection="column" gap={1}>
           {head}
           <Text dimColor>
-            {counts.reviewed === 0 && counts.dropped === 0 && counts.flagged === 0
-              ? 'Nothing written yet. Hunks show up here as Claude edits files.'
+            {isFresh
+              ? 'Nothing to read yet. Hunks arrive here as Claude writes.'
               : 'Diff read. Nothing waiting on you.'}
           </Text>
-          {noteOffer}
+          {noteOffer && <Box>{noteOffer}</Box>}
           {undoButton && <Box>{undoButton}</Box>}
         </Box>
       )
     }
 
+    const where = progressOf(list, current)
     const room = Math.max(3, (e.viewport?.rows ?? 24) - CHROME_ROWS)
     const shown = trimHunk(current.text, room)
 
     return (
       <Box flexDirection="column" gap={1}>
         {head}
+
         <Box flexDirection="column">
-          <Text bold>{current.path}</Text>
-          <Text dimColor>
-            {current.header} · +{current.added} −{current.removed}
-            {current.status === 'later' ? ' · put off' : ''}
-          </Text>
-          {current.note !== undefined && <Text>note: {current.note}</Text>}
+          <Box justifyContent="space-between" gap={2}>
+            <Text wrap="truncate-start" bold>
+              {current.path}
+            </Text>
+            {where.ofFiles > 1 && (
+              <Text dimColor tabular>
+                file {where.atFile} of {where.ofFiles}
+              </Text>
+            )}
+          </Box>
+          <Box justifyContent="space-between" gap={2}>
+            <Text dimColor tabular>
+              line {current.start} · <Text color="diffAdded">+{current.added}</Text>{' '}
+              <Text color="diffRemoved">−{current.removed}</Text>
+              {current.status === 'later' ? ' · put off' : ''}
+            </Text>
+            <Text dimColor tabular>
+              {where.hereLeft > 1 ? `${where.hereLeft} left here · ` : ''}
+              {where.totalLeft} left
+            </Text>
+          </Box>
+          {current.note !== undefined && (
+            <Text color="warning" wrap="truncate-end">
+              note: {current.note}
+            </Text>
+          )}
         </Box>
-        <Code source={shown.text} format="diff" wrap="truncate-end" />
-        {shown.hidden > 0 && <Text dimColor>… {shown.hidden} more lines in this hunk</Text>}
-        <Box gap={1}>
-          <Button key="ok" hotkey="o" variant="primary" onPress={() => mark($, current.id, 'ok')}>
-            Looks right
-          </Button>
-          <Button key="flag" hotkey="f" onPress={() => mark($, current.id, 'flagged')}>
-            Flag
-          </Button>
-          <Button key="later" hotkey="l" dimColor onPress={() => mark($, current.id, 'later')}>
-            Later
-          </Button>
-          <Button key="drop" hotkey="x" dimColor onPress={() => dropFile($, current.path)}>
-            Skip file
-          </Button>
-          {undoButton}
+
+        <Box flexDirection="column">
+          <Text dimColor>{'─'.repeat(width)}</Text>
+          <Code source={shown.text} format="diff" wrap="truncate-end" />
+          {shown.hidden > 0 && <Text dimColor>… {shown.hidden} more lines in this hunk</Text>}
         </Box>
-        {noteOffer}
-        {counts.flagged > 0 && (
-          <Text dimColor>
-            {counts.flagged} flagged hunk{counts.flagged === 1 ? '' : 's'} go to Claude with your next message
-          </Text>
-        )}
+
+        <Box flexDirection="column" gap={1}>
+          <Box gap={2} flexWrap="wrap">
+            <Button key="ok" hotkey="o" plain onPress={() => mark($, current.id, 'ok')}>
+              Looks right
+            </Button>
+            <Button key="flag" hotkey="f" plain onPress={() => mark($, current.id, 'flagged')}>
+              Flag
+            </Button>
+            <Button key="later" hotkey="l" plain dimColor onPress={() => mark($, current.id, 'later')}>
+              Later
+            </Button>
+            <Button key="drop" hotkey="x" plain dimColor onPress={() => dropFile($, current.path)}>
+              Skip file
+            </Button>
+            {undoButton}
+          </Box>
+          {noteOffer && <Box>{noteOffer}</Box>}
+          {counts.flagged > 0 && (
+            <Text color="warning">
+              {counts.flagged} flagged → sent to Claude with your next message
+            </Text>
+          )}
+        </Box>
       </Box>
     )
   })

@@ -4,6 +4,8 @@ import type { TurnRecord } from '../types'
 import {
   asDuration,
   askRoomFor,
+  calibrationLine,
+  CALIBRATION_HEAD,
   asText,
   bucketOf,
   calibration,
@@ -216,8 +218,9 @@ test('the report stands up with nothing in it, and names the numbers once there 
 
   expect(text).toContain('Brier')
   expect(text).toContain('overconfident')
-  expect(text).toContain('said  90%')
-  expect(text).toContain('actual   0%')
+  // Columns line up under a heading, so a column of rows is scannable.
+  expect(text).toContain('said     actual   turns')
+  expect(text).toContain('90% →      0%')
 })
 
 test('a waved-away verdict owes nothing and scores nothing', async () => {
@@ -290,4 +293,20 @@ test('the report names the worst calls once there are any', async () => {
   expect(text).toStartWith('You run 95 points overconfident.')
   expect(text).toContain('Worst calls')
   expect(text).toContain('refactor the auth layer')
+})
+
+test('a calibration row pads to the width of its heading', async () => {
+  const line = calibrationLine({ said: 0.8, actual: 0.64, turns: 11, lean: 'over' })
+
+  expect(line).toContain('80%')
+  expect(line).toContain('64%')
+  expect(line).toContain('overconfident')
+  // The heading and the row are the same shape, so the columns agree.
+  expect(line.indexOf('%')).toBeLessThan(CALIBRATION_HEAD.indexOf('actual'))
+})
+
+test('a row that is honest says nothing about leaning', async () => {
+  const line = calibrationLine({ said: 0.5, actual: 0.5, turns: 4, lean: 'fair' })
+
+  expect(line).not.toContain('confident')
 })

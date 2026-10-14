@@ -65,13 +65,14 @@ test('one question at a time, each answered by a bare digit', async ($, on) => {
 
   // The ask is quoted, so the forecast is anchored to something.
   expect(await ui.find({ text: /add the retry logic/ })).toBeDefined()
-  expect(await ui.findAll({ type: 'Button' })).toHaveLength(5)
+  // Five forecasts and a way out of being asked.
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(6)
 
   await ui.press({ key: 'p80' })
 
   // The confidence row is answered, so the band moves on rather than stacking.
   expect(await ui.find({ text: /how many files/ })).toBeDefined()
-  expect(await ui.findAll({ type: 'Button' })).toHaveLength(4)
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(5)
 
   await ui.press({ key: 'f2-3' })
 
@@ -185,4 +186,25 @@ test('the record pane draws on every surface', async $ => {
 
     await ui.unmount()
   }
+})
+
+test('a bet can be waved away, and the band then leaves the row alone', async ($, on) => {
+  engineBottom(on)
+  await $.turn.start({ text: 'something I have no view on', turnId: 'turn-5' })
+
+  const ui = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+
+  expect(await ui.find({ text: /land first try/ })).toBeDefined()
+  await ui.press({ key: 'decline' })
+
+  // A prompt you cannot dismiss is a nag: the band asks nothing more this turn.
+  expect(await ui.find({ text: /land first try/ })).toBeUndefined()
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(0)
+
+  await ui.unmount()
 })

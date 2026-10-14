@@ -6,7 +6,9 @@ import {
   globToRegExp,
   isIgnored,
   mergeHunks,
+  progressOf,
   reviewable,
+  summaryOf,
   nextHunk,
   parseDiff,
   parseIgnore,
@@ -379,4 +381,43 @@ test('an ignored file is left out however it came to be written', async () => {
   const offered = reviewable([lock, code], parseIgnore(DEFAULT_IGNORE), [])
 
   expect(offered.map(one => one.id)).toEqual(['c@1'])
+})
+
+test('the header says how much is left here and in all', async () => {
+  const list = [
+    hunk({ id: 'a1', path: 'a.ts', start: 1 }),
+    hunk({ id: 'a2', path: 'a.ts', start: 40 }),
+    hunk({ id: 'b1', path: 'b.ts', start: 1 }),
+    hunk({ id: 'c1', path: 'c.ts', start: 1, status: 'ok' }),
+  ]
+
+  const where = progressOf(list, list[0] as never)
+
+  expect(where.hereLeft).toBe(2)
+  expect(where.totalLeft).toBe(3)
+  expect(where.atFile).toBe(1)
+  // c.ts is read, so it is not among the files with anything left.
+  expect(where.ofFiles).toBe(2)
+})
+
+test('progress counts a hunk put off as still to come', async () => {
+  const list = [hunk({ id: 'a', status: 'later' }), hunk({ id: 'b', status: 'dropped' })]
+
+  const where = progressOf(list, list[0] as never)
+
+  expect(where.totalLeft).toBe(1)
+})
+
+test('the counts line leaves out every zero', async () => {
+  expect(summaryOf([hunk({ id: 'a' })])).toBe('1 to read')
+  expect(summaryOf([])).toBe('')
+
+  const mixed = summaryOf([
+    hunk({ id: 'a', status: 'pending' }),
+    hunk({ id: 'b', status: 'ok' }),
+    hunk({ id: 'c', status: 'flagged' }),
+  ])
+
+  expect(mixed).toBe('1 to read · 1 read · 1 flagged')
+  expect(mixed).not.toContain('0 ')
 })

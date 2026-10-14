@@ -34,8 +34,11 @@ while you wait. **Type a bare digit into an empty composer and it answers** —
 no pane to place, no focus to manage, nothing to click.
 
 ```
-Will "add the retry logic to the client" land first try?  1: 50% 2: 65% 3: 80% 4: 90% 5: 95%
+Will "add the retry logic to the client" land first try?  1: 50% 2: 65% 3: 80% 4: 90% 5: 95% 0: skip
 ```
+
+`0` waves the turn away and the band goes quiet for the rest of it: a prompt you
+cannot dismiss is a nag.
 
 Answer that and it asks the next thing, never both at once, so the digits
 always mean the obvious thing:
@@ -58,9 +61,10 @@ score tells you that you are overconfident, the ask tells you what about.
 You run 12 points overconfident.
 Brier 0.147 over 23 turns · better than a coin flip
 
-said  50% · actual  60% ·  5 turns · underconfident
-said  80% · actual  64% · 11 turns · overconfident
-said  95% · actual  71% ·  7 turns · overconfident
+ said     actual   turns
+  50% →     60%    5   underconfident
+  80% →     64%   11   overconfident
+  95% →     71%    7   overconfident
 
 Worst calls
 95% and it did not — refactor the auth layer to use the new client
@@ -117,7 +121,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 31 tests
+claude plugin test .         # 34 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested

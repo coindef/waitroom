@@ -8,6 +8,8 @@ import {
   asPercent,
   asText,
   BANDS,
+  CALIBRATION_HEAD,
+  calibrationLine,
   bucketOf,
   COIN_FLIP_BRIER,
   FILE_BUCKETS,
@@ -83,6 +85,12 @@ const placeConfidence = async ($: EngineInterface, said: number) => {
 
 const placeFiles = async ($: EngineInterface, said: FileBucket) => {
   await update($, open, bet => ({ ...bet, saidFiles: said }))
+  await showStatus($)
+}
+
+/** Waves this turn's bet away, so the band stops asking for the rest of it. */
+const declineBet = async ($: EngineInterface) => {
+  await update($, open, bet => ({ ...bet, isDeclined: true as const }))
   await showStatus($)
 }
 
@@ -199,7 +207,7 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const room = askRoomFor(e.props.bodyColumns)
 
-    if (e.props.isWorking && bet.turnId !== '') {
+    if (e.props.isWorking && bet.turnId !== '' && bet.isDeclined !== true) {
       const said = bet.saidConfidence
       const quoted = shortAsk(bet.ask, room)
       const about = quoted === '' ? '' : ` "${quoted}"`
@@ -218,6 +226,9 @@ export const register: Register = (on, options) => {
                 {asPercent(band)}
               </Button>
             ))}
+            <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
+              skip
+            </Button>
           </Box>
         )
       }
@@ -237,6 +248,9 @@ export const register: Register = (on, options) => {
                 {bucket}
               </Button>
             ))}
+            <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
+              skip
+            </Button>
           </Box>
         )
       }
@@ -306,11 +320,16 @@ export const register: Register = (on, options) => {
         </Box>
 
         <Box flexDirection="column">
+          <Text dimColor tabular>
+            {CALIBRATION_HEAD}
+          </Text>
           {found.rows.slice(0, rows).map(row => (
-            <Text key={`row${Math.round(row.said * 100)}`} dimColor={row.lean === 'fair'}>
-              said {asPercent(row.said).padStart(4)} · actual {asPercent(row.actual).padStart(4)} ·{' '}
-              {row.turns} turn{row.turns === 1 ? '' : 's'}
-              {row.lean === 'fair' ? '' : ` · ${row.lean}confident`}
+            <Text
+              key={`row${Math.round(row.said * 100)}`}
+              tabular
+              color={row.lean === 'over' ? 'warning' : row.lean === 'under' ? 'subtle' : 'success'}
+            >
+              {calibrationLine(row)}
             </Text>
           ))}
         </Box>

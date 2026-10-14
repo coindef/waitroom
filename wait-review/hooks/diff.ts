@@ -184,6 +184,50 @@ export const reviewable = (
   return found.filter(hunk => !before.has(hunk.id) && !isIgnored(hunk.path, ignore))
 }
 
+/**
+ * Where the current hunk sits in what is left to read.
+ *
+ * A reviewer wants to know how much is still coming before they commit to
+ * reading, and which file they are in; a bare count of unread hunks says
+ * neither.
+ */
+export type Progress = {
+  /** Unread hunks in this file, the current one included. */
+  hereLeft: number
+  /** Unread hunks in all, the current one included. */
+  totalLeft: number
+  /** This file's place among the files with anything left. */
+  atFile: number
+  ofFiles: number
+}
+
+const isLeft = (hunk: Hunk): boolean => hunk.status === 'pending' || hunk.status === 'later'
+
+export const progressOf = (list: readonly Hunk[], current: Hunk): Progress => {
+  const left = list.filter(isLeft)
+  const files = [...new Set(left.map(one => one.path))]
+
+  return {
+    hereLeft: left.filter(one => one.path === current.path).length,
+    totalLeft: left.length,
+    atFile: files.indexOf(current.path) + 1,
+    ofFiles: files.length,
+  }
+}
+
+/** The counts worth showing: a zero says nothing, so it is left out. */
+export const summaryOf = (list: readonly Hunk[]): string => {
+  const counts = tally(list)
+  const parts: string[] = []
+  if (counts.pending > 0) parts.push(`${counts.pending} to read`)
+  if (counts.reviewed > 0) parts.push(`${counts.reviewed} read`)
+  if (counts.flagged > 0) parts.push(`${counts.flagged} flagged`)
+  if (counts.later > 0) parts.push(`${counts.later} put off`)
+  if (counts.dropped > 0) parts.push(`${counts.dropped} skipped`)
+
+  return parts.join(' · ')
+}
+
 /** The hunk to show: the first one not yet decided, else the first put off. */
 export const nextHunk = (list: readonly Hunk[]): Hunk | undefined =>
   list.find(hunk => hunk.status === 'pending') ?? list.find(hunk => hunk.status === 'later')

@@ -56,6 +56,13 @@ export type OpenBet = {
   files: string[]
   saidConfidence?: number
   saidFiles?: FileBucket
+  /**
+   * Set when the person waved this turn's bet away.
+   *
+   * A prompt you cannot dismiss is a nag, so the band gets out of the way for
+   * the rest of the turn rather than holding its buttons up unanswered.
+   */
+  isDeclined?: true
 }
 
 declare module 'claude-code' {
