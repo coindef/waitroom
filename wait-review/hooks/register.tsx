@@ -76,15 +76,18 @@ const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string)
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
 /**
- * Anchors the review to the commit the session started on.
+ * Anchors the review to the commit the session started on, once.
  *
- * Called once, at session start: a commit made later must not take its own
- * changes out of the queue, because a commit is not a review.
+ * A commit made later must not take its own changes out of the queue, because
+ * a commit is not a review. Idempotent because `session.start` fires again on
+ * every hot reload while `$.state` survives it: re-anchoring there would move
+ * the base onto a commit made since, which is the very thing this prevents.
  */
 const anchorBase = async ($: EngineInterface) => {
+  if ((await read($, base)) !== null) return
   const found = await runGit($, ['rev-parse', 'HEAD'])
   const sha = found?.exitCode === 0 ? found.stdout.trim() : ''
-  await update($, base, () => (sha === '' ? null : sha))
+  if (sha !== '') await update($, base, () => sha)
 }
 
 /** The repository root, or undefined where the session is not in a repository. */

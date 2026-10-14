@@ -267,3 +267,56 @@ test('a commit the agent makes mid-session does not empty the queue', async ($, 
 
   await ui.unmount()
 })
+
+test('a hot reload does not move the base onto a commit made since', async ($, on) => {
+  // The second session.start stands for a reload: $.state survives it, so a
+  // re-anchor would land on HEAD, which is the bug the anchor exists to stop.
+  const asked: string[] = []
+  mock.clock(on)
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  on('command.register', ($$, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($$, e) => ({ text: e.answer }))
+  on('tool.call', { tool: 'Write' }, () => ({ result: {} as never }))
+  on('process.run', ($$, e) => {
+    const argv = e.argv.join(' ')
+    if (argv.includes('--show-toplevel')) return ran(`${ROOT}\n`)
+    if (argv.includes('rev-parse')) {
+      asked.push(argv)
+
+      return ran(`${BASE}\n`)
+    }
+    if (argv.includes('ls-files')) return ran('')
+    if (argv.includes(`diff ${BASE}`)) return ran(DIFF)
+    if (argv.includes('diff')) return ran('')
+
+    return ran('')
+  })
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+
+  // Asked once, however many times the module loads.
+  expect(asked).toHaveLength(1)
+
+  await $.turn.start({ text: 'drop the retry', turnId: 'turn-6' })
+  await $.tool.call({ tool: 'Write', file_path: `${ROOT}/src/auth.ts`, content: 'x' })
+  await $.turn.complete({
+    turnId: 'turn-6',
+    answer: 'committed it',
+    durationMs: 30000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const ui = await $.ui.mount({
+    plugin: 'wait-review',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'wait-review',
+    props: PANE_PROPS,
+    viewport: { columns: 100, rows: 30 },
+  })
+  expect(await ui.find({ text: /1 to read/ })).toBeDefined()
+  await ui.unmount()
+})
