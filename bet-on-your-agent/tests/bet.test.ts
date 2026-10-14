@@ -3,15 +3,20 @@ import { expect, test } from 'claude-code/testing'
 import type { TurnRecord } from '../types'
 import {
   asDuration,
+  askRoomFor,
   asText,
   bucketOf,
   calibration,
   COIN_FLIP_BRIER,
+  headline,
   keepRecord,
   median,
   owedVerdict,
   report,
   setVerdict,
+  shortAsk,
+  skipVerdict,
+  worstCalls,
 } from '../hooks/bet'
 
 let next = 0
@@ -213,4 +218,76 @@ test('the report stands up with nothing in it, and names the numbers once there 
   expect(text).toContain('overconfident')
   expect(text).toContain('said  90%')
   expect(text).toContain('actual   0%')
+})
+
+test('a waved-away verdict owes nothing and scores nothing', async () => {
+  const records = skipVerdict([turn({ turnId: 'a', saidConfidence: 0.8 })], 'a')
+  const found = report(records)
+
+  expect(found.owed).toBe(0)
+  expect(found.scored).toBe(0)
+  // The turn still happened, so it stays on the record.
+  expect(found.recorded).toBe(1)
+})
+
+test('a waved-away verdict is not asked about again', async () => {
+  const records = skipVerdict([turn({ turnId: 'a', saidConfidence: 0.8 })], 'a')
+
+  expect(owedVerdict(records)).toBeUndefined()
+})
+
+test('the worst calls are the widest misses, and name what was asked', async () => {
+  const misses = worstCalls([
+    turn({ saidConfidence: 0.95, landed: false, ask: 'refactor the auth layer' }),
+    turn({ saidConfidence: 0.8, landed: false, ask: 'rename a variable' }),
+    turn({ saidConfidence: 0.9, landed: true, ask: 'add a test' }),
+  ])
+
+  expect(misses.map(one => one.ask)).toEqual(['refactor the auth layer', 'rename a variable'])
+  expect(misses[0]?.error).toBeGreaterThan(misses[1]?.error ?? 1)
+})
+
+test('a call that was nearly right is not held up as a worst call', async () => {
+  // 0.9 and it landed is an error of 0.01: being right is not a miss.
+  expect(worstCalls([turn({ saidConfidence: 0.9, landed: true })])).toEqual([])
+})
+
+test('the headline says the lean in words before any score', async () => {
+  const over = report([
+    turn({ saidConfidence: 0.9, landed: false }),
+    turn({ saidConfidence: 0.9, landed: false }),
+  ])
+
+  expect(headline(over)).toBe('You run 90 points overconfident.')
+  expect(headline(report([turn({ saidConfidence: 0.5, landed: true }), turn({ saidConfidence: 0.5, landed: false })]))).toBe(
+    'Your forecasts match what happens.',
+  )
+})
+
+test('an ask is flattened to one line and cut to the room there is', async () => {
+  expect(shortAsk('  add   the\n retry logic ')).toBe('add the retry logic')
+  expect(shortAsk('a'.repeat(80)).length).toBe(48)
+  expect(shortAsk('a'.repeat(80)).endsWith('…')).toBe(true)
+  expect(shortAsk('short enough', 20)).toBe('short enough')
+  expect(shortAsk('anything', 0)).toBe('')
+})
+
+test('the ask yields the band to its buttons when there is no room', async () => {
+  expect(askRoomFor(200)).toBe(48)
+  expect(askRoomFor(80)).toBe(38)
+  // Too narrow to show both, so the buttons win and the ask is dropped.
+  expect(askRoomFor(50)).toBe(0)
+})
+
+test('the report names the worst calls once there are any', async () => {
+  const text = asText(
+    report([
+      turn({ saidConfidence: 0.95, landed: false, ask: 'refactor the auth layer' }),
+      turn({ saidConfidence: 0.95, landed: false, ask: 'rename a thing' }),
+    ]),
+  )
+
+  expect(text).toStartWith('You run 95 points overconfident.')
+  expect(text).toContain('Worst calls')
+  expect(text).toContain('refactor the auth layer')
 })

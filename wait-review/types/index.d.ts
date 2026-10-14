@@ -6,8 +6,13 @@
  * $.state key the module names to what is declared here.
  */
 
-/** Where a hunk stands in the review queue. */
-export type HunkStatus = 'pending' | 'ok' | 'flagged' | 'later' | 'sent'
+/**
+ * Where a hunk stands in the review queue.
+ *
+ * `dropped` is not `ok`: it means the person waved a whole file away without
+ * reading it, and the counts keep the two apart rather than claiming credit.
+ */
+export type HunkStatus = 'pending' | 'ok' | 'flagged' | 'later' | 'sent' | 'dropped'
 
 /**
  * One reviewable hunk of the agent's own diff.
@@ -23,6 +28,8 @@ export type Hunk = {
   path: string
   /** The `@@ -a,b +c,d @@` line. */
   header: string
+  /** First line of the hunk on the new side, so a file reads top to bottom. */
+  start: number
   /** Header and body joined: ready for `Code` with `format: 'diff'`. */
   text: string
   added: number
@@ -33,6 +40,9 @@ export type Hunk = {
 /** A file the agent wrote, and the turn it last wrote it in. */
 export type Touch = { path: string; turn: number }
 
+/** The last call the person made, kept so one press can take it back. */
+export type Decision = { id: string; from: HunkStatus }
+
 declare module 'claude-code' {
   interface PluginState {
     'wait-review': {
@@ -40,6 +50,7 @@ declare module 'claude-code' {
       touches: Touch[]
       turn: number
       busy: boolean
+      lastDecision: Decision | null
     }
   }
 }

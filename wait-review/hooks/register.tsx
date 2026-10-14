@@ -1,8 +1,19 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Hunk, HunkStatus, Touch } from '../types'
-import { mergeHunks, nextHunk, parseDiff, reviewNote, tally, toRepoPath, trimHunk } from './diff'
+import type { Decision, Hunk, HunkStatus, Touch } from '../types'
+import {
+  DEFAULT_IGNORE,
+  isIgnored,
+  mergeHunks,
+  nextHunk,
+  parseDiff,
+  parseIgnore,
+  reviewNote,
+  tally,
+  toRepoPath,
+  trimHunk,
+} from './diff'
 
 const PANE = 'wait-review'
 
@@ -10,6 +21,10 @@ const hunks = atom({ plugin: 'wait-review', key: 'hunks' } as const, [] as Hunk[
 const touches = atom({ plugin: 'wait-review', key: 'touches' } as const, [] as Touch[])
 const turn = atom({ plugin: 'wait-review', key: 'turn' } as const, 0)
 const busy = atom({ plugin: 'wait-review', key: 'busy' } as const, false)
+const lastDecision = atom(
+  { plugin: 'wait-review', key: 'lastDecision' } as const,
+  null as Decision | null,
+)
 
 /** Rows the pane spends on its own counts, path, buttons and footer. */
 const CHROME_ROWS = 9
@@ -21,6 +36,7 @@ type Config = {
   contextLines: number
   autoOpen: boolean
   attachFlags: boolean
+  ignore: string[]
 }
 
 const whole = (value: unknown, fallback: number): number => {
@@ -29,12 +45,29 @@ const whole = (value: unknown, fallback: number): number => {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback
 }
 
+/**
+ * The status line, which is a convenience: it never throws outward, because a
+ * failure here would otherwise abort whatever hook was keeping it up to date.
+ */
 const showStatus = async ($: EngineInterface) => {
-  const counts = tally(await read($, hunks))
-  const parts: string[] = []
-  if (counts.pending > 0) parts.push(`${counts.pending} to read`)
-  if (counts.flagged > 0) parts.push(`${counts.flagged} flagged`)
-  $.ui.status(parts.length > 0 ? `review: ${parts.join(' · ')}` : undefined)
+  try {
+    const counts = tally(await read($, hunks))
+    const parts: string[] = []
+    if (counts.pending > 0) parts.push(`${counts.pending} to read`)
+    if (counts.flagged > 0) parts.push(`${counts.flagged} flagged`)
+    if (parts.length === 0) {
+      $.ui.status(undefined)
+
+      return
+    }
+    // Below 144 columns a pane nobody asked for is never placed, so without
+    // this the count is the only sign the mod is there, and no way in.
+    const panes = await $.ui.panes().catch(() => [])
+    const isShown = panes.some(pane => pane.id === PANE && pane.isPlaced)
+    $.ui.status(`review: ${parts.join(' · ')}${isShown ? '' : ' · /wait-review'}`)
+  } catch {
+    // Nothing to do: the counts are still right, only unshown.
+  }
 }
 
 const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string) =>
@@ -104,8 +137,9 @@ const scan = async ($: EngineInterface, config: Config) => {
   await update($, hunks, old => mergeHunks(old, found, ready))
 }
 
-const noteTouch = async ($: EngineInterface, path: string | undefined) => {
+const noteTouch = async ($: EngineInterface, path: string | undefined, ignore: readonly string[]) => {
   if (path === undefined || path === '') return
+  if (isIgnored(path, ignore)) return
   const now = await read($, turn)
   await update($, touches, old =>
     [...old.filter(one => one.path !== path), { path, turn: now }].slice(-300),
@@ -113,7 +147,38 @@ const noteTouch = async ($: EngineInterface, path: string | undefined) => {
 }
 
 const mark = async ($: EngineInterface, id: string, status: HunkStatus) => {
+  const before = (await read($, hunks)).find(one => one.id === id)
   await update($, hunks, old => old.map(one => (one.id === id ? { ...one, status } : one)))
+  await update($, lastDecision, () => (before ? { id, from: before.status } : null))
+  await showStatus($)
+}
+
+/** Puts the last call back, so misreading a hunk costs one press, not a rescan. */
+const undo = async ($: EngineInterface) => {
+  const last = await read($, lastDecision)
+  if (!last) return
+  await update($, hunks, old =>
+    old.map(one => (one.id === last.id ? { ...one, status: last.from } : one)),
+  )
+  await update($, lastDecision, () => null)
+  await showStatus($)
+}
+
+/**
+ * Waves away everything still unread in one file.
+ *
+ * Dropped, not approved: a regenerated file is noise to clear, and the counts
+ * should not pretend it was read.
+ */
+const dropFile = async ($: EngineInterface, path: string) => {
+  await update($, hunks, old =>
+    old.map(one =>
+      one.path === path && (one.status === 'pending' || one.status === 'later')
+        ? { ...one, status: 'dropped' }
+        : one,
+    ),
+  )
+  await update($, lastDecision, () => null)
   await showStatus($)
 }
 
@@ -123,6 +188,11 @@ export const register: Register = (on, options) => {
     contextLines: whole(options.contextLines, 3),
     autoOpen: options.autoOpen !== false,
     attachFlags: options.attachFlags !== false,
+    ignore: parseIgnore(
+      typeof options.ignore === 'string' && options.ignore.trim() !== ''
+        ? options.ignore
+        : DEFAULT_IGNORE,
+    ),
   }
 
   on('session.start', async ($, e, next) => {
@@ -150,21 +220,21 @@ export const register: Register = (on, options) => {
   // One hook per tool so `e` narrows to that tool's own input.
   on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
     const ran = await next(e)
-    if (!ran.deny && !ran.isError) await noteTouch($, e.file_path)
+    if (!ran.deny && !ran.isError) await noteTouch($, e.file_path, config.ignore)
 
     return ran
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'Write' }, async ($, e, next) => {
     const ran = await next(e)
-    if (!ran.deny && !ran.isError) await noteTouch($, e.file_path)
+    if (!ran.deny && !ran.isError) await noteTouch($, e.file_path, config.ignore)
 
     return ran
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'NotebookEdit' }, async ($, e, next) => {
     const ran = await next(e)
-    if (!ran.deny && !ran.isError) await noteTouch($, e.notebook_path)
+    if (!ran.deny && !ran.isError) await noteTouch($, e.notebook_path, config.ignore)
 
     return ran
   }).catch(($, e, next) => next(e))
@@ -213,14 +283,22 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button, Code } = $.ui.resolve(e)
     const list = await read($, hunks)
     const isBusy = await read($, busy)
+    const last = await read($, lastDecision)
     const counts = tally(list)
     const current = nextHunk(list)
 
     const head = (
       <Text dimColor>
         {counts.pending} to read · {counts.reviewed} reviewed · {counts.flagged} flagged
+        {counts.dropped > 0 ? ` · ${counts.dropped} dropped` : ''}
         {isBusy ? ' · Claude is working' : ''}
       </Text>
+    )
+
+    const undoButton = last && (
+      <Button key="undo" hotkey="u" dimColor onPress={() => undo($)}>
+        Undo
+      </Button>
     )
 
     if (!current) {
@@ -228,10 +306,11 @@ export const register: Register = (on, options) => {
         <Box flexDirection="column" gap={1}>
           {head}
           <Text dimColor>
-            {counts.reviewed === 0
+            {counts.reviewed === 0 && counts.dropped === 0
               ? 'Nothing written yet. Hunks show up here as Claude edits files.'
               : 'Diff read. Nothing waiting on you.'}
           </Text>
+          {undoButton && <Box>{undoButton}</Box>}
         </Box>
       )
     }
@@ -261,6 +340,10 @@ export const register: Register = (on, options) => {
           <Button key="later" hotkey="l" dimColor onPress={() => mark($, current.id, 'later')}>
             Later
           </Button>
+          <Button key="drop" hotkey="x" dimColor onPress={() => dropFile($, current.path)}>
+            Skip file
+          </Button>
+          {undoButton}
         </Box>
         {counts.flagged > 0 && (
           <Text dimColor>

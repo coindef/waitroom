@@ -26,16 +26,32 @@ export type TurnRecord = {
   filesBucket: FileBucket
   /** An interrupted turn is recorded but never scored. */
   isAborted: boolean
+  /**
+   * The opening of the prompt that started the turn.
+   *
+   * What anchors a forecast to something: a score says you are overconfident,
+   * this says overconfident about what.
+   */
+  ask?: string
   /** The forecast, 0 to 1; absent when no bet was placed. */
   saidConfidence?: number
   saidFiles?: FileBucket
   /** The person's verdict; absent until they give it. */
   landed?: boolean
+  /**
+   * Set when the person waved the verdict away.
+   *
+   * Kept rather than deleted so the turn still counts as recorded, but it owes
+   * nothing and is never scored.
+   */
+  isVerdictSkipped?: true
 }
 
 /** The bet on the turn now running. */
 export type OpenBet = {
   turnId: string
+  /** The opening of the prompt that started this turn. */
+  ask: string
   /** Distinct paths written so far this turn. */
   files: string[]
   saidConfidence?: number
@@ -51,7 +67,7 @@ declare module 'claude-code' {
        * Bumped whenever the store changes.
        *
        * A `$.store` read does not subscribe a drawing the way a `$.state` read
-       * does, so the pane reads this to be redrawn when a record lands.
+       * does, so the sites read this to be redrawn when a record lands.
        */
       revision: number
     }

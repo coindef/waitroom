@@ -30,6 +30,12 @@
       "default": true,
       "description": "Attach flagged hunks to your next message as review notes for Claude.",
       "title": "Send flagged hunks to Claude"
+    },
+    "ignore": {
+      "type": "string",
+      "title": "Files to leave out",
+      "default": "",
+      "description": "Comma-separated globs whose hunks are never queued. Empty uses the built-in list of lockfiles, build output and snapshots."
     }
   }
 }

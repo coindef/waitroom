@@ -31,8 +31,9 @@ the diff has been reviewed at no dedicated review cost.
   touched, and when.
 - At the end of each turn, re-reads `git diff` for those files and queues each
   hunk as its own review card.
-- Shows one card at a time in a pane: the path, the hunk, and three buttons.
-  Press `o` (looks right), `f` (flag), `l` (later).
+- Shows one card at a time in a pane, in reading order — each file together,
+  top of the file first. Press `o` (looks right), `f` (flag), `l` (later),
+  `x` (skip the rest of this file), `u` (undo the last call).
 - Keeps a count on the status line, so an unread diff is visible without
   opening anything.
 - Sends what you flagged to Claude as review notes attached to your next
@@ -54,6 +55,7 @@ Set these in the config menu, or under `pluginConfigs` in settings.
 | Option | Default | What it means |
 | --- | --- | --- |
 | `settleTurns` | `0` | Turns a file must go untouched before its hunks are offered. `0` offers them at the end of the turn that wrote them. |
+| `ignore` | built-in list | Comma-separated globs whose hunks are never queued. Empty uses the built-in list. |
 | `contextLines` | `3` | Lines of context around each hunk (`git --unified`). |
 | `autoOpen` | `true` | Open the pane when the session starts. |
 | `attachFlags` | `true` | Attach flagged hunks to your next message. |
@@ -63,6 +65,33 @@ text. When Claude rewrites a region you already marked reviewed, the id changes
 and the hunk returns to the queue as a new card, so surfacing eagerly costs
 nothing. Raise it to `1` or `2` if you would rather read each region once the
 agent has clearly moved on.
+
+## Files it leaves alone
+
+Agents regenerate lockfiles, build output and snapshots, and one regenerated
+lockfile is otherwise forty hunks of noise ahead of the code that matters. So
+these are never queued:
+
+```
+lockfiles (npm, pnpm, yarn, bun, cargo, poetry, composer, bundler, go.sum)
+node_modules/ dist/ build/ out/ target/ .next/ coverage/
+__snapshots__/ *.snap *.min.js *.min.css *.map
+```
+
+Set `ignore` to your own comma-separated globs to replace that list. `*` stays
+inside one path segment, `**` crosses them, and a leading `**/` matches a
+relative or an absolute spelling of the same file.
+
+## Where the pane goes
+
+A pane nobody asked for is only placed from 144 columns, so on a narrower
+terminal it waits until you ask. When that happens the status line says so:
+
+```
+review: 3 to read · /wait-review
+```
+
+Running `/wait-review` places it at any width.
 
 ## What it does not do
 
@@ -74,12 +103,16 @@ agent has clearly moved on.
 - **It does not block anything.** Every hook that sits at a gating site passes
   the call through if the plugin itself fails, so a bug here can never swallow
   your prompt or an edit.
+- **No comment box on a flag.** Flagging sends the hunk, not a reason. A
+  one-line note would be better and is the next thing worth adding; a picker of
+  canned reasons would not, since the agent can usually see what is wrong once
+  the hunk is in front of it.
 
 ## Developing
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 23 tests
+claude plugin test .         # 34 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

@@ -32,8 +32,19 @@ export const bucketOf = (files: number): FileBucket => {
  */
 const scorable = (records: readonly TurnRecord[]): TurnRecord[] =>
   records.filter(
-    one => one.saidConfidence !== undefined && one.landed !== undefined && !one.isAborted,
+    one =>
+      one.saidConfidence !== undefined &&
+      one.landed !== undefined &&
+      !one.isAborted &&
+      one.isVerdictSkipped !== true,
   )
+
+/** A bet still waiting on the person: bet, not yet answered, not waved away. */
+const isOwed = (one: TurnRecord): boolean =>
+  one.saidConfidence !== undefined &&
+  one.landed === undefined &&
+  one.isVerdictSkipped !== true &&
+  !one.isAborted
 
 export type CalibrationRow = {
   /** The forecast, 0 to 1. */
@@ -99,6 +110,8 @@ export type Report = {
   medianMs?: number
   /** Awaiting your verdict. */
   owed: number
+  /** The widest misses, for the part of the report that teaches. */
+  misses: Miss[]
   lean?: 'over' | 'under' | 'fair'
   /** Percentage points between what you said on average and what happened. */
   gap?: number
@@ -108,9 +121,7 @@ export const report = (records: readonly TurnRecord[]): Report => {
   const scored = scorable(records)
   const live = records.filter(one => !one.isAborted)
   const filesBet = live.filter(one => one.saidFiles !== undefined)
-  const owed = records.filter(
-    one => one.saidConfidence !== undefined && one.landed === undefined && !one.isAborted,
-  ).length
+  const owed = records.filter(isOwed).length
 
   const base: Report = {
     scored: scored.length,
@@ -118,6 +129,7 @@ export const report = (records: readonly TurnRecord[]): Report => {
     rows: calibration(records),
     owed,
     medianMs: median(live.map(one => one.durationMs)),
+    misses: worstCalls(records),
   }
 
   if (filesBet.length > 0) {
@@ -143,9 +155,40 @@ export const report = (records: readonly TurnRecord[]): Report => {
 
 /** The oldest bet still waiting on a verdict, which is the one to ask about. */
 export const owedVerdict = (records: readonly TurnRecord[]): TurnRecord | undefined =>
-  records
-    .filter(one => one.saidConfidence !== undefined && one.landed === undefined && !one.isAborted)
-    .sort((a, b) => a.at - b.at)[0]
+  records.filter(isOwed).sort((a, b) => a.at - b.at)[0]
+
+/** Waves the verdict away: the turn stays recorded but owes and scores nothing. */
+export const skipVerdict = (
+  records: readonly TurnRecord[],
+  turnId: string,
+): TurnRecord[] =>
+  records.map(one => (one.turnId === turnId ? { ...one, isVerdictSkipped: true as const } : one))
+
+export type Miss = {
+  ask?: string
+  said: number
+  landed: boolean
+  /** Squared error of this one call: how far the forecast was from the event. */
+  error: number
+}
+
+/**
+ * The calls that went worst, widest first.
+ *
+ * The table says you are overconfident; this says what about. It is the part
+ * that teaches, because a forecast is only ever wrong about a specific ask.
+ */
+export const worstCalls = (records: readonly TurnRecord[], limit = 3): Miss[] =>
+  scorable(records)
+    .map(one => {
+      const said = one.saidConfidence as number
+      const landed = one.landed === true
+
+      return { ask: one.ask, said, landed, error: (said - (landed ? 1 : 0)) ** 2 }
+    })
+    .filter(one => one.error > 0.25)
+    .sort((a, b) => b.error - a.error)
+    .slice(0, limit)
 
 /** Adds or replaces a record, newest last, oldest dropped past `limit`. */
 export const keepRecord = (
@@ -175,21 +218,60 @@ export const asDuration = (ms: number): string => {
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
 }
 
-/** The report as the slash command prints it. */
-export const asText = (found: Report): string => {
-  if (found.recorded === 0) return 'No turns recorded yet. Place a bet while the next one runs.'
+/** How wide a slice of the prompt anchors a bet. */
+export const ASK_ROOM = 48
 
-  const lines: string[] = []
-  if (found.brier !== undefined) {
-    const skill = found.brier < COIN_FLIP_BRIER ? 'better than a coin flip' : 'no better than 50% every time'
-    lines.push(`Brier ${found.brier.toFixed(3)} over ${found.scored} scored turns — ${skill}.`)
-  } else {
-    lines.push(`${found.recorded} turns recorded, none scored yet.`)
+/** The opening of a prompt, on one line, for the band and the record. */
+export const shortAsk = (text: string, room = ASK_ROOM): string => {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  if (room < 1) return ''
+  if (flat.length <= room) return flat
+
+  return `${flat.slice(0, room - 1).trimEnd()}…`
+}
+
+/**
+ * How much of the ask the band can show beside its buttons.
+ *
+ * The buttons are the point, so they get the room first: below what they need
+ * the ask is dropped rather than wrapped onto a second row.
+ */
+export const askRoomFor = (bodyColumns: number): number => {
+  const left = Math.min(ASK_ROOM, bodyColumns - 42)
+
+  return left < 12 ? 0 : left
+}
+
+/**
+ * The headline, in words rather than a score.
+ *
+ * "Brier 0.147" tells almost nobody anything on its own, so the lean leads and
+ * the number backs it up.
+ */
+export const headline = (found: Report): string => {
+  if (found.lean === 'over') return `You run ${found.gap} points overconfident.`
+  if (found.lean === 'under') {
+    return `You run ${Math.abs(found.gap ?? 0)} points underconfident.`
   }
 
-  if (found.lean === 'over') lines.push(`You run ${found.gap} points overconfident.`)
-  if (found.lean === 'under') lines.push(`You run ${Math.abs(found.gap ?? 0)} points underconfident.`)
-  if (found.lean === 'fair') lines.push('Your average forecast matches what happens.')
+  return 'Your forecasts match what happens.'
+}
+
+/** The report as the slash command prints it. */
+export const asText = (found: Report): string => {
+  if (found.recorded === 0) return 'No turns recorded yet. Call the next one while it runs.'
+  if (found.brier === undefined) {
+    const owed = found.owed > 0 ? ` ${found.owed} waiting on your verdict.` : ''
+
+    return `${found.recorded} turns recorded, none scored yet.${owed}`
+  }
+
+  const skill =
+    found.brier < COIN_FLIP_BRIER ? 'better than a coin flip' : 'no better than a coin flip'
+  const lines: string[] = [
+    headline(found),
+    `Brier ${found.brier.toFixed(3)} over ${found.scored} scored turns — ${skill}.`,
+  ]
 
   if (found.rows.length > 0) {
     lines.push('')
@@ -198,6 +280,15 @@ export const asText = (found: Report): string => {
       lines.push(
         `  said ${asPercent(row.said).padStart(4)}   actual ${asPercent(row.actual).padStart(4)}   (${row.turns})${note}`,
       )
+    }
+  }
+
+  if (found.misses.length > 0) {
+    lines.push('', 'Worst calls')
+    for (const miss of found.misses) {
+      const said = asPercent(miss.said)
+      const what = miss.landed ? 'and it landed' : 'and it did not'
+      lines.push(`  ${said} ${what} — ${miss.ask ?? 'a turn with no prompt'}`)
     }
   }
 

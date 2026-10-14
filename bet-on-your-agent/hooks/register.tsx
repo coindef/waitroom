@@ -4,24 +4,26 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { FileBucket, OpenBet, TurnRecord } from '../types'
 import {
   asDuration,
+  askRoomFor,
   asPercent,
   asText,
   BANDS,
   bucketOf,
   COIN_FLIP_BRIER,
   FILE_BUCKETS,
+  headline,
   keepRecord,
   owedVerdict,
   report,
   setVerdict,
+  shortAsk,
+  skipVerdict,
 } from './bet'
 
 const PANE = 'bet-on-your-agent'
 const STORE_KEY = 'turns'
-/** Hotkeys for the file-count buttons; the confidence row takes 1 to 5. */
-const FILE_KEYS = ['a', 'b', 'c', 'd'] as const
 
-const NO_BET: OpenBet = { turnId: '', files: [] }
+const NO_BET: OpenBet = { turnId: '', ask: '', files: [] }
 
 const open = atom({ plugin: 'bet-on-your-agent', key: 'open' } as const, NO_BET)
 const busy = atom({ plugin: 'bet-on-your-agent', key: 'busy' } as const, false)
@@ -39,30 +41,39 @@ const loadTurns = async ($: EngineInterface): Promise<TurnRecord[]> => {
 /**
  * Writes the history and bumps `revision`.
  *
- * A `$.store` read does not subscribe a drawing, so without the bump the pane
- * would keep showing the history as it stood when it was last drawn.
+ * A `$.store` read does not subscribe a drawing, so without the bump the band
+ * and pane would keep showing the history as it stood when last drawn.
  */
 const saveTurns = async ($: EngineInterface, records: readonly TurnRecord[]) => {
   await $.store.set(STORE_KEY, records)
   await update($, revision, at => at + 1)
 }
 
+/**
+ * The status line, which is a convenience: it never throws outward, because a
+ * failure here would otherwise abort whatever hook was keeping it up to date —
+ * including the one that records the turn.
+ */
 const showStatus = async ($: EngineInterface) => {
-  const isBusy = await read($, busy)
-  const bet = await read($, open)
-  if (isBusy) {
-    const said = bet.saidConfidence === undefined ? 'no bet' : asPercent(bet.saidConfidence)
-    $.ui.status(`bet: ${said}`)
+  try {
+    const isBusy = await read($, busy)
+    const bet = await read($, open)
+    if (isBusy) {
+      const said = bet.saidConfidence === undefined ? 'open' : asPercent(bet.saidConfidence)
+      $.ui.status(`bet: ${said}`)
 
-    return
-  }
-  const found = report(await loadTurns($))
-  if (found.owed > 0) {
-    $.ui.status(`bet: ${found.owed} verdict${found.owed === 1 ? '' : 's'} owed`)
+      return
+    }
+    const found = report(await loadTurns($))
+    if (found.owed > 0) {
+      $.ui.status(`bet: ${found.owed} verdict${found.owed === 1 ? '' : 's'} owed`)
 
-    return
+      return
+    }
+    $.ui.status(found.brier === undefined ? undefined : `bet: Brier ${found.brier.toFixed(2)}`)
+  } catch {
+    // Nothing to do: the record is still kept, only unshown.
   }
-  $.ui.status(found.brier === undefined ? undefined : `bet: Brier ${found.brier.toFixed(2)}`)
 }
 
 const placeConfidence = async ($: EngineInterface, said: number) => {
@@ -80,6 +91,11 @@ const giveVerdict = async ($: EngineInterface, turnId: string, landed: boolean) 
   await showStatus($)
 }
 
+const waveVerdict = async ($: EngineInterface, turnId: string) => {
+  await saveTurns($, skipVerdict(await loadTurns($), turnId))
+  await showStatus($)
+}
+
 const noteFile = async ($: EngineInterface, path: string | undefined) => {
   if (path === undefined || path === '') return
   await update($, open, bet =>
@@ -88,7 +104,7 @@ const noteFile = async ($: EngineInterface, path: string | undefined) => {
 }
 
 export const register: Register = (on, options) => {
-  const config: Config = { autoOpen: options.autoOpen !== false }
+  const config: Config = { autoOpen: options.autoOpen === true }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -131,7 +147,7 @@ export const register: Register = (on, options) => {
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
     // The betting window opens here and closes when the turn lands.
-    await update($, open, () => ({ turnId: e.turnId, files: [] }))
+    await update($, open, () => ({ turnId: e.turnId, ask: e.text, files: [] }))
     await update($, busy, () => true)
     await showStatus($)
 
@@ -143,7 +159,9 @@ export const register: Register = (on, options) => {
     if (e.agentId !== undefined) return done
 
     const bet = await read($, open)
-    const files = bet.turnId === e.turnId ? bet.files.length : 0
+    const isThisTurn = bet.turnId === e.turnId
+    const files = isThisTurn ? bet.files.length : 0
+    const ask = isThisTurn ? shortAsk(bet.ask) : ''
     const record: TurnRecord = {
       turnId: e.turnId,
       at: await $.clock.now(),
@@ -151,12 +169,11 @@ export const register: Register = (on, options) => {
       files,
       filesBucket: bucketOf(files),
       isAborted: e.isAborted,
-      ...(bet.turnId === e.turnId && bet.saidConfidence !== undefined
+      ...(ask === '' ? {} : { ask }),
+      ...(isThisTurn && bet.saidConfidence !== undefined
         ? { saidConfidence: bet.saidConfidence }
         : {}),
-      ...(bet.turnId === e.turnId && bet.saidFiles !== undefined
-        ? { saidFiles: bet.saidFiles }
-        : {}),
+      ...(isThisTurn && bet.saidFiles !== undefined ? { saidFiles: bet.saidFiles } : {}),
     }
     await saveTurns($, keepRecord(await loadTurns($), record))
     await update($, busy, () => false)
@@ -165,118 +182,131 @@ export const register: Register = (on, options) => {
     return done
   }).catch(($, e, next) => next(e))
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
-    const isBusy = await read($, busy)
+  /**
+   * The band is where betting lives.
+   *
+   * It sits where the person is already looking while they wait, it costs no
+   * pane, and a bare digit typed into an empty composer answers its buttons —
+   * so a forecast is one keystroke with no focus to manage. Only ever one
+   * question at a time, so the digits always mean the obvious thing.
+   */
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    // A survey of the engine's own owns the band while it is up.
+    if (e.props.hasSurvey) return next(e)
+
     const bet = await read($, open)
-    // Read so a saved record redraws this pane; the value itself is not shown.
     await read($, revision)
-    const records = await loadTurns($)
-    const owed = owedVerdict(records)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const room = askRoomFor(e.props.bodyColumns)
 
-    const verdictRow = owed && (
-      <Box flexDirection="column">
-        <Text>
-          You said {asPercent(owed.saidConfidence ?? 0)} on a turn that wrote {owed.files}{' '}
-          file{owed.files === 1 ? '' : 's'} in {asDuration(owed.durationMs)}. Did it land?
-        </Text>
-        <Box gap={2}>
-          <Button key="landed" hotkey="y" plain onPress={() => giveVerdict($, owed.turnId, true)}>
-            landed
-          </Button>
-          <Button key="fixed" hotkey="n" plain onPress={() => giveVerdict($, owed.turnId, false)}>
-            needed fixing
-          </Button>
-        </Box>
-      </Box>
-    )
+    if (e.props.isWorking && bet.turnId !== '') {
+      const said = bet.saidConfidence
+      const quoted = shortAsk(bet.ask, room)
+      const about = quoted === '' ? '' : ` "${quoted}"`
 
-    if (isBusy) {
+      if (said === undefined) {
+        return (
+          <Box gap={1}>
+            <Text>Will{about} land first try?</Text>
+            {BANDS.map((band, at) => (
+              <Button
+                key={`p${Math.round(band * 100)}`}
+                hotkey={String(at + 1)}
+                plain
+                onPress={() => placeConfidence($, band)}
+              >
+                {asPercent(band)}
+              </Button>
+            ))}
+          </Box>
+        )
+      }
+
+      if (bet.saidFiles === undefined) {
+        return (
+          <Box gap={1}>
+            <Text dimColor>{asPercent(said)} ·</Text>
+            <Text>how many files?</Text>
+            {FILE_BUCKETS.map((bucket, at) => (
+              <Button
+                key={`f${bucket}`}
+                hotkey={String(at + 1)}
+                plain
+                onPress={() => placeFiles($, bucket)}
+              >
+                {bucket}
+              </Button>
+            ))}
+          </Box>
+        )
+      }
+
       return (
-        <Box flexDirection="column" gap={1}>
+        <Box>
           <Text dimColor>
-            Turn running · {bet.files.length} file{bet.files.length === 1 ? '' : 's'} written so far
+            bet {asPercent(said)} · {bet.saidFiles} files · {bet.files.length} written so far
           </Text>
-
-          <Box flexDirection="column">
-            <Text>Will it land first try?</Text>
-            {bet.saidConfidence === undefined ? (
-              <Box gap={2}>
-                {BANDS.map((band, at) => (
-                  <Button
-                    key={`p${Math.round(band * 100)}`}
-                    hotkey={String(at + 1)}
-                    plain
-                    onPress={() => placeConfidence($, band)}
-                  >
-                    {asPercent(band)}
-                  </Button>
-                ))}
-              </Box>
-            ) : (
-              <Text dimColor>you said {asPercent(bet.saidConfidence)}</Text>
-            )}
-          </Box>
-
-          <Box flexDirection="column">
-            <Text>How many files will it touch?</Text>
-            {bet.saidFiles === undefined ? (
-              <Box gap={2}>
-                {FILE_BUCKETS.map((bucket, at) => (
-                  <Button
-                    key={`f${bucket}`}
-                    hotkey={FILE_KEYS[at]}
-                    plain
-                    onPress={() => placeFiles($, bucket)}
-                  >
-                    {bucket}
-                  </Button>
-                ))}
-              </Box>
-            ) : (
-              <Text dimColor>you said {bet.saidFiles}</Text>
-            )}
-          </Box>
-
-          {verdictRow}
         </Box>
       )
     }
 
-    if (owed) return <Box flexDirection="column">{verdictRow}</Box>
+    const owed = owedVerdict(await loadTurns($))
+    if (!owed) return next(e)
 
-    const found = report(records)
+    const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, room)
+
+    return (
+      <Box gap={1}>
+        <Text>
+          {quoted === '' ? 'That turn' : `"${quoted}"`} — you said{' '}
+          {asPercent(owed.saidConfidence ?? 0)}.
+        </Text>
+        <Button key="landed" hotkey="1" plain onPress={() => giveVerdict($, owed.turnId, true)}>
+          landed
+        </Button>
+        <Button key="fixed" hotkey="2" plain onPress={() => giveVerdict($, owed.turnId, false)}>
+          needed fixing
+        </Button>
+        <Button key="skip" hotkey="3" plain dimColor onPress={() => waveVerdict($, owed.turnId)}>
+          skip
+        </Button>
+      </Box>
+    )
+  })
+
+  // The pane is the record: what the band collects, read back. /bet opens it.
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    await read($, revision)
+    const found = report(await loadTurns($))
+
     if (found.brier === undefined) {
       return (
         <Box flexDirection="column" gap={1}>
           <Text dimColor>
             {found.recorded === 0
-              ? 'No turns yet. Call the next one while it runs.'
+              ? 'No turns yet. Call the next one from the row above the prompt.'
               : `${found.recorded} turns recorded, none scored yet.`}
           </Text>
-          <Text dimColor>Bet on a turn while it runs, then say whether it landed.</Text>
+          <Text dimColor>Bet while a turn runs, then say whether it landed.</Text>
         </Box>
       )
     }
 
-    const room = Math.max(2, (e.viewport?.rows ?? 24) - 8)
+    const rows = Math.max(2, (e.viewport?.rows ?? 24) - 12)
 
     return (
       <Box flexDirection="column" gap={1}>
         <Box flexDirection="column">
-          <Text bold>
-            Brier {found.brier.toFixed(3)} over {found.scored} turns
-          </Text>
+          <Text bold>{headline(found)}</Text>
           <Text dimColor>
+            Brier {found.brier.toFixed(3)} over {found.scored} turns ·{' '}
             {found.brier < COIN_FLIP_BRIER ? 'better than a coin flip' : 'no better than a coin flip'}
-            {found.lean === 'fair'
-              ? ' · your average forecast matches what happens'
-              : ` · ${Math.abs(found.gap ?? 0)} points ${found.lean}confident`}
           </Text>
         </Box>
 
         <Box flexDirection="column">
-          {found.rows.slice(0, room).map(row => (
+          {found.rows.slice(0, rows).map(row => (
             <Text key={`row${Math.round(row.said * 100)}`} dimColor={row.lean === 'fair'}>
               said {asPercent(row.said).padStart(4)} · actual {asPercent(row.actual).padStart(4)} ·{' '}
               {row.turns} turn{row.turns === 1 ? '' : 's'}
@@ -284,6 +314,18 @@ export const register: Register = (on, options) => {
             </Text>
           ))}
         </Box>
+
+        {found.misses.length > 0 && (
+          <Box flexDirection="column">
+            <Text dimColor>Worst calls</Text>
+            {found.misses.map(miss => (
+              <Text key={`miss${miss.ask ?? ''}${miss.said}`}>
+                {asPercent(miss.said)} {miss.landed ? 'and it landed' : 'and it did not'} —{' '}
+                <Text dimColor>{miss.ask ?? 'a turn with no prompt'}</Text>
+              </Text>
+            ))}
+          </Box>
+        )}
 
         <Text dimColor>
           {found.files ? `files called ${found.files.right}/${found.files.of} · ` : ''}

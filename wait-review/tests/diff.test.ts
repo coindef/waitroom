@@ -2,11 +2,16 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Hunk } from '../types'
 import {
+  DEFAULT_IGNORE,
+  globToRegExp,
+  isIgnored,
   mergeHunks,
   nextHunk,
   parseDiff,
+  parseIgnore,
   reviewNote,
   sidePath,
+  sortHunks,
   tally,
   toRepoPath,
   trimHunk,
@@ -45,6 +50,7 @@ const hunk = (over: Partial<Hunk>): Hunk => ({
   id: 'id',
   path: 'a.ts',
   header: '@@ -1,1 +1,1 @@',
+  start: 1,
   text: '@@ -1,1 +1,1 @@\n-a\n+b',
   added: 1,
   removed: 1,
@@ -169,6 +175,96 @@ test('the queue offers what is pending before what was put off', async () => {
   expect(nextHunk([hunk({ status: 'ok' }), hunk({ id: 's', status: 'sent' })])).toBeUndefined()
 })
 
+test('a hunk knows where in the file it starts', async () => {
+  const found = parseDiff(DIFF)
+
+  expect(found[0]?.start).toBe(1)
+  expect(found[1]?.start).toBe(21)
+  expect(found[2]?.start).toBe(1)
+})
+
+test('the queue reads a file top to bottom, one file at a time', async () => {
+  const sorted = sortHunks([
+    hunk({ id: 'b2', path: 'b.ts', start: 90 }),
+    hunk({ id: 'a2', path: 'a.ts', start: 40 }),
+    hunk({ id: 'b1', path: 'b.ts', start: 10 }),
+    hunk({ id: 'a1', path: 'a.ts', start: 5 }),
+  ])
+
+  expect(sorted.map(one => one.id)).toEqual(['a1', 'a2', 'b1', 'b2'])
+})
+
+test('a merge leaves the queue in reading order however the scans arrived', async () => {
+  const merged = mergeHunks(
+    [hunk({ id: 'z', path: 'z.ts', start: 1, status: 'ok' })],
+    [hunk({ id: 'a2', path: 'a.ts', start: 70 }), hunk({ id: 'a1', path: 'a.ts', start: 2 })],
+    ['a.ts'],
+  )
+
+  expect(merged.map(one => one.id)).toEqual(['a1', 'a2', 'z'])
+})
+
+test('a capped queue drops the oldest hunks, not every late-alphabet file', async () => {
+  const found = [
+    hunk({ id: 'a', path: 'a.ts', start: 1 }),
+    hunk({ id: 'z', path: 'z.ts', start: 1 }),
+  ]
+  const merged = mergeHunks([], found, ['a.ts', 'z.ts'], 1)
+
+  // One survives, and it is the newest found rather than the alphabetical first.
+  expect(merged).toHaveLength(1)
+  expect(merged[0]?.id).toBe('z')
+})
+
+test('a glob matches a path whether it is spelled relative or absolute', async () => {
+  expect(globToRegExp('**/package-lock.json').test('package-lock.json')).toBe(true)
+  expect(globToRegExp('**/package-lock.json').test('/home/me/app/package-lock.json')).toBe(true)
+  expect(globToRegExp('**/package-lock.json').test('src/package-lock.json.ts')).toBe(false)
+})
+
+test('a glob keeps * inside one segment and ** across them', async () => {
+  expect(globToRegExp('*.snap').test('a.snap')).toBe(true)
+  expect(globToRegExp('*.snap').test('dir/a.snap')).toBe(false)
+  expect(globToRegExp('**/dist/**').test('/app/dist/js/a.js')).toBe(true)
+  expect(globToRegExp('**/dist/**').test('/app/src/a.js')).toBe(false)
+  expect(globToRegExp('a?.ts').test('a1.ts')).toBe(true)
+  expect(globToRegExp('a?.ts').test('a12.ts')).toBe(false)
+})
+
+test('a dot in a pattern is a dot, not any character', async () => {
+  expect(globToRegExp('**/*.map').test('/app/a.map')).toBe(true)
+  expect(globToRegExp('**/*.map').test('/app/axmap')).toBe(false)
+})
+
+test('the built-in list covers the files nobody reviews', async () => {
+  const patterns = parseIgnore(DEFAULT_IGNORE)
+
+  for (const path of [
+    '/app/package-lock.json',
+    '/app/pnpm-lock.yaml',
+    '/app/Cargo.lock',
+    '/app/go.sum',
+    '/app/dist/main.js',
+    '/app/coverage/lcov.info',
+    '/app/src/__snapshots__/a.snap',
+    '/app/vendor/thing.min.js',
+    '/app/out/bundle.js.map',
+  ]) {
+    expect(isIgnored(path, patterns)).toBe(true)
+  }
+
+  // The code itself is never swept up with it.
+  for (const path of ['/app/src/index.ts', '/app/hooks/diff.ts', '/app/README.md']) {
+    expect(isIgnored(path, patterns)).toBe(false)
+  }
+})
+
+test('an ignore list is read off commas and newlines, blanks dropped', async () => {
+  expect(parseIgnore('a, b\n c ,,')).toEqual(['a', 'b', 'c'])
+  expect(parseIgnore('')).toEqual([])
+  expect(isIgnored('x.ts', [])).toBe(false)
+})
+
 test('the tally separates what is read, flagged and already sent', async () => {
   const counts = tally([
     hunk({ id: '1', status: 'pending' }),
@@ -179,7 +275,7 @@ test('the tally separates what is read, flagged and already sent', async () => {
     hunk({ id: '6', status: 'later' }),
   ])
 
-  expect(counts).toEqual({ pending: 2, later: 1, flagged: 1, reviewed: 2 })
+  expect(counts).toEqual({ pending: 2, later: 1, flagged: 1, reviewed: 2, dropped: 0 })
 })
 
 test('review notes carry each flagged hunk as the diff that was read', async () => {
@@ -258,4 +354,16 @@ test('a rescan that finds the same hunk does not hold it twice', async () => {
 
   expect(merged).toHaveLength(1)
   expect(merged[0]?.status).toBe('ok')
+})
+
+test('a dropped hunk counts as dropped, never as reviewed', async () => {
+  const counts = tally([hunk({ id: '1', status: 'dropped' }), hunk({ id: '2', status: 'ok' })])
+
+  // Waving a file away is not the same as having read it.
+  expect(counts.dropped).toBe(1)
+  expect(counts.reviewed).toBe(1)
+})
+
+test('a dropped hunk is never offered again', async () => {
+  expect(nextHunk([hunk({ id: 'd', status: 'dropped' })])).toBeUndefined()
 })

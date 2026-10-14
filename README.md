@@ -12,7 +12,7 @@ Two Claude Code plugins for the dead time while a coding agent works.
 | Mod | What it does |
 | --- | --- |
 | [**wait-review**](./wait-review) | Offers the diff the agent already wrote, one hunk at a time, and sends what you flag back with your next message. |
-| [**bet-on-your-agent**](./bet-on-your-agent) | Forecast how the turn will go while it runs, then get a Brier score and a calibration table. |
+| [**bet-on-your-agent**](./bet-on-your-agent) | Forecast how the turn will go from the row above the prompt, then get a Brier score and a calibration table. |
 
 ## The idea behind both
 
@@ -33,8 +33,10 @@ abandoned mid-thought:
   trust the agent is the skill that matters most and is currently learned by
   vibes.
 
-They compose: both open a pane during the same window, one asking what you make
-of what it wrote, the other what you expect next.
+They compose rather than compete for room: **wait-review** takes the pane, and
+**bet-on-your-agent** takes the single row above the prompt, where a bare digit
+answers it. One asks what you make of what the agent wrote, the other what you
+expect from what it is writing.
 
 ## Developing
 
@@ -42,10 +44,10 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 23 tests
+claude plugin test     ./wait-review          # 34 tests
 
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 20 tests
+claude plugin test     ./bet-on-your-agent    # 31 tests
 ```
 
 Run a working copy without installing it:

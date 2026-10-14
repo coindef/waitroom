@@ -77,10 +77,12 @@ export const parseDiff = (output: string): Hunk[] => {
     while (body.length > 0 && body[body.length - 1] === '') body.pop()
     if (body.length === 0) return
     const text = [header, ...body].join('\n')
+    const head = HUNK_HEAD.exec(header)
     hunks.push({
       id: `${path}@${hash(text)}`,
       path,
       header,
+      start: Number(head?.[3] ?? 0),
       text,
       added: body.filter(line => line.startsWith('+')).length,
       removed: body.filter(line => line.startsWith('-')).length,
@@ -163,6 +165,15 @@ export const trimHunk = (text: string, maxLines: number): { text: string; hidden
 }
 
 /**
+ * The order a person reads in: each file together, top of the file first.
+ *
+ * Without this the queue grows in whatever order the scans happened to find
+ * things, and reading jumps between files mid-thought.
+ */
+export const sortHunks = (list: readonly Hunk[]): Hunk[] =>
+  [...list].sort((a, b) => (a.path === b.path ? a.start - b.start : a.path < b.path ? -1 : 1))
+
+/**
  * Merges a fresh scan into the queue, keeping what the person already decided.
  *
  * `scanned` is every path the scan asked git about, not every path it found, so
@@ -179,7 +190,9 @@ export const mergeHunks = (
   const asked = new Set(scanned)
   const kept = old.filter(hunk => !asked.has(hunk.path))
   const merged = found.map(hunk => decided.get(hunk.id) ?? hunk)
-  return [...kept, ...merged].slice(-limit)
+  // Cap newest-first so a huge diff drops old hunks, not every file late in
+  // the alphabet; order what survives for reading.
+  return sortHunks([...kept, ...merged].slice(-limit))
 }
 
 /** The hunk to show: the first one not yet decided, else the first put off. */
@@ -192,7 +205,82 @@ export const tally = (list: readonly Hunk[]) => ({
   later: list.filter(hunk => hunk.status === 'later').length,
   flagged: list.filter(hunk => hunk.status === 'flagged').length,
   reviewed: list.filter(hunk => hunk.status === 'ok' || hunk.status === 'sent').length,
+  dropped: list.filter(hunk => hunk.status === 'dropped').length,
 })
+
+/**
+ * Files the agent writes but nobody reviews: lockfiles, build output,
+ * snapshots. One regenerated lockfile is otherwise forty hunks of noise ahead
+ * of the code that matters.
+ */
+export const DEFAULT_IGNORE = [
+  '**/package-lock.json',
+  '**/pnpm-lock.yaml',
+  '**/yarn.lock',
+  '**/bun.lockb',
+  '**/Cargo.lock',
+  '**/poetry.lock',
+  '**/composer.lock',
+  '**/Gemfile.lock',
+  '**/go.sum',
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/out/**',
+  '**/target/**',
+  '**/.next/**',
+  '**/coverage/**',
+  '**/__snapshots__/**',
+  '**/*.snap',
+  '**/*.min.js',
+  '**/*.min.css',
+  '**/*.map',
+].join(',')
+
+/** Splits a configured ignore list on commas and newlines. */
+export const parseIgnore = (text: string): string[] =>
+  text
+    .split(/[,\n]/)
+    .map(one => one.trim())
+    .filter(one => one !== '')
+
+/**
+ * A glob as a whole-path pattern: `*` within a segment, `?` one character,
+ * `**` across segments, and a leading double-star-slash that may match no
+ * leading segments at all, so one pattern covers a relative and an absolute
+ * spelling of the same file.
+ */
+export const globToRegExp = (pattern: string): RegExp => {
+  let out = ''
+  for (let at = 0; at < pattern.length; at++) {
+    const char = pattern[at]
+    if (char === '*') {
+      if (pattern[at + 1] === '*') {
+        if (pattern[at + 2] === '/') {
+          out += '(?:.*/)?'
+          at += 2
+        } else {
+          out += '.*'
+          at += 1
+        }
+      } else {
+        out += '[^/]*'
+      }
+      continue
+    }
+    if (char === '?') {
+      out += '[^/]'
+      continue
+    }
+    out += (char ?? '').replace(/[.+^${}()|[\]\\]/g, '\\$&')
+  }
+
+  return new RegExp(`^${out}$`)
+}
+
+/** Whether any pattern covers this path; matched against the path as given. */
+export const isIgnored = (path: string, patterns: readonly string[]): boolean =>
+  patterns.some(pattern => globToRegExp(pattern).test(path))
 
 const NOTE_BUDGET = 12000
 

@@ -1,8 +1,8 @@
 # bet-on-your-agent
 
-A Claude Code plugin that scores how well you call your own agent. During the
-wait, you forecast how the turn will go. Afterwards it tells you how calibrated
-you were.
+A Claude Code plugin that scores how well you call your own agent. While a turn
+runs, the row above the prompt asks you how it will go. Afterwards it tells you
+how calibrated you were.
 
 ```
 /plugin install bet-on-your-agent --marketplace coindef/Plugin
@@ -29,28 +29,51 @@ lands.
 
 ## What it does
 
-While a turn runs, the pane asks two things:
-
-- **Will it land first try?** — 50 / 65 / 80 / 90 / 95%. Resolved by your own
-  verdict, which you give whenever you feel like it.
-- **How many files will it touch?** — 0 / 1 / 2–3 / 4+. Resolved automatically
-  from the `Edit`, `Write` and `NotebookEdit` calls the turn actually made.
-
-Press a number for the first row, a letter for the second. You can answer one,
-both, or neither.
-
-When nothing is running, the pane shows your record:
+It lives in the row above the prompt, which is where you are already looking
+while you wait. **Type a bare digit into an empty composer and it answers** —
+no pane to place, no focus to manage, nothing to click.
 
 ```
-Brier 0.147 over 23 turns
-better than a coin flip · 12 points overconfident
+Will "add the retry logic to the client" land first try?  1: 50% 2: 65% 3: 80% 4: 90% 5: 95%
+```
+
+Answer that and it asks the next thing, never both at once, so the digits
+always mean the obvious thing:
+
+```
+80% · how many files?  1: 0  2: 1  3: 2-3  4: 4+
+```
+
+- **Will it land first try?** Resolved by your own verdict, which it asks for
+  once the turn lands — with a `skip` if you would rather not say.
+- **How many files?** Resolved automatically from the `Edit`, `Write` and
+  `NotebookEdit` calls the turn actually made, so it needs no verdict at all.
+
+The forecast is quoted against **what you asked for**, which is the point: a
+score tells you that you are overconfident, the ask tells you what about.
+
+`/bet` opens the record:
+
+```
+You run 12 points overconfident.
+Brier 0.147 over 23 turns · better than a coin flip
 
 said  50% · actual  60% ·  5 turns · underconfident
 said  80% · actual  64% · 11 turns · overconfident
 said  95% · actual  71% ·  7 turns · overconfident
 
+Worst calls
+95% and it did not — refactor the auth layer to use the new client
+95% and it did not — make the config loader handle overrides
+80% and it did not — rename the session helpers
+
 files called 14/23 · lands first try 65% · median 42s
 ```
+
+The headline is in words because "Brier 0.147" means nothing on its own. The
+table is the part that teaches, and **Worst calls** is the part that teaches
+fastest: it is always a specific kind of ask you misjudge, not forecasting in
+general.
 
 Every turn is recorded whether you bet on it or not, so even without forecasting
 you accumulate the thing that is genuinely hard to intuit: how often your agent
@@ -61,13 +84,13 @@ takes.
 
 | Command | What it does |
 | --- | --- |
-| `/bet` | Prints your Brier score and calibration table |
+| `/bet` | Prints your record and opens the pane |
 
 ## Settings
 
 | Option | Default | What it means |
 | --- | --- | --- |
-| `autoOpen` | `true` | Open the pane when the session starts. |
+| `autoOpen` | `false` | Open the record pane at session start. Off by default: betting lives in the band, so the pane is only worth space when you want to read the record. |
 
 ## How the scoring works
 
@@ -80,7 +103,10 @@ takes.
 - **Interrupted turns are recorded but never scored.** Stopping a turn yourself
   says nothing about the agent.
 - **A bet with no verdict waits.** It is never counted as a loss, so leaving one
-  unanswered costs you nothing but the sample.
+  unanswered costs you nothing but the sample. Press `skip` and it is dropped
+  from scoring entirely while the turn stays on the record.
+- **A call that was nearly right is never held up as a worst call.** Only a miss
+  wider than a coin flip makes that list.
 - **"Landed" is your judgement**, which is the honest design: the thing being
   calibrated is your judgement, so it is also the ground truth.
 
@@ -91,9 +117,11 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 20 tests
+claude plugin test .         # 31 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested
 directly; `hooks/register.tsx` is the hooks module and `types/index.d.ts` the
-state contract.
+state contract. `tests/band.test.tsx` drives the whole loop through the engine:
+place a bet while a turn runs, land the turn, answer the verdict, and read the
+call back out of the record.
