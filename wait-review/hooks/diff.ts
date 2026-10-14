@@ -298,7 +298,8 @@ export const reviewNote = (flagged: readonly Hunk[]): string => {
   let budget = NOTE_BUDGET
   let shown = 0
   for (const hunk of flagged) {
-    const block = `${hunk.path} ${hunk.header}\n\`\`\`diff\n${hunk.text}\n\`\`\`\n`
+    const said = hunk.note === undefined || hunk.note === '' ? '' : `\nthey said: ${hunk.note}`
+    const block = `${hunk.path} ${hunk.header}${said}\n\`\`\`diff\n${hunk.text}\n\`\`\`\n`
     if (block.length > budget && shown > 0) break
     lines.push(block)
     budget -= block.length

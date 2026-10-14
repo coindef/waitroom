@@ -34,6 +34,9 @@ the diff has been reviewed at no dedicated review cost.
 - Shows one card at a time in a pane, in reading order — each file together,
   top of the file first. Press `o` (looks right), `f` (flag), `l` (later),
   `x` (skip the rest of this file), `u` (undo the last call).
+- After flagging, `n` opens a box to say why, and that reason goes to Claude
+  with the hunk. Optional: flagging stays one press and the box only appears
+  when you ask for it.
 - Keeps a count on the status line, so an unread diff is visible without
   opening anything.
 - Sends what you flagged to Claude as review notes attached to your next
@@ -93,6 +96,26 @@ review: 3 to read · /wait-review
 
 Running `/wait-review` places it at any width.
 
+## Saying why
+
+Flagging sends the hunk. Pressing `n` after it adds your reason, which arrives
+with the diff:
+
+```
+src/auth.ts @@ -10,3 +10,3 @@
+they said: this drops the retry on every 5xx
+```
+
+It is a mode on purpose. A focused field takes the keys that would otherwise be
+`o`, `f` and `l`, so the box is only up while you want it, and Enter on an empty
+box means the diff speaks for itself.
+
+Mostly you will not need it — the flagged hunks ride along with your next
+message, so you can simply type the reason there. The box earns its place when
+you have flagged several hunks and the reasons differ. On a surface that draws
+no text field (the mobile app today) it is not offered, and typing the reason
+into your message is the fallback.
+
 ## What it does not do
 
 - **No git, no review.** The queue is built from `git diff HEAD`, so outside a
@@ -103,22 +126,27 @@ Running `/wait-review` places it at any width.
 - **It does not block anything.** Every hook that sits at a gating site passes
   the call through if the plugin itself fails, so a bug here can never swallow
   your prompt or an edit.
-- **No comment box on a flag.** Flagging sends the hunk, not a reason. A
-  one-line note would be better and is the next thing worth adding; a picker of
-  canned reasons would not, since the agent can usually see what is wrong once
-  the hunk is in front of it.
+- **No canned reasons.** The note is free text or nothing. A picker of
+  "wrong / risky / unclear" would add a keystroke to tell the agent something it
+  can usually work out once the hunk is in front of it.
 
 ## Developing
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 34 tests
+claude plugin test .         # 41 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,
 hunk trimming, queue merging) and is tested directly. `hooks/register.tsx` is
 the hooks module; `types/index.d.ts` is the state contract that
 `claude plugin validate` holds it to.
+
+`tests/flow.test.ts` drives the whole loop through the engine with git answered
+by the test — `$.process.run` is an event like any other — so the scan is
+exercised rather than mocked away: Claude writes a file, the turn lands, the
+hunk queues, it is flagged with a reason, and the reason turns up in the context
+attached to the next prompt.
 
 Run a working copy without installing it:
 

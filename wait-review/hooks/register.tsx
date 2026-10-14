@@ -25,6 +25,7 @@ const lastDecision = atom(
   { plugin: 'wait-review', key: 'lastDecision' } as const,
   null as Decision | null,
 )
+const noting = atom({ plugin: 'wait-review', key: 'noting' } as const, null as string | null)
 
 /** Rows the pane spends on its own counts, path, buttons and footer. */
 const CHROME_ROWS = 9
@@ -147,10 +148,39 @@ const noteTouch = async ($: EngineInterface, path: string | undefined, ignore: r
 }
 
 const mark = async ($: EngineInterface, id: string, status: HunkStatus) => {
+  await update($, noting, () => null)
   const before = (await read($, hunks)).find(one => one.id === id)
   await update($, hunks, old => old.map(one => (one.id === id ? { ...one, status } : one)))
   await update($, lastDecision, () => (before ? { id, from: before.status } : null))
   await showStatus($)
+}
+
+/** Opens the note box for a hunk, or closes it when given nothing. */
+const setNoting = async ($: EngineInterface, id: string | null) => {
+  await update($, noting, () => id)
+}
+
+/**
+ * Keeps what the person wrote about a flagged hunk and closes the box.
+ *
+ * An empty note is no note: pressing Enter on an empty box is how you decide
+ * the diff speaks for itself.
+ */
+const saveNote = async ($: EngineInterface, id: string, text: string) => {
+  const note = text.trim()
+  await update($, hunks, old =>
+    old.map(one => {
+      if (one.id !== id) return one
+      if (note === '') {
+        const { note: _dropped, ...rest } = one
+
+        return rest
+      }
+
+      return { ...one, note }
+    }),
+  )
+  await update($, noting, () => null)
 }
 
 /** Puts the last call back, so misreading a hunk costs one press, not a rescan. */
@@ -280,12 +310,20 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button, Code } = $.ui.resolve(e)
+    const table = $.ui.resolve(e)
+    const { Box, Text, Button, Code } = table
+    // Which surfaces draw a field is declared by `Elements`, not discoverable
+    // from the table: the runtime one carries every name and renders the ones
+    // its surface does not know as a fragment. The mobile app draws none, so
+    // the note is not offered there; this is the line to change when it does.
+    const hasInput = e.surface !== 'mobile'
     const list = await read($, hunks)
     const isBusy = await read($, busy)
     const last = await read($, lastDecision)
+    const noteFor = await read($, noting)
     const counts = tally(list)
     const current = nextHunk(list)
+    const flagged = last && list.find(one => one.id === last.id)?.status === 'flagged' ? last.id : null
 
     const head = (
       <Text dimColor>
@@ -301,15 +339,50 @@ export const register: Register = (on, options) => {
       </Button>
     )
 
+    // Offered wherever a flagged hunk is waiting on a reason, which includes an
+    // emptied queue: flagging the last hunk is the commonest way to reach here,
+    // and that is exactly when the reason still needs saying.
+    const hasNote = flagged !== null && list.find(one => one.id === flagged)?.note !== undefined
+    const noteOffer = flagged !== null && hasInput && (
+      <Box>
+        <Button key="note-open" hotkey="n" dimColor onPress={() => setNoting($, flagged)}>
+          {hasNote ? 'Edit note' : 'Say why'}
+        </Button>
+      </Box>
+    )
+
+    // The note box is a mode and does not depend on a card being up, so it is
+    // answered before anything else.
+    if (noteFor !== null && hasInput && 'Input' in table) {
+      const { Input } = table
+      const target = list.find(one => one.id === noteFor)
+
+      return (
+        <Box flexDirection="column" gap={1}>
+          {head}
+          <Text dimColor>{target?.path ?? 'that hunk'}</Text>
+          <Input
+            key="note-text"
+            label="Why is this wrong?"
+            placeholder="Enter on an empty box if the diff says it"
+            submitLabel="Attach"
+            autoFocus
+            onSubmit={value => saveNote($, noteFor, value)}
+          />
+        </Box>
+      )
+    }
+
     if (!current) {
       return (
         <Box flexDirection="column" gap={1}>
           {head}
           <Text dimColor>
-            {counts.reviewed === 0 && counts.dropped === 0
+            {counts.reviewed === 0 && counts.dropped === 0 && counts.flagged === 0
               ? 'Nothing written yet. Hunks show up here as Claude edits files.'
               : 'Diff read. Nothing waiting on you.'}
           </Text>
+          {noteOffer}
           {undoButton && <Box>{undoButton}</Box>}
         </Box>
       )
@@ -327,6 +400,7 @@ export const register: Register = (on, options) => {
             {current.header} · +{current.added} −{current.removed}
             {current.status === 'later' ? ' · put off' : ''}
           </Text>
+          {current.note !== undefined && <Text>note: {current.note}</Text>}
         </Box>
         <Code source={shown.text} format="diff" wrap="truncate-end" />
         {shown.hidden > 0 && <Text dimColor>… {shown.hidden} more lines in this hunk</Text>}
@@ -345,6 +419,7 @@ export const register: Register = (on, options) => {
           </Button>
           {undoButton}
         </Box>
+        {noteOffer}
         {counts.flagged > 0 && (
           <Text dimColor>
             {counts.flagged} flagged hunk{counts.flagged === 1 ? '' : 's'} go to Claude with your next message

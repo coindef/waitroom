@@ -35,6 +35,13 @@ export type Hunk = {
   added: number
   removed: number
   status: HunkStatus
+  /**
+   * Why the person flagged it, in their words; absent unless they wrote one.
+   *
+   * Optional on purpose: flagging stays one press, and the note is a second,
+   * separate act for the times when the diff alone does not say what is wrong.
+   */
+  note?: string
 }
 
 /** A file the agent wrote, and the turn it last wrote it in. */
@@ -51,6 +58,13 @@ declare module 'claude-code' {
       turn: number
       busy: boolean
       lastDecision: Decision | null
+      /**
+       * The hunk a note is being typed for, or null.
+       *
+       * A mode, because a focused Input takes the keys that would otherwise be
+       * the review hotkeys: the note box is only up while it is wanted.
+       */
+      noting: string | null
     }
   }
 }

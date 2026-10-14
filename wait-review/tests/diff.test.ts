@@ -367,3 +367,20 @@ test('a dropped hunk counts as dropped, never as reviewed', async () => {
 test('a dropped hunk is never offered again', async () => {
   expect(nextHunk([hunk({ id: 'd', status: 'dropped' })])).toBeUndefined()
 })
+
+test('a note the person wrote rides along with the hunk they flagged', async () => {
+  const note = reviewNote([
+    hunk({ id: '1', path: 'src/auth.ts', note: 'this drops the retry on 5xx' }),
+    hunk({ id: '2', path: 'src/db.ts' }),
+  ])
+
+  expect(note).toContain('they said: this drops the retry on 5xx')
+  // A hunk with no note says nothing extra, rather than an empty line.
+  expect(note).not.toContain('they said: \n')
+})
+
+test('a hunk with no note reads exactly as it did before notes existed', async () => {
+  const plain = reviewNote([hunk({ id: '1', path: 'a.ts' })])
+
+  expect(plain).not.toContain('they said')
+})
