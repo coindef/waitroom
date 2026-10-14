@@ -1,0 +1,423 @@
+import { expect, test } from 'claude-code/testing'
+
+import type { Hunk } from '../types'
+import {
+  DEFAULT_IGNORE,
+  globToRegExp,
+  isIgnored,
+  mergeHunks,
+  progressOf,
+  reviewable,
+  summaryOf,
+  nextHunk,
+  parseDiff,
+  parseIgnore,
+  reviewNote,
+  sidePath,
+  sortHunks,
+  tally,
+  trimHunk,
+} from '../hooks/diff'
+
+/** `git diff --no-prefix` over two edited files and one added file. */
+const DIFF = [
+  'diff --git hooks/diff.ts hooks/diff.ts',
+  'index 1234567..89abcde 100644',
+  '--- hooks/diff.ts',
+  '+++ hooks/diff.ts',
+  '@@ -1,4 +1,5 @@',
+  " import type { Hunk } from '../types'",
+  ' ',
+  '+const NEW = 1',
+  ' export const hash = (text: string): string => {',
+  '   let value = 0x811c9dc5',
+  '@@ -20,5 +21,6 @@ export const parseDiff = (output: string) => {',
+  '   const hunks: Hunk[] = []',
+  "-  let minus = ''",
+  "+  let minus = undefined",
+  "+  let extra = ''",
+  "   let plus = ''",
+  "   let path = ''",
+  'diff --git README.md README.md',
+  'new file mode 100644',
+  '--- /dev/null',
+  '+++ README.md',
+  '@@ -0,0 +1,2 @@',
+  '+# wait-review',
+  '+',
+  '',
+].join('\n')
+
+const hunk = (over: Partial<Hunk>): Hunk => ({
+  id: 'id',
+  path: 'a.ts',
+  header: '@@ -1,1 +1,1 @@',
+  start: 1,
+  text: '@@ -1,1 +1,1 @@\n-a\n+b',
+  added: 1,
+  removed: 1,
+  status: 'pending',
+  ...over,
+})
+
+test('every hunk of every file in one diff becomes its own card', async () => {
+  const found = parseDiff(DIFF)
+
+  expect(found).toHaveLength(3)
+  expect(found.map(one => one.path)).toEqual(['hooks/diff.ts', 'hooks/diff.ts', 'README.md'])
+  expect(found[0]?.added).toBe(1)
+  expect(found[0]?.removed).toBe(0)
+  expect(found[1]?.added).toBe(2)
+  expect(found[1]?.removed).toBe(1)
+  expect(found[2]?.added).toBe(2)
+})
+
+test('a hunk carries its own header and body, ready to draw as a diff', async () => {
+  const found = parseDiff(DIFF)
+
+  expect(found[0]?.header).toBe('@@ -1,4 +1,5 @@')
+  expect(found[0]?.text.startsWith('@@ -1,4 +1,5 @@\n')).toBe(true)
+  expect(found[0]?.text).toContain('+const NEW = 1')
+  // One card holds one hunk: the next hunk's header is not in it.
+  expect(found[0]?.text).not.toContain('@@ -20,5')
+})
+
+test('a file added whole takes its path from the + side, not /dev/null', async () => {
+  const added = parseDiff(DIFF).filter(one => one.path === 'README.md')
+
+  expect(added).toHaveLength(1)
+  expect(added[0]?.removed).toBe(0)
+})
+
+test('a file deleted whole takes its path from the - side', async () => {
+  const found = parseDiff([
+    'diff --git old.txt old.txt',
+    '--- old.txt',
+    '+++ /dev/null',
+    '@@ -1,2 +0,0 @@',
+    '-gone',
+    '-also gone',
+  ].join('\n'))
+
+  expect(found).toHaveLength(1)
+  expect(found[0]?.path).toBe('old.txt')
+  expect(found[0]?.removed).toBe(2)
+  expect(found[0]?.added).toBe(0)
+})
+
+test('an id follows the hunk text, so a rewrite comes back as a new hunk', async () => {
+  const first = parseDiff(DIFF)
+  const again = parseDiff(DIFF)
+  const changed = parseDiff(DIFF.replace('+const NEW = 1', '+const NEW = 2'))
+
+  expect(again[0]?.id).toBe(first[0]?.id)
+  expect(changed[0]?.id).not.toBe(first[0]?.id)
+  // The untouched hunks of the same file keep their ids.
+  expect(changed[1]?.id).toBe(first[1]?.id)
+})
+
+test('output that is not a diff yields no cards rather than a broken one', async () => {
+  expect(parseDiff('')).toEqual([])
+  expect(parseDiff('fatal: bad revision')).toEqual([])
+})
+
+test('a trimmed hunk header counts the lines actually kept', async () => {
+  const text = ['@@ -1,4 +1,5 @@', ' one', ' two', '+three', '-four', ' five'].join('\n')
+  const cut = trimHunk(text, 3)
+  const lines = cut.text.split('\n')
+
+  expect(cut.hidden).toBe(2)
+  expect(lines).toHaveLength(4)
+  // Two context lines plus one added: 2 on the - side, 3 on the +.
+  expect(lines[0]).toBe('@@ -1,2 +1,3 @@')
+})
+
+test('a hunk shorter than the room is left exactly as it was', async () => {
+  const text = ['@@ -1,1 +1,2 @@', ' one', '+two'].join('\n')
+
+  expect(trimHunk(text, 10)).toEqual({ text, hidden: 0 })
+})
+
+test('a trimmed hunk still parses as the one hunk it is', async () => {
+  const long = ['@@ -1,6 +1,6 @@', ' a', ' b', ' c', '-d', '+D', ' e'].join('\n')
+  const cut = trimHunk(long, 4)
+  const reparsed = parseDiff(['--- x.ts', '+++ x.ts', cut.text].join('\n'))
+
+  expect(reparsed).toHaveLength(1)
+  expect(reparsed[0]?.path).toBe('x.ts')
+})
+
+test('a rescan keeps what the person already decided', async () => {
+  const reviewed = hunk({ id: 'a@1', path: 'a.ts', status: 'ok' })
+  const fresh = hunk({ id: 'b@1', path: 'a.ts' })
+  const merged = mergeHunks([reviewed], [hunk({ id: 'a@1', path: 'a.ts' }), fresh])
+
+  expect(merged).toHaveLength(2)
+  expect(merged.find(one => one.id === 'a@1')?.status).toBe('ok')
+  expect(merged.find(one => one.id === 'b@1')?.status).toBe('pending')
+})
+
+test('a rescan drops hunks the agent has since reverted', async () => {
+  const stale = hunk({ id: 'a@1', path: 'a.ts', status: 'ok' })
+  const other = hunk({ id: 'z@1', path: 'untouched.ts', status: 'flagged' })
+
+  const merged = mergeHunks([stale, other], [])
+
+  // The scan reads the whole repository, so finding nothing left means there
+  // is nothing left to review.
+  expect(merged).toEqual([])
+})
+
+test('the queue offers what is pending before what was put off', async () => {
+  const later = hunk({ id: 'l', status: 'later' })
+  const pending = hunk({ id: 'p', status: 'pending' })
+
+  expect(nextHunk([later, pending])?.id).toBe('p')
+  expect(nextHunk([later])?.id).toBe('l')
+  expect(nextHunk([hunk({ status: 'ok' }), hunk({ id: 's', status: 'sent' })])).toBeUndefined()
+})
+
+test('a hunk knows where in the file it starts', async () => {
+  const found = parseDiff(DIFF)
+
+  expect(found[0]?.start).toBe(1)
+  expect(found[1]?.start).toBe(21)
+  expect(found[2]?.start).toBe(1)
+})
+
+test('the queue reads a file top to bottom, one file at a time', async () => {
+  const sorted = sortHunks([
+    hunk({ id: 'b2', path: 'b.ts', start: 90 }),
+    hunk({ id: 'a2', path: 'a.ts', start: 40 }),
+    hunk({ id: 'b1', path: 'b.ts', start: 10 }),
+    hunk({ id: 'a1', path: 'a.ts', start: 5 }),
+  ])
+
+  expect(sorted.map(one => one.id)).toEqual(['a1', 'a2', 'b1', 'b2'])
+})
+
+test('a merge leaves the queue in reading order however the scans arrived', async () => {
+  const merged = mergeHunks(
+    [hunk({ id: 'a2', path: 'a.ts', start: 70, status: 'ok' })],
+    [hunk({ id: 'a2', path: 'a.ts', start: 70 }), hunk({ id: 'a1', path: 'a.ts', start: 2 })],
+  )
+
+  expect(merged.map(one => one.id)).toEqual(['a1', 'a2'])
+  expect(merged[1]?.status).toBe('ok')
+})
+
+test('a capped queue drops the oldest hunks, not every late-alphabet file', async () => {
+  const found = [
+    hunk({ id: 'a', path: 'a.ts', start: 1 }),
+    hunk({ id: 'z', path: 'z.ts', start: 1 }),
+  ]
+  const merged = mergeHunks([], found, 1)
+
+  // One survives, and it is the newest found rather than the alphabetical first.
+  expect(merged).toHaveLength(1)
+  expect(merged[0]?.id).toBe('z')
+})
+
+test('a glob matches a path whether it is spelled relative or absolute', async () => {
+  expect(globToRegExp('**/package-lock.json').test('package-lock.json')).toBe(true)
+  expect(globToRegExp('**/package-lock.json').test('/home/me/app/package-lock.json')).toBe(true)
+  expect(globToRegExp('**/package-lock.json').test('src/package-lock.json.ts')).toBe(false)
+})
+
+test('a glob keeps * inside one segment and ** across them', async () => {
+  expect(globToRegExp('*.snap').test('a.snap')).toBe(true)
+  expect(globToRegExp('*.snap').test('dir/a.snap')).toBe(false)
+  expect(globToRegExp('**/dist/**').test('/app/dist/js/a.js')).toBe(true)
+  expect(globToRegExp('**/dist/**').test('/app/src/a.js')).toBe(false)
+  expect(globToRegExp('a?.ts').test('a1.ts')).toBe(true)
+  expect(globToRegExp('a?.ts').test('a12.ts')).toBe(false)
+})
+
+test('a dot in a pattern is a dot, not any character', async () => {
+  expect(globToRegExp('**/*.map').test('/app/a.map')).toBe(true)
+  expect(globToRegExp('**/*.map').test('/app/axmap')).toBe(false)
+})
+
+test('the built-in list covers the files nobody reviews', async () => {
+  const patterns = parseIgnore(DEFAULT_IGNORE)
+
+  for (const path of [
+    '/app/package-lock.json',
+    '/app/pnpm-lock.yaml',
+    '/app/Cargo.lock',
+    '/app/go.sum',
+    '/app/dist/main.js',
+    '/app/coverage/lcov.info',
+    '/app/src/__snapshots__/a.snap',
+    '/app/vendor/thing.min.js',
+    '/app/out/bundle.js.map',
+  ]) {
+    expect(isIgnored(path, patterns)).toBe(true)
+  }
+
+  // The code itself is never swept up with it.
+  for (const path of ['/app/src/index.ts', '/app/hooks/diff.ts', '/app/README.md']) {
+    expect(isIgnored(path, patterns)).toBe(false)
+  }
+})
+
+test('an ignore list is read off commas and newlines, blanks dropped', async () => {
+  expect(parseIgnore('a, b\n c ,,')).toEqual(['a', 'b', 'c'])
+  expect(parseIgnore('')).toEqual([])
+  expect(isIgnored('x.ts', [])).toBe(false)
+})
+
+test('the tally separates what is read, flagged and already sent', async () => {
+  const counts = tally([
+    hunk({ id: '1', status: 'pending' }),
+    hunk({ id: '2', status: 'pending' }),
+    hunk({ id: '3', status: 'ok' }),
+    hunk({ id: '4', status: 'sent' }),
+    hunk({ id: '5', status: 'flagged' }),
+    hunk({ id: '6', status: 'later' }),
+  ])
+
+  expect(counts).toEqual({ pending: 2, later: 1, flagged: 1, reviewed: 2, dropped: 0 })
+})
+
+test('review notes carry each flagged hunk as the diff that was read', async () => {
+  const note = reviewNote([
+    hunk({ id: '1', path: 'src/auth.ts', text: '@@ -1,1 +1,1 @@\n-weak\n+strong' }),
+    hunk({ id: '2', path: 'src/db.ts' }),
+  ])
+
+  expect(note).toContain('src/auth.ts')
+  expect(note).toContain('src/db.ts')
+  expect(note).toContain('```diff')
+  expect(note).toContain('+strong')
+})
+
+test('review notes stay bounded, and say how many they left out', async () => {
+  const body = `@@ -1,1 +1,1 @@\n+${'x'.repeat(4000)}`
+  const many = Array.from({ length: 12 }, (_, at) =>
+    hunk({ id: `h${at}`, path: `file${at}.ts`, text: body }),
+  )
+
+  const note = reviewNote(many)
+
+  expect(note.length).toBeLessThan(20000)
+  expect(note).toContain('more flagged hunk')
+})
+
+test('a path holding a space keeps neither the tab git ends it with nor quotes', async () => {
+  // Real `git diff --no-prefix` output: a name with a space gets a trailing tab.
+  expect(sidePath('dir with space/spaced name.txt\t')).toBe('dir with space/spaced name.txt')
+  expect(sidePath('plain.txt')).toBe('plain.txt')
+  expect(sidePath('"quoted name.txt"')).toBe('quoted name.txt')
+  expect(sidePath('/dev/null')).toBe('/dev/null')
+})
+
+test('a hunk for a spaced path is keyed on the name without the tab', async () => {
+  const found = parseDiff([
+    'diff --git dir a/f.txt dir a/f.txt',
+    '--- dir a/f.txt\t',
+    '+++ dir a/f.txt\t',
+    '@@ -1,1 +1,1 @@',
+    '-a',
+    '+b',
+  ].join('\n'))
+
+  expect(found[0]?.path).toBe('dir a/f.txt')
+  expect(found[0]?.id.startsWith('dir a/f.txt@')).toBe(true)
+})
+
+test('a rescan that finds the same hunk does not hold it twice', async () => {
+  const card = hunk({ id: 'a@1', path: 'hooks/diff.ts', status: 'ok' })
+  const again = hunk({ id: 'a@1', path: 'hooks/diff.ts' })
+
+  const merged = mergeHunks([card], [again])
+
+  expect(merged).toHaveLength(1)
+  expect(merged[0]?.status).toBe('ok')
+})
+
+test('a dropped hunk counts as dropped, never as reviewed', async () => {
+  const counts = tally([hunk({ id: '1', status: 'dropped' }), hunk({ id: '2', status: 'ok' })])
+
+  // Waving a file away is not the same as having read it.
+  expect(counts.dropped).toBe(1)
+  expect(counts.reviewed).toBe(1)
+})
+
+test('a dropped hunk is never offered again', async () => {
+  expect(nextHunk([hunk({ id: 'd', status: 'dropped' })])).toBeUndefined()
+})
+
+test('a note the person wrote rides along with the hunk they flagged', async () => {
+  const note = reviewNote([
+    hunk({ id: '1', path: 'src/auth.ts', note: 'this drops the retry on 5xx' }),
+    hunk({ id: '2', path: 'src/db.ts' }),
+  ])
+
+  expect(note).toContain('they said: this drops the retry on 5xx')
+  // A hunk with no note says nothing extra, rather than an empty line.
+  expect(note).not.toContain('they said: \n')
+})
+
+test('a hunk with no note reads exactly as it did before notes existed', async () => {
+  const plain = reviewNote([hunk({ id: '1', path: 'a.ts' })])
+
+  expect(plain).not.toContain('they said')
+})
+
+test('work already uncommitted when the session began is not the agent\'s review', async () => {
+  const mine = hunk({ id: 'mine@1', path: 'src/wip.ts' })
+  const theirs = hunk({ id: 'theirs@1', path: 'src/auth.ts' })
+
+  const offered = reviewable([mine, theirs], [], ['mine@1'])
+
+  expect(offered.map(one => one.id)).toEqual(['theirs@1'])
+})
+
+test('an ignored file is left out however it came to be written', async () => {
+  const lock = hunk({ id: 'l@1', path: 'package-lock.json' })
+  const code = hunk({ id: 'c@1', path: 'src/a.ts' })
+
+  const offered = reviewable([lock, code], parseIgnore(DEFAULT_IGNORE), [])
+
+  expect(offered.map(one => one.id)).toEqual(['c@1'])
+})
+
+test('the header says how much is left here and in all', async () => {
+  const list = [
+    hunk({ id: 'a1', path: 'a.ts', start: 1 }),
+    hunk({ id: 'a2', path: 'a.ts', start: 40 }),
+    hunk({ id: 'b1', path: 'b.ts', start: 1 }),
+    hunk({ id: 'c1', path: 'c.ts', start: 1, status: 'ok' }),
+  ]
+
+  const where = progressOf(list, list[0] as never)
+
+  expect(where.hereLeft).toBe(2)
+  expect(where.totalLeft).toBe(3)
+  expect(where.atFile).toBe(1)
+  // c.ts is read, so it is not among the files with anything left.
+  expect(where.ofFiles).toBe(2)
+})
+
+test('progress counts a hunk put off as still to come', async () => {
+  const list = [hunk({ id: 'a', status: 'later' }), hunk({ id: 'b', status: 'dropped' })]
+
+  const where = progressOf(list, list[0] as never)
+
+  expect(where.totalLeft).toBe(1)
+})
+
+test('the counts line leaves out every zero', async () => {
+  expect(summaryOf([hunk({ id: 'a' })])).toBe('1 to read')
+  expect(summaryOf([])).toBe('')
+
+  const mixed = summaryOf([
+    hunk({ id: 'a', status: 'pending' }),
+    hunk({ id: 'b', status: 'ok' }),
+    hunk({ id: 'c', status: 'flagged' }),
+  ])
+
+  expect(mixed).toBe('1 to read · 1 read · 1 flagged')
+  expect(mixed).not.toContain('0 ')
+})

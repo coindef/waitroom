@@ -1,0 +1,189 @@
+# wait-review
+
+A Claude Code plugin that turns the wait while Claude works into incremental
+review of the diff it has already written.
+
+```
+/plugin install wait-review --marketplace coindef/Plugin
+```
+
+(Answer `y` to add the marketplace, then pick a scope.)
+
+## Why this and not a loading-screen game
+
+The cost of waiting on a coding agent is not boredom, it is context collapse. A
+90-second wait filled with something entertaining costs minutes of refocus on
+the way back, and any game with a win condition quietly teaches you to want the
+agent to be slow. You also cannot win on entertainment: the person already has
+a phone.
+
+Meanwhile a real problem is getting worse. The agent writes code faster than
+anyone reads it, so a session ends with a 600-line diff nobody will ever review
+properly.
+
+So the wait is spent on the diff the agent already wrote. Same mental context,
+naturally chunked, interruptible at any moment, and at the end of the session
+the diff has been reviewed at no dedicated review cost.
+
+## What it does
+
+- At the end of each turn, reads the repository's whole diff against the commit
+  the session started on, and queues each hunk as its own review card.
+- Leaves out whatever was already uncommitted when the session began, so your
+  own work in progress is never offered as the agent's review.
+- Shows one card at a time in a pane, in reading order — each file together,
+  top of the file first. Press `o` (looks right), `f` (flag), `l` (later),
+  `x` (skip the rest of this file), `u` (undo the last call).
+- After flagging, `n` opens a box to say why, and that reason goes to Claude
+  with the hunk. Optional: flagging stays one press and the box only appears
+  when you ask for it.
+- Keeps a count on the status line, so an unread diff is visible without
+  opening anything.
+- Sends what you flagged to Claude as review notes attached to your next
+  message, as the diff you were looking at when you flagged it.
+
+That last step closes the loop: you read during the wait, flag what is wrong,
+and the correction rides along with whatever you type next. No extra turn.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `/wait-review` | Opens the pane and re-reads the diff now |
+
+## Settings
+
+Set these in the config menu, or under `pluginConfigs` in settings.
+
+| Option | Default | What it means |
+| --- | --- | --- |
+| `ignore` | built-in list | Comma-separated globs whose hunks are never queued. Empty uses the built-in list. |
+| `contextLines` | `3` | Lines of context around each hunk (`git --unified`). |
+| `autoOpen` | `true` | Open the pane when the session starts. |
+| `attachFlags` | `true` | Attach flagged hunks to your next message. |
+
+A hunk's id is a hash of its own text. When Claude rewrites a region you already
+marked reviewed the id changes, so the hunk returns to the queue as a new card
+rather than staying silently approved — and a hunk it reverted, or you
+committed, leaves the queue on the next scan.
+
+## Files it leaves alone
+
+Agents regenerate lockfiles, build output and snapshots, and one regenerated
+lockfile is otherwise forty hunks of noise ahead of the code that matters. So
+these are never queued:
+
+```
+lockfiles (npm, pnpm, yarn, bun, cargo, poetry, composer, bundler, go.sum)
+node_modules/ dist/ build/ out/ target/ .next/ coverage/
+__snapshots__/ *.snap *.min.js *.min.css *.map
+```
+
+Set `ignore` to your own comma-separated globs to replace that list. `*` stays
+inside one path segment, `**` crosses them, and a leading `**/` matches a
+relative or an absolute spelling of the same file.
+
+## Why it reads git rather than watching edits
+
+It used to build the queue from `Edit`, `Write` and `NotebookEdit` calls. That
+was wrong, and only using it showed how wrong: an agent that writes through a
+shell heredoc, `sed` or a script makes no such call, so nothing was ever queued
+and the pane sat empty through a session that rewrote eight files. Some agents
+are told to prefer the shell for edits, which made the mod useless for them.
+
+git is the only witness that cannot be fooled, so the scan reads the whole
+repository diff and does not care how a file came to be written. The cost is
+that your own uncommitted work would be in that diff too, which is what the
+session-start snapshot is for.
+
+## Where the pane goes
+
+A pane nobody asked for is only placed from 144 columns, so on a narrower
+terminal it waits until you ask. When that happens the status line says so:
+
+```
+review: 3 to read · /wait-review
+```
+
+Running `/wait-review` places it at any width.
+
+## What the pane looks like
+
+```
+2 to read · 1 read                                   Claude is working
+
+src/auth/session.ts                                      file 1 of 2
+line 42 · +3 −1                            2 left here · 3 left
+────────────────────────────────────────────────────────────────────
+  42   const sent = await fetch(url)
+  43 - if (!sent.ok) return retry(url)
+  43 + if (!sent.ok) return undefined
+  44   return sent.json()
+
+o: Looks right   f: Flag   l: Later   x: Skip file
+```
+
+Each control carries its own key, so there is no legend to learn and nothing to
+click. The header says how much is left before you commit to reading: how many
+hunks in this file, how many in all, and which file of how many. Counts that are
+zero are left out rather than shown as zero.
+
+## Saying why
+
+Flagging sends the hunk. Pressing `n` after it adds your reason, which arrives
+with the diff:
+
+```
+src/auth.ts @@ -10,3 +10,3 @@
+they said: this drops the retry on every 5xx
+```
+
+It is a mode on purpose. A focused field takes the keys that would otherwise be
+`o`, `f` and `l`, so the box is only up while you want it, and Enter on an empty
+box means the diff speaks for itself.
+
+Mostly you will not need it — the flagged hunks ride along with your next
+message, so you can simply type the reason there. The box earns its place when
+you have flagged several hunks and the reasons differ. On a surface that draws
+no text field (the mobile app today) it is not offered, and typing the reason
+into your message is the fallback.
+
+## What it does not do
+
+- **No git, no review.** The queue is built from `git diff HEAD`, so outside a
+  repository the pane stays empty. Untracked files are picked up separately,
+  via `git diff --no-index`.
+- **The base is where the session started**, not current `HEAD`. An agent
+  commits on your behalf, often before you have read a line, and against
+  current `HEAD` that silently empties the queue of everything it just
+  committed. A commit is not a review, so the anchor is taken once at session
+  start; under a rebase or reset that loses it, the scan falls back to `HEAD`.
+- **It does not block anything.** Every hook that sits at a gating site passes
+  the call through if the plugin itself fails, so a bug here can never swallow
+  your prompt or an edit.
+- **No canned reasons.** The note is free text or nothing. A picker of
+  "wrong / risky / unclear" would add a keystroke to tell the agent something it
+  can usually work out once the hunk is in front of it.
+
+## Developing
+
+```
+claude plugin validate .     # manifest and hooks, as the engine reads them
+claude plugin test .         # 48 tests
+```
+
+The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,
+hunk trimming, queue merging) and is tested directly. `hooks/register.tsx` is
+the hooks module; `types/index.d.ts` is the state contract that
+`claude plugin validate` holds it to.
+
+`tests/flow.test.ts` drives the whole loop through the engine with git answered
+by the test — `$.process.run` is an event like any other — so the scan is
+exercised rather than mocked away. Its first test makes no tool call at all,
+which is the regression for the bug above.
+
+Run a working copy without installing it:
+
+```
+claude --plugin-dir /path/to/Plugin
+```

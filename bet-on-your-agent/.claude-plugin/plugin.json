@@ -1,0 +1,17 @@
+{
+  "name": "bet-on-your-agent",
+  "version": "0.1.0",
+  "description": "Forecast how a turn will go from the row above the prompt, and get scored on your calibration.",
+  "author": {
+    "name": "coindef"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "autoOpen": {
+      "type": "boolean",
+      "title": "Open the record pane at session start",
+      "default": false,
+      "description": "Betting lives in the row above the prompt, so the pane is off by default; /bet opens it."
+    }
+  }
+}

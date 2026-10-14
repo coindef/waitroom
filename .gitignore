@@ -1,0 +1,3 @@
+# Written by the engine each time it loads a mod from this folder: this
+# build's API declarations, regenerated rather than edited.
+**/.claude-plugin/types/
