@@ -1,0 +1,35 @@
+{
+  "name": "wait-review",
+  "version": "0.1.0",
+  "description": "Turns the wait while Claude works into incremental review of the diff it already wrote.",
+  "author": {
+    "name": "coindef"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "settleTurns": {
+      "type": "number",
+      "default": 0,
+      "description": "Turns a file must go untouched before its hunks are offered for review. 0 offers them at the end of the turn that wrote them.",
+      "title": "Settle turns"
+    },
+    "contextLines": {
+      "type": "number",
+      "default": 3,
+      "description": "Lines of context around each hunk (git --unified).",
+      "title": "Context lines"
+    },
+    "autoOpen": {
+      "type": "boolean",
+      "default": true,
+      "description": "Open the review pane when the session starts.",
+      "title": "Open pane at session start"
+    },
+    "attachFlags": {
+      "type": "boolean",
+      "default": true,
+      "description": "Attach flagged hunks to your next message as review notes for Claude.",
+      "title": "Send flagged hunks to Claude"
+    }
+  }
+}

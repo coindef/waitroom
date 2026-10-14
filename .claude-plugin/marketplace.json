@@ -1,0 +1,14 @@
+{
+  "name": "wait-review",
+  "owner": {
+    "name": "coindef"
+  },
+  "description": "Mods that make waiting on a coding agent productive.",
+  "plugins": [
+    {
+      "name": "wait-review",
+      "source": ".",
+      "description": "Turns the wait while Claude works into incremental review of the diff it already wrote."
+    }
+  ]
+}
