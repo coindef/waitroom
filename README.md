@@ -1,11 +1,14 @@
-# wait-mods
+# waitroom
 
-Two Claude Code plugins for the dead time while a coding agent works.
+Two Claude Code plugins for the dead time while a coding agent works. The wait
+is the one moment you are already holding the problem in your head and have
+nothing to do with it; these spend it on the diff the agent just wrote, and on
+how well you called the turn.
 
 ## Install
 
 ```
-/plugin install wait-review --marketplace coindef/Plugin
+/plugin install wait-review --marketplace coindef/waitroom
 ```
 
 Answer `y` to add the marketplace, then Enter to accept the user scope. That is
@@ -13,14 +16,14 @@ the whole install — the plugin is active in that session straight away, and in
 every session after it. Nothing to configure, no key, no service, and nothing
 written to your repository.
 
-**Once the marketplace is added it is called `wait-mods`**, so the second mod,
+**Once the marketplace is added it is called `waitroom`**, so the second mod,
 and anything you install later, goes by that name rather than by the repository:
 
 ```
-/plugin install bet-on-your-agent@wait-mods
+/plugin install bet-on-your-agent@waitroom
 ```
 
-Using `--marketplace coindef/Plugin` a second time answers
+Using `--marketplace coindef/waitroom` a second time answers
 `Plugin "..." not found in any marketplace`, because that flag takes the name a
 marketplace was added under, and the add step has already happened.
 
@@ -95,25 +98,36 @@ They compose rather than compete for room: **wait-review** takes the pane, and
 **bet-on-your-agent** takes the single row above the prompt. One asks what you
 make of what the agent wrote, the other what you expect from what it is writing.
 
-## Two things you will see, neither of them a problem
+## If a plugin shows an error
 
-**"4 userConfig options not yet set"**, printed by the installer. Informational:
-every option has a working default and the plugin runs on them. The debug log
-says so in as many words — `every option is its default`. Configure them if you
-want to change something, not to get started.
-
-**A short non-interactive run does not load the hooks.** Plugins that hook the
-engine's own events are early access, and the switch is fetched per process:
-sub-second, but a `claude -p` run can finish before it lands. In the debug log
-that reads
+Plugins that hook the engine's own events are **early access**, gated by a
+rollout switch. Two different things can happen, and the debug log
+(`claude --debug`) tells them apart. Both read:
 
 ```
-hooks module wait-review@wait-mods not loaded: ... flag fetch has not answered the rollout switch
-hooks module wait-review@wait-mods loaded (worker, environment 4, tier user); events: session.start,...
+hooks module wait-review@waitroom not loaded: hooks modules are turned off for
+installed plugins in this process: this wake's flag fetch has not answered the
+rollout switch
 ```
 
-— refused at first, then loaded under half a second later. Interactive sessions,
-which is where a pane and a prompt row mean anything, are unaffected.
+- **A line like that followed, under a second later, by `… loaded (worker,
+  environment 4, tier user); events: session.start,…`** is the harmless case:
+  the switch is on and the process simply started before the answer arrived. A
+  short `claude -p` run can end in that gap; an interactive session never does.
+- **That line with no `loaded` after it** means the switch is off for this
+  build or account. Nothing in these mods can turn it on, and they load by
+  themselves once it reads on.
+
+A quick way to tell which you have: every plugin that carries a hooks module
+will show the error, including ones from other marketplaces that have nothing
+to do with these. If the only healthy plugins you have left are skill-and-
+command ones, it is the switch, not the mod.
+
+## What the installer says on the way in
+
+**"4 userConfig options not yet set"** is informational: every option has a
+working default and the plugin runs on them — the debug log puts it as `every
+option is its default`. Configure them to change something, not to get started.
 
 ## Developing
 
@@ -133,7 +147,7 @@ reload in place:
 ```
 claude --plugin-dir ./wait-review
 # or
-claude plugin marketplace add .     # then /plugin install <mod> --marketplace wait-mods
+claude plugin marketplace add .     # then /plugin install <mod> --marketplace waitroom
 ```
 
 Each mod keeps the logic that needs no engine in one plain module
