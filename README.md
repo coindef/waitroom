@@ -8,7 +8,7 @@ how well you called the turn.
 ## Install
 
 ```
-/plugin install wait-review --marketplace coindef/Plugin
+/plugin install wait-review --marketplace coindef/waitroom
 ```
 
 Answer `y` to add the marketplace, then Enter to accept the user scope. That is
@@ -29,7 +29,7 @@ get this wrong:
 - **a repository path**, on the first install, to fetch and add the marketplace
 - **a marketplace name**, afterwards, because the add has already happened
 
-So `--marketplace coindef/Plugin` a second time answers `Plugin "..." not found
+So `--marketplace coindef/waitroom` a second time answers `Plugin "..." not found
 in any marketplace` — by then the marketplace is called `waitroom`, and a
 repository path is not a marketplace name. A path to a repository that does not
 exist answers the same way.

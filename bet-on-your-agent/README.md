@@ -5,7 +5,7 @@ runs, the row above the prompt asks you how it will go. Afterwards it tells you
 how calibrated you were.
 
 ```
-/plugin install bet-on-your-agent --marketplace coindef/Plugin
+/plugin install bet-on-your-agent --marketplace coindef/waitroom
 ```
 
 (Answer `y` to add the marketplace, then pick a scope.)
