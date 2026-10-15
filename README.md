@@ -16,16 +16,23 @@ the whole install — the plugin is active in that session straight away, and in
 every session after it. Nothing to configure, no key, no service, and nothing
 written to your repository.
 
-**Once the marketplace is added it is called `waitroom`**, so the second mod,
-and anything you install later, goes by that name rather than by the repository:
+The source is the repository path; the marketplace it adds is called
+**`waitroom`**, which is the name everything after the first install goes by:
 
 ```
 /plugin install bet-on-your-agent@waitroom
 ```
 
-Using `--marketplace coindef/waitroom` a second time answers
-`Plugin "..." not found in any marketplace`, because that flag takes the name a
-marketplace was added under, and the add step has already happened.
+`--marketplace` takes one of two things, and mixing them up is the one way to
+get this wrong:
+
+- **a repository path**, on the first install, to fetch and add the marketplace
+- **a marketplace name**, afterwards, because the add has already happened
+
+So `--marketplace coindef/waitroom` a second time answers `Plugin "..." not found
+in any marketplace` — by then the marketplace is called `waitroom`, and a
+repository path is not a marketplace name. A path to a repository that does not
+exist answers the same way.
 
 Start with `wait-review` if you only want one.
 
