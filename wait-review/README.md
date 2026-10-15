@@ -4,7 +4,7 @@ A Claude Code plugin that turns the wait while Claude works into incremental
 review of the diff it has already written.
 
 ```
-/plugin install wait-review --marketplace coindef/waitroom
+/plugin install wait-review --marketplace coindef/Plugin
 ```
 
 (Answer `y` to add the marketplace, then pick a scope.)
