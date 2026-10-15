@@ -1,9 +1,9 @@
 {
-  "name": "wait-mods",
+  "name": "waitroom",
   "owner": {
     "name": "coindef"
   },
-  "description": "Mods that make waiting on a coding agent productive.",
+  "description": "Mods that make the wait on a coding agent worth something.",
   "plugins": [
     {
       "name": "wait-review",
