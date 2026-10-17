@@ -208,6 +208,15 @@ export const setVerdict = (
   landed: boolean,
 ): TurnRecord[] => records.map(one => (one.turnId === turnId ? { ...one, landed } : one))
 
+/** Puts a turn back to owed: undoes `setVerdict` or `skipVerdict` on it. */
+export const undoVerdict = (records: readonly TurnRecord[], turnId: string): TurnRecord[] =>
+  records.map(one => {
+    if (one.turnId !== turnId) return one
+    const { landed: _landed, isVerdictSkipped: _skipped, ...rest } = one
+
+    return rest
+  })
+
 export const asPercent = (value: number): string => `${Math.round(value * 100)}%`
 
 /** `48s`, or `2m 5s` once a turn runs past a minute. */
@@ -308,7 +317,10 @@ export const asText = (found: Report): string => {
 
   lines.push('')
   if (found.files) lines.push(`File count called right ${found.files.right}/${found.files.of}.`)
-  if (found.landed) lines.push(`The agent landed it first try ${found.landed.yes}/${found.landed.of}.`)
+  if (found.landed) {
+    const percent = asPercent(found.landed.yes / found.landed.of)
+    lines.push(`The agent landed it first try ${percent} (${found.landed.yes}/${found.landed.of}).`)
+  }
   if (found.medianMs !== undefined) lines.push(`Median turn ${asDuration(found.medianMs)}.`)
   if (found.owed > 0) lines.push(`${found.owed} bet${found.owed === 1 ? '' : 's'} waiting on your verdict.`)
 

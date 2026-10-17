@@ -18,6 +18,7 @@ import {
   setVerdict,
   shortAsk,
   skipVerdict,
+  undoVerdict,
   worstCalls,
 } from '../hooks/bet'
 
@@ -188,6 +189,21 @@ test('a verdict lands on its own turn and no other', async () => {
   expect(after.find(one => one.turnId === 'b')?.landed).toBeUndefined()
 })
 
+test('undoing a verdict returns the turn to owed, win or skip alike', async () => {
+  const landed = setVerdict([turn({ turnId: 'a', saidConfidence: 0.8 })], 'a', true)
+  const backToOwed = undoVerdict(landed, 'a')
+
+  expect(owedVerdict(backToOwed)?.turnId).toBe('a')
+  expect(backToOwed[0]?.landed).toBeUndefined()
+
+  const skipped = skipVerdict([turn({ turnId: 'b', saidConfidence: 0.8 })], 'b')
+  expect(owedVerdict(undoVerdict(skipped, 'b'))?.turnId).toBe('b')
+
+  // Undoing a turn that was never bet on is a no-op, not an error.
+  const neverBet = [turn({ turnId: 'c' })]
+  expect(undoVerdict(neverBet, 'c')).toEqual(neverBet)
+})
+
 test('the verdict asked for is the oldest one owed', async () => {
   const records = [
     turn({ turnId: 'new', at: 900, saidConfidence: 0.8 }),
@@ -221,6 +237,9 @@ test('the report stands up with nothing in it, and names the numbers once there 
   // Columns line up under a heading, so a column of rows is scannable.
   expect(text).toContain('said     actual   turns')
   expect(text).toContain('90% →      0%')
+  // The percentage and the raw count agree, rather than one surface showing
+  // a fraction and another a percent for the same number.
+  expect(text).toContain('The agent landed it first try 0% (0/2).')
 })
 
 test('a waved-away verdict owes nothing and scores nothing', async () => {

@@ -116,14 +116,24 @@ test('a bet placed while the turn runs is the verdict owed once it lands', async
 
   await idle.press({ key: 'fixed' })
 
-  // Answered, so the band has nothing left to ask.
+  // Answered, so the band has nothing left to ask - only what it recorded.
   expect(await idle.find({ text: /you said/ })).toBeUndefined()
+  expect(await idle.find({ text: /Recorded: Needed fixing/ })).toBeDefined()
+
+  // One press puts it back to owed, for a misread verdict.
+  await idle.press({ key: 'undo' })
+  expect(await idle.find({ text: /you said 95%/ })).toBeDefined()
+
+  // Answered again, so the record below sees exactly one scored turn.
+  await idle.press({ key: 'fixed' })
   await idle.unmount()
 
   // And the call shows up in the record, scored and named.
   const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
   expect(await pane.find({ text: /overconfident/ })).toBeDefined()
   expect(await pane.find({ text: /refactor the auth layer/ })).toBeDefined()
+  // Its own stat, on its own line, not packed into one dim run-on sentence.
+  expect(await pane.find({ text: /Lands first try 0% \(0\/1\)/ })).toBeDefined()
   await pane.unmount()
 })
 

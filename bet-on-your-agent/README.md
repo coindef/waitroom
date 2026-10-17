@@ -34,7 +34,7 @@ while you wait. **Type a bare digit into an empty composer and it answers** —
 no pane to place, no focus to manage, nothing to click.
 
 ```
-Will "add the retry logic to the client" land first try?  1: 50% 2: 65% 3: 80% 4: 90% 5: 95% 0: skip
+Will "add the retry logic to the client" land first try?  1: 50% 2: 65% 3: 80% 4: 90% 5: 95% 0: Skip
 ```
 
 `0` waves the turn away and the band goes quiet for the rest of it: a prompt you
@@ -48,7 +48,9 @@ always mean the obvious thing:
 ```
 
 - **Will it land first try?** Resolved by your own verdict, which it asks for
-  once the turn lands — with a `skip` if you would rather not say.
+  once the turn lands — with a `skip` if you would rather not say. Answered it
+  wrong? The band holds what it recorded for one more press of `u: Undo`,
+  until the next turn starts.
 - **How many files?** Resolved automatically from the `Edit`, `Write` and
   `NotebookEdit` calls the turn actually made, so it needs no verdict at all.
 
@@ -59,7 +61,7 @@ score tells you that you are overconfident, the ask tells you what about.
 
 ```
 You run 12 points overconfident.
-Brier 0.147 over 23 turns · better than a coin flip
+Brier 0.147 over 23 scored turns — better than a coin flip.
 
  said     actual   turns
   50% →     60%    5   underconfident
@@ -67,11 +69,13 @@ Brier 0.147 over 23 turns · better than a coin flip
   95% →     71%    7   overconfident
 
 Worst calls
-95% and it did not — refactor the auth layer to use the new client
-95% and it did not — make the config loader handle overrides
-80% and it did not — rename the session helpers
+  95% and it did not — refactor the auth layer to use the new client
+  95% and it did not — make the config loader handle overrides
+  80% and it did not — rename the session helpers
 
-files called 14/23 · lands first try 65% · median 42s
+File count called right 14/23.
+The agent landed it first try 65% (15/23).
+Median turn 42s.
 ```
 
 The headline is in words because "Brier 0.147" means nothing on its own. The

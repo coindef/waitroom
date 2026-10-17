@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { FileBucket, OpenBet, TurnRecord } from '../types'
+import type { FileBucket, LastVerdict, OpenBet, TurnRecord } from '../types'
 import {
   asDuration,
   askRoomFor,
@@ -20,6 +20,7 @@ import {
   setVerdict,
   shortAsk,
   skipVerdict,
+  undoVerdict,
 } from './bet'
 
 const PANE = 'bet-on-your-agent'
@@ -29,6 +30,10 @@ const NO_BET: OpenBet = { turnId: '', ask: '', files: [] }
 
 const open = atom({ plugin: 'bet-on-your-agent', key: 'open' } as const, NO_BET)
 const busy = atom({ plugin: 'bet-on-your-agent', key: 'busy' } as const, false)
+const lastVerdict = atom(
+  { plugin: 'bet-on-your-agent', key: 'lastVerdict' } as const,
+  null as LastVerdict | null,
+)
 const revision = atom({ plugin: 'bet-on-your-agent', key: 'revision' } as const, 0)
 
 type Config = { autoOpen: boolean }
@@ -61,7 +66,12 @@ const showStatus = async ($: EngineInterface) => {
     const isBusy = await read($, busy)
     const bet = await read($, open)
     if (isBusy) {
-      const said = bet.saidConfidence === undefined ? 'open' : asPercent(bet.saidConfidence)
+      const said =
+        bet.saidConfidence !== undefined
+          ? asPercent(bet.saidConfidence)
+          : bet.isDeclined === true
+            ? 'skipped'
+            : 'open'
       $.ui.status(`bet: ${said}`)
 
       return
@@ -96,11 +106,22 @@ const declineBet = async ($: EngineInterface) => {
 
 const giveVerdict = async ($: EngineInterface, turnId: string, landed: boolean) => {
   await saveTurns($, setVerdict(await loadTurns($), turnId, landed))
+  await update($, lastVerdict, () => ({ turnId, result: landed ? 'landed' : 'fixed' }))
   await showStatus($)
 }
 
 const waveVerdict = async ($: EngineInterface, turnId: string) => {
   await saveTurns($, skipVerdict(await loadTurns($), turnId))
+  await update($, lastVerdict, () => ({ turnId, result: 'skipped' }))
+  await showStatus($)
+}
+
+/** Puts the last verdict back to owed, so misreading it costs one press, not a wrong score. */
+const undoLastVerdict = async ($: EngineInterface) => {
+  const last = await read($, lastVerdict)
+  if (!last) return
+  await saveTurns($, undoVerdict(await loadTurns($), last.turnId))
+  await update($, lastVerdict, () => null)
   await showStatus($)
 }
 
@@ -157,6 +178,9 @@ export const register: Register = (on, options) => {
     // The betting window opens here and closes when the turn lands.
     await update($, open, () => ({ turnId: e.turnId, ask: e.text, files: [] }))
     await update($, busy, () => true)
+    // A new turn's own questions take over the band; the last verdict is
+    // settled by now, or it would still be the one being asked about.
+    await update($, lastVerdict, () => null)
     await showStatus($)
 
     return next(e)
@@ -210,12 +234,15 @@ export const register: Register = (on, options) => {
     if (e.props.isWorking && bet.turnId !== '' && bet.isDeclined !== true) {
       const said = bet.saidConfidence
       const quoted = shortAsk(bet.ask, room)
-      const about = quoted === '' ? '' : ` "${quoted}"`
 
       if (said === undefined) {
         return (
           <Box gap={1}>
-            <Text>Will{about} land first try?</Text>
+            <Text>
+              Will{' '}
+              {quoted !== '' && <Text dimColor>"{quoted}" </Text>}
+              land first try?
+            </Text>
             {BANDS.map((band, at) => (
               <Button
                 key={`p${Math.round(band * 100)}`}
@@ -227,7 +254,7 @@ export const register: Register = (on, options) => {
               </Button>
             ))}
             <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
-              skip
+              Skip
             </Button>
           </Box>
         )
@@ -249,40 +276,61 @@ export const register: Register = (on, options) => {
               </Button>
             ))}
             <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
-              skip
+              Skip
             </Button>
           </Box>
         )
       }
 
+      const isOver =
+        FILE_BUCKETS.indexOf(bucketOf(bet.files.length)) > FILE_BUCKETS.indexOf(bet.saidFiles)
+
       return (
         <Box>
           <Text dimColor>
-            bet {asPercent(said)} · {bet.saidFiles} files · {bet.files.length} written so far
+            bet {asPercent(said)} · {bet.saidFiles} files ·{' '}
+          </Text>
+          <Text dimColor={!isOver} color={isOver ? 'warning' : undefined}>
+            {bet.files.length} written so far
           </Text>
         </Box>
       )
     }
 
     const owed = owedVerdict(await loadTurns($))
-    if (!owed) return next(e)
+    if (!owed) {
+      const last = await read($, lastVerdict)
+      if (!last) return next(e)
+
+      const label =
+        last.result === 'landed' ? 'Landed' : last.result === 'fixed' ? 'Needed fixing' : 'Skipped'
+
+      return (
+        <Box gap={1}>
+          <Text dimColor>Recorded: {label}</Text>
+          <Button key="undo" hotkey="u" plain dimColor onPress={() => undoLastVerdict($)}>
+            Undo
+          </Button>
+        </Box>
+      )
+    }
 
     const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, room)
 
     return (
       <Box gap={1}>
         <Text>
-          {quoted === '' ? 'That turn' : `"${quoted}"`} — you said{' '}
+          <Text dimColor>{quoted === '' ? 'That turn' : `"${quoted}"`}</Text> — you said{' '}
           {asPercent(owed.saidConfidence ?? 0)}.
         </Text>
         <Button key="landed" hotkey="1" plain onPress={() => giveVerdict($, owed.turnId, true)}>
-          landed
+          Landed
         </Button>
         <Button key="fixed" hotkey="2" plain onPress={() => giveVerdict($, owed.turnId, false)}>
-          needed fixing
+          Needed fixing
         </Button>
-        <Button key="skip" hotkey="3" plain dimColor onPress={() => waveVerdict($, owed.turnId)}>
-          skip
+        <Button key="skip" hotkey="0" plain dimColor onPress={() => waveVerdict($, owed.turnId)}>
+          Skip
         </Button>
       </Box>
     )
@@ -307,12 +355,17 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const rows = Math.max(2, (e.viewport?.rows ?? 24) - 12)
+    const rows = Math.max(2, (e.viewport?.rows ?? 24) - 14)
 
     return (
       <Box flexDirection="column" gap={1}>
         <Box flexDirection="column">
-          <Text bold>{headline(found)}</Text>
+          <Text
+            weight="bold"
+            color={found.lean === 'over' ? 'warning' : found.lean === 'under' ? 'subtle' : 'success'}
+          >
+            {headline(found)}
+          </Text>
           <Text dimColor>
             Brier {found.brier.toFixed(3)} over {found.scored} turns ·{' '}
             {found.brier < COIN_FLIP_BRIER ? 'better than a coin flip' : 'no better than a coin flip'}
@@ -339,18 +392,28 @@ export const register: Register = (on, options) => {
             <Text dimColor>Worst calls</Text>
             {found.misses.map(miss => (
               <Text key={`miss${miss.ask ?? ''}${miss.said}`}>
-                {asPercent(miss.said)} {miss.landed ? 'and it landed' : 'and it did not'} —{' '}
+                {asPercent(miss.said)}{' '}
+                <Text color={miss.landed ? 'success' : 'warning'}>
+                  {miss.landed ? 'and it landed' : 'and it did not'}
+                </Text>{' '}
+                —{' '}
                 <Text dimColor>{miss.ask ?? 'a turn with no prompt'}</Text>
               </Text>
             ))}
           </Box>
         )}
 
-        <Text dimColor>
-          {found.files ? `files called ${found.files.right}/${found.files.of} · ` : ''}
-          {found.landed ? `lands first try ${asPercent(found.landed.yes / found.landed.of)} · ` : ''}
-          {found.medianMs === undefined ? '' : `median ${asDuration(found.medianMs)}`}
-        </Text>
+        <Box flexDirection="column">
+          {found.files !== undefined && (
+            <Text dimColor>File count called right {found.files.right}/{found.files.of}.</Text>
+          )}
+          {found.landed !== undefined && (
+            <Text dimColor>
+              Lands first try {asPercent(found.landed.yes / found.landed.of)} ({found.landed.yes}/{found.landed.of}).
+            </Text>
+          )}
+          {found.medianMs !== undefined && <Text dimColor>Median turn {asDuration(found.medianMs)}.</Text>}
+        </Box>
       </Box>
     )
   })
