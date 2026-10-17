@@ -42,6 +42,35 @@ exist answers the same way.
 
 Start with `wait-review` if you only want one.
 
+### Updating
+
+Run these at the prompt, then **restart Claude Code** — an update is written to
+disk straight away but only loaded by the next session:
+
+```
+/plugin marketplace update waitroom
+/plugin update wait-review@waitroom
+/plugin update bet-on-your-agent@waitroom
+```
+
+It reports `updated from 0.1.0 to 0.2.0`. If it says you are already on the
+latest version, the marketplace has not been refreshed yet: run the first line
+again.
+
+### Coming from the old name
+
+The repository was called `Plugin`, and the marketplace `wait-mods` (in the
+very first release, `wait-review`). If you installed under one of those, the
+stale marketplace is still registered and has to go before the new one can take
+its place. `/plugin marketplace list` shows which you have; remove it, then
+install again:
+
+```
+/plugin marketplace remove wait-mods
+/plugin install wait-review --marketplace coindef/waitroom
+/plugin install bet-on-your-agent@waitroom
+```
+
 ## Requirements
 
 - **Claude Code, run interactively.** Tested on 2.1.300 and 2.1.302. Check with
