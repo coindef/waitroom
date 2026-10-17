@@ -34,7 +34,14 @@ version keeps the old code even when the repository has moved on.
 - **Say why** when you flag: `n` opens a box, and the reason travels to Claude
   with the hunk.
 - **Undo** with `u`; **skip a whole file** with `x`, counted as skipped rather
-  than read.
+  than read — and skipping a file is undoable too, each hunk going back to the
+  status it actually had rather than a blanket reset.
+- **`/wait-review` opens the pane holding the keyboard**, so its letters answer
+  at once. The pane that opens by itself at session start deliberately does
+  not, since it would eat the first keystrokes of an unsent prompt.
+- **The status line keeps reminding you of hunks put off**, rather than going
+  quiet once nothing is pending — which is exactly when `later` needs to be
+  remembered.
 - **Lockfiles, build output and snapshots are never queued**; `ignore` replaces
   the list.
 - The empty pane teaches the keys before you need them, and the status line
@@ -48,6 +55,11 @@ version keeps the old code even when the repository has moved on.
   first try?`
 - **Lives in the row above the prompt.** A bare digit typed into an empty
   prompt answers it: no pane, no focus, nothing to click.
+- **`0` always means skip**: waving away a forecast, the file count, or the
+  verdict. The verdict's skip used to sit on `3`.
+- **A verdict can be undone.** The row keeps `Recorded: Needed fixing · u:
+  Undo` until the next turn starts, so a misread verdict is one press rather
+  than a wrong score.
 - **`0` waves a turn away**, and the row goes quiet for the rest of it.
 - **Bets are quoted against what you asked**, and `/bet` names the asks you
   called worst.
@@ -61,6 +73,13 @@ version keeps the old code even when the repository has moved on.
 - A second install with `--marketplace <owner>/<repo>` answered `not found in
   any marketplace`. The repository and the marketplace are now both `waitroom`,
   and the README says which of the two `--marketplace` takes when.
+
+### Credits
+
+The undo for a skipped file and for a verdict, `0` as the one skip key,
+`/wait-review` taking focus, the put-off reminder, and the move off the
+deprecated `bold` prop came from a parallel pass on this release (#5),
+merged into it here.
 
 ## 0.1.0
 

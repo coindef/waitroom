@@ -106,7 +106,12 @@ terminal it waits until you ask. When that happens the status line says so:
 wait-review: 3 to read · open with /wait-review
 ```
 
-Running `/wait-review` places it at any width.
+Running `/wait-review` places it at any width, and it takes the keyboard too —
+the hotkeys answer right away, no click or `ctrl+x tab` needed first. Once
+you've opened it that way and not closed it by hand, the floor for the
+unasked, auto-opened-at-start pane drops from 144 columns to 110 for the rest
+of this session and any after — the terminal does not need to be as wide once
+you've shown you want it.
 
 ## Giving it the keys
 
@@ -173,7 +178,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 64 tests
+claude plugin test .         # 65 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

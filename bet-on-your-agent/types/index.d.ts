@@ -47,6 +47,9 @@ export type TurnRecord = {
   isVerdictSkipped?: true
 }
 
+/** The most recent verdict given, kept so one press can take it back. */
+export type LastVerdict = { turnId: string; result: 'landed' | 'fixed' | 'skipped' }
+
 /** The bet on the turn now running. */
 export type OpenBet = {
   turnId: string
@@ -70,6 +73,7 @@ declare module 'claude-code' {
     'bet-on-your-agent': {
       open: OpenBet
       busy: boolean
+      lastVerdict: LastVerdict | null
       /**
        * Bumped whenever the store changes.
        *

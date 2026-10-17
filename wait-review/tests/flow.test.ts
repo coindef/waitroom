@@ -328,6 +328,36 @@ test('a surface with no field offers no note, and still reviews', async ($, on) 
   await ui.unmount()
 })
 
+test('dropping a file can be undone, same as marking a single hunk', async ($, on) => {
+  const repo: Repo = { vsBase: '', vsHead: '', revParses: 0 }
+  engineBottom(on, repo)
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  repo.vsBase = AUTH_DIFF
+  repo.vsHead = AUTH_DIFF
+  await $.turn.start({ text: 'drop the retry', turnId: 'turn-10' })
+  await $.turn.complete({
+    turnId: 'turn-10',
+    answer: 'done',
+    durationMs: 30000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const ui = await mountPane($, 'terminal')
+  expect(await ui.find({ text: /1 to read/ })).toBeDefined()
+
+  await ui.press({ key: 'drop' })
+  expect(await ui.find({ text: /1 skipped/ })).toBeDefined()
+
+  // Skipping a whole file touches the most hunks of any call, so it is the
+  // one most worth being able to take back.
+  await ui.press({ key: 'undo' })
+  expect(await ui.find({ text: /1 to read/ })).toBeDefined()
+  expect(await ui.find({ text: /skipped/ })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('the full review card is drawable on every surface', async ($, on) => {
   // `drawn` rejects when a surface could not draw what the chain returned, so
   // this is the check that the card's layout validates against each surface's
