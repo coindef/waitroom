@@ -55,8 +55,12 @@ line 42 · +3 −1                            2 left here · 3 left
 o: Looks right   f: Flag   l: Later   x: Skip file
 ```
 
-Press the letter. That is the whole interface. Flag something and your reason
-goes to Claude with your next message.
+Press the letter. That is the whole interface, once the pane holds the
+keyboard — a click, `ctrl+x tab`, or running `/wait-review` all give it that.
+The quiet auto-open at the start of a session does not reach for it on its
+own, on purpose: it would otherwise eat the first keystrokes of a prompt you
+have not sent yet. Flag something and your reason goes to Claude with your
+next message.
 
 If the pane never appears, your terminal is under 144 columns — a pane nobody
 asked for needs that much room. Run `/wait-review` and it opens at any width.
@@ -69,7 +73,7 @@ review: 3 to read · /wait-review
 **bet-on-your-agent** puts one row above the prompt while a turn runs:
 
 ```
-Will "add the retry logic to the client" land first try?  1: 50% 2: 65% 3: 80% 4: 90% 5: 95% 0: skip
+Will "add the retry logic to the client" land first try?  1: 50% 2: 65% 3: 80% 4: 90% 5: 95% 0: Skip
 ```
 
 Type a bare digit into the empty composer and it answers — no pane, no focus,
@@ -142,11 +146,27 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 48 tests
+claude plugin test     ./wait-review          # 49 tests
 
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 34 tests
+claude plugin test     ./bet-on-your-agent    # 35 tests
 ```
+
+Neither of those runs a real type checker, so also run `tsc` from each mod's
+folder once it has loaded at least once (that's what writes
+`.claude-plugin/types/`, which the mod's `tsconfig.json` points at):
+
+```
+npx -y -p typescript@5.7 tsc -p .
+```
+
+(`typescript@latest` currently ships a rewritten `tsc` whose CLI rejects
+`-p` outright — pin a 5.x release rather than chasing that down again.) A
+clean run prints nothing. This caught a real bug once already (two call
+sites where a status literal silently widened to `string` inside a `.map`,
+erasing the protection `HunkStatus` was there to give) that 84 passing tests
+and a clean `validate` both missed — run it after any change to either
+mod's `hooks/`, not just when something looks wrong.
 
 Run a working copy without installing it, or install from this clone so edits
 reload in place:
