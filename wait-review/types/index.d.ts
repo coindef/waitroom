@@ -44,8 +44,14 @@ export type Hunk = {
   note?: string
 }
 
-/** The last call the person made, kept so one press can take it back. */
-export type Decision = { id: string; from: HunkStatus }
+/**
+ * The last call the person made, kept so one press can take it back.
+ *
+ * A list because dropping a whole file changes every pending hunk in it at
+ * once, each from whatever status it held; marking a single hunk is just a
+ * list of one.
+ */
+export type Decision = { changes: { id: string; from: HunkStatus }[] }
 
 declare module 'claude-code' {
   interface PluginState {

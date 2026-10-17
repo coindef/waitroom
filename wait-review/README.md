@@ -105,7 +105,12 @@ terminal it waits until you ask. When that happens the status line says so:
 review: 3 to read · /wait-review
 ```
 
-Running `/wait-review` places it at any width.
+Running `/wait-review` places it at any width, and it takes the keyboard too —
+the hotkeys answer right away, no click or `ctrl+x tab` needed first. Once
+you've opened it that way and not closed it by hand, the floor for the
+unasked, auto-opened-at-start pane drops from 144 columns to 110 for the rest
+of this session and any after — the terminal does not need to be as wide once
+you've shown you want it.
 
 ## What the pane looks like
 

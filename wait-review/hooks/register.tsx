@@ -61,6 +61,9 @@ const showStatus = async ($: EngineInterface) => {
     const counts = tally(await read($, hunks))
     const parts: string[] = []
     if (counts.pending > 0) parts.push(`${counts.pending} to read`)
+    // Nothing pending but something put off is not "done" - that would make
+    // the status go quiet on exactly the hunks "later" exists to be reminded of.
+    else if (counts.later > 0) parts.push(`${counts.later} put off`)
     if (counts.flagged > 0) parts.push(`${counts.flagged} flagged`)
     if (parts.length === 0) {
       $.ui.status(undefined)
@@ -172,13 +175,17 @@ const mark = async ($: EngineInterface, id: string, status: HunkStatus) => {
   await update($, noting, () => null)
   const before = (await read($, hunks)).find(one => one.id === id)
   await update($, hunks, old => old.map(one => (one.id === id ? { ...one, status } : one)))
-  await update($, lastDecision, () => (before ? { id, from: before.status } : null))
+  await update($, lastDecision, () => (before ? { changes: [{ id, from: before.status }] } : null))
   await showStatus($)
 }
 
 /** Opens the note box for a hunk, or closes it when given nothing. */
 const setNoting = async ($: EngineInterface, id: string | null) => {
   await update($, noting, () => id)
+  // The Input's own `autoFocus` only wins when the site's ring starts fresh;
+  // the click on "Say why" that got here already moved it there, so the ring
+  // stays on that button unless told otherwise - land it on the box instead.
+  if (id !== null) await $.ui.focus({ requestId: PANE, key: 'note-text' }).catch(() => undefined)
 }
 
 /**
@@ -204,12 +211,13 @@ const saveNote = async ($: EngineInterface, id: string, text: string) => {
   await update($, noting, () => null)
 }
 
-/** Puts the last call back, so misreading a hunk costs one press, not a rescan. */
+/** Puts the last call back, so misreading a hunk (or a whole file) costs one press, not a rescan. */
 const undo = async ($: EngineInterface) => {
   const last = await read($, lastDecision)
   if (!last) return
+  const from = new Map(last.changes.map(one => [one.id, one.from]))
   await update($, hunks, old =>
-    old.map(one => (one.id === last.id ? { ...one, status: last.from } : one)),
+    old.map(one => (from.has(one.id) ? { ...one, status: from.get(one.id) as HunkStatus } : one)),
   )
   await update($, lastDecision, () => null)
   await showStatus($)
@@ -219,17 +227,17 @@ const undo = async ($: EngineInterface) => {
  * Waves away everything still unread in one file.
  *
  * Dropped, not approved: a regenerated file is noise to clear, and the counts
- * should not pretend it was read.
+ * should not pretend it was read. Undoable like any other call: it is the one
+ * that touches the most hunks at once, so it is the one most worth a take-back.
  */
 const dropFile = async ($: EngineInterface, path: string) => {
-  await update($, hunks, old =>
-    old.map(one =>
-      one.path === path && (one.status === 'pending' || one.status === 'later')
-        ? { ...one, status: 'dropped' }
-        : one,
-    ),
-  )
-  await update($, lastDecision, () => null)
+  const before = await read($, hunks)
+  const changes = before
+    .filter(one => one.path === path && (one.status === 'pending' || one.status === 'later'))
+    .map(one => ({ id: one.id, from: one.status }))
+  const ids = new Set(changes.map(one => one.id))
+  await update($, hunks, old => old.map(one => (ids.has(one.id) ? { ...one, status: 'dropped' as const } : one)))
+  await update($, lastDecision, () => (changes.length > 0 ? { changes } : null))
   await showStatus($)
 }
 
@@ -262,8 +270,11 @@ export const register: Register = (on, options) => {
     await scan($, config)
     await showStatus($)
     const counts = tally(await read($, hunks))
+    // Focused only here, not on the autoOpen at session.start: typing `/wait-review`
+    // is asking to use it now, where auto-opening at the start of a session is not -
+    // stealing the composer's focus before a first prompt would eat its keystrokes.
     const opened = await $.ui
-      .open({ id: PANE, title: 'Wait review' })
+      .open({ id: PANE, title: 'Wait review', focus: true })
       .catch(() => ({ isPlaced: false, reason: 'the engine would not place it' }) as const)
     const where = opened.isPlaced ? 'Review pane open.' : `Review pane waiting (${opened.reason}).`
 
@@ -304,7 +315,7 @@ export const register: Register = (on, options) => {
     const done = await next({ ...e, context: [...(e.context ?? []), reviewNote(flagged)] })
     const ids = new Set(flagged.map(one => one.id))
     await update($, hunks, old =>
-      old.map(one => (ids.has(one.id) ? { ...one, status: 'sent' } : one)),
+      old.map(one => (ids.has(one.id) ? { ...one, status: 'sent' as const } : one)),
     )
     await showStatus($)
 
@@ -325,7 +336,13 @@ export const register: Register = (on, options) => {
     const noteFor = await read($, noting)
     const counts = tally(list)
     const current = nextHunk(list)
-    const flagged = last && list.find(one => one.id === last.id)?.status === 'flagged' ? last.id : null
+    // Only a single-hunk decision can be "the hunk just flagged" - a dropped
+    // file is many hunks at once and none of them is an offer to say why.
+    const flaggedId = last?.changes.length === 1 ? last.changes[0]?.id : undefined
+    const flagged =
+      flaggedId !== undefined && list.find(one => one.id === flaggedId)?.status === 'flagged'
+        ? flaggedId
+        : null
     const width = Math.max(20, e.props.bodyColumns)
 
     const summary = summaryOf(list)
@@ -362,7 +379,7 @@ export const register: Register = (on, options) => {
         <Box flexDirection="column" gap={1}>
           {head}
           <Box flexDirection="column">
-            <Text wrap="truncate-start" bold>
+            <Text wrap="truncate-start" weight="bold">
               {target?.path ?? 'that hunk'}
             </Text>
             <Input
@@ -405,7 +422,7 @@ export const register: Register = (on, options) => {
 
         <Box flexDirection="column">
           <Box justifyContent="space-between" gap={2}>
-            <Text wrap="truncate-start" bold>
+            <Text wrap="truncate-start" weight="bold">
               {current.path}
             </Text>
             {where.ofFiles > 1 && (
