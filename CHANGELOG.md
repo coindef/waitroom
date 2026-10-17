@@ -1,5 +1,15 @@
 # Changelog
 
+## bet-on-your-agent 0.2.1
+
+- **A bet left unanswered lapses after four hours.** "Did it land?" waited for
+  an answer forever, so a bet left at the end of a day opened the next day's
+  session by asking about a turn nobody remembered — and a session restart is
+  what every `/plugin update` asks for. Past the window the bet is waved away
+  as a skip would: still on the record, never scored, never asked about.
+
+`wait-review` is unchanged at 0.2.0.
+
 ## 0.2.0 — launch
 
 Both mods are bumped together, so `/plugin update` brings an install from

@@ -12,6 +12,7 @@ import {
   COIN_FLIP_BRIER,
   headline,
   keepRecord,
+  lapseVerdicts,
   median,
   owedVerdict,
   report,
@@ -19,6 +20,7 @@ import {
   shortAsk,
   skipVerdict,
   undoVerdict,
+  VERDICT_WINDOW_MS,
   worstCalls,
 } from '../hooks/bet'
 
@@ -250,6 +252,34 @@ test('a waved-away verdict owes nothing and scores nothing', async () => {
   expect(found.scored).toBe(0)
   // The turn still happened, so it stays on the record.
   expect(found.recorded).toBe(1)
+})
+
+test('a verdict owed past the window lapses, and nothing else does', async () => {
+  const at = 10_000
+  const records = [
+    turn({ turnId: 'stale', at, saidConfidence: 0.8 }),
+    turn({ turnId: 'fresh', at: at + VERDICT_WINDOW_MS, saidConfidence: 0.8 }),
+    turn({ turnId: 'answered', at, saidConfidence: 0.8, landed: true }),
+    turn({ turnId: 'unbet', at }),
+  ]
+  const now = at + VERDICT_WINDOW_MS + 1
+
+  const kept = lapseVerdicts(records, now)
+
+  // The stale one is waved away, so it is neither asked about nor scored.
+  expect(owedVerdict(kept)?.turnId).toBe('fresh')
+  expect(report(kept).owed).toBe(1)
+  expect(report(kept).scored).toBe(1)
+  // It still happened, so it stays on the record.
+  expect(report(kept).recorded).toBe(4)
+  expect(kept.find(one => one.turnId === 'answered')?.landed).toBe(true)
+})
+
+test('nothing lapsed hands the same records back, so nothing is written', async () => {
+  const records = [turn({ turnId: 'fresh', at: 5000, saidConfidence: 0.8 })]
+
+  expect(lapseVerdicts(records, 5000 + VERDICT_WINDOW_MS)).toBe(records)
+  expect(lapseVerdicts([], 0)).toEqual([])
 })
 
 test('a waved-away verdict is not asked about again', async () => {

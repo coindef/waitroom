@@ -164,6 +164,30 @@ export const skipVerdict = (
 ): TurnRecord[] =>
   records.map(one => (one.turnId === turnId ? { ...one, isVerdictSkipped: true as const } : one))
 
+/**
+ * How long a bet waits on its verdict before it lapses.
+ *
+ * "Did it land?" is only answerable while the turn is still in mind. Without
+ * a limit, a bet left unanswered at the end of a day opened the next day's
+ * session by asking about work nobody remembered — and a verdict guessed at
+ * then is noise in the score, not signal.
+ */
+export const VERDICT_WINDOW_MS = 4 * 60 * 60 * 1000
+
+/**
+ * Waves away every verdict owed for longer than the window, as a skip would.
+ *
+ * Hands `records` itself back when nothing lapsed, so the caller can tell
+ * there is nothing to write.
+ */
+export const lapseVerdicts = (records: TurnRecord[], now: number): TurnRecord[] => {
+  const hasLapsed = (one: TurnRecord) => isOwed(one) && now - one.at > VERDICT_WINDOW_MS
+
+  return records.some(hasLapsed)
+    ? records.map(one => (hasLapsed(one) ? { ...one, isVerdictSkipped: true as const } : one))
+    : records
+}
+
 export type Miss = {
   ask?: string
   said: number

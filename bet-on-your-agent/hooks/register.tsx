@@ -15,6 +15,7 @@ import {
   FILE_BUCKETS,
   headline,
   keepRecord,
+  lapseVerdicts,
   owedVerdict,
   report,
   setVerdict,
@@ -123,6 +124,13 @@ const waveVerdict = async ($: EngineInterface, turnId: string) => {
   await showStatus($)
 }
 
+/** Lets go of the verdicts too old to answer, so a session never opens on one. */
+const lapseStaleVerdicts = async ($: EngineInterface) => {
+  const records = await loadTurns($)
+  const kept = lapseVerdicts(records, await $.clock.now())
+  if (kept !== records) await saveTurns($, kept)
+}
+
 /** Puts the last verdict back to owed, so misreading it costs one press, not a wrong score. */
 const undoLastVerdict = async ($: EngineInterface) => {
   const last = await read($, lastVerdict)
@@ -148,6 +156,8 @@ export const register: Register = (on, options) => {
       description: 'How well you call your agent: Brier score and calibration',
     })
     if (config.autoOpen) void $.ui.open({ id: PANE, title: 'Bet on your agent' }).catch(() => undefined)
+    await lapseStaleVerdicts($)
+    await showStatus($)
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -188,6 +198,8 @@ export const register: Register = (on, options) => {
     // A new turn's own questions take over the band; the last verdict is
     // settled by now, or it would still be the one being asked about.
     await update($, lastVerdict, () => null)
+    // A session can run past the window too.
+    await lapseStaleVerdicts($)
     await showStatus($)
 
     return next(e)

@@ -172,6 +172,64 @@ test('the verdict can be waved away, and then is not asked again', async ($, on)
   await idle.unmount()
 })
 
+test('a bet left unanswered for hours is not what the next session opens on', async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  on('command.register', ($$, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($$, e) => ({ text: e.answer }))
+  on('ui.render', { component: 'AbovePrompt' }, ($$, e) => {
+    const { Box } = $$.ui.resolve(e)
+
+    return <Box />
+  })
+  const said: (string | undefined)[] = []
+  on('ui.status', ($$, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+
+  await $.turn.start({ text: 'migrate the billing tables', turnId: 'turn-late' })
+  const betting = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betting.press({ key: 'p90' })
+  await betting.unmount()
+  await $.turn.complete({
+    turnId: 'turn-late',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  expect(said.at(-1)).toBe('did it land? 1 to answer')
+
+  // The person walked away; the next session starts the next morning.
+  await clock.advance(16 * 60 * 60 * 1000)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  expect(await idle.find({ text: /migrate the billing tables/ })).toBeUndefined()
+  expect(await idle.findAll({ type: 'Button' })).toHaveLength(0)
+  await idle.unmount()
+  expect(said.at(-1)).not.toContain('did it land')
+
+  // It lapsed rather than vanished: the turn is still on the record, unscored.
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /waiting on your verdict/ })).toBeUndefined()
+  await pane.unmount()
+})
+
 test('the band yields to a survey of the engine’s own', async ($, on) => {
   engineBottom(on)
   await $.turn.start({ text: 'anything', turnId: 'turn-4' })
