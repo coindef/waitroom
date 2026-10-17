@@ -53,9 +53,11 @@ disk straight away but only loaded by the next session:
 /plugin update bet-on-your-agent@waitroom
 ```
 
-Each reports `updated from` the old version `to` the new one. If one says you
-are already on the latest version, the marketplace has not been refreshed yet:
-run the first line again. What changed is in [CHANGELOG.md](./CHANGELOG.md).
+Each reports `updated from` the old version `to` the new one, or `already at
+the latest version` for a mod that has not changed. What changed, and in which
+mod, is in [CHANGELOG.md](./CHANGELOG.md); if one it lists as changed still
+says it is at the latest version, the marketplace was not refreshed yet, so run
+the first line again.
 
 ### Coming from the old name
 
@@ -231,7 +233,7 @@ claude plugin validate ./wait-review
 claude plugin test     ./wait-review          # 65 tests
 
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 40 tests
+claude plugin test     ./bet-on-your-agent    # 41 tests
 ```
 
 Neither of those runs a real type checker, so also run `tsc` from each mod's

@@ -153,9 +153,22 @@ export const report = (records: readonly TurnRecord[]): Report => {
   }
 }
 
-/** The oldest bet still waiting on a verdict, which is the one to ask about. */
+/**
+ * The bet to ask about: the latest one still waiting on a verdict.
+ *
+ * It used to be the oldest, which a live session showed was wrong: you bet on
+ * a turn, watch it land, and get asked about one from forty minutes earlier
+ * instead. The turn that just landed is the one on screen and in mind; any
+ * older ones wait behind it until they lapse. Records are kept newest last, so
+ * a tie on the clock goes to the later one.
+ */
 export const owedVerdict = (records: readonly TurnRecord[]): TurnRecord | undefined =>
-  records.filter(isOwed).sort((a, b) => a.at - b.at)[0]
+  records
+    .filter(isOwed)
+    .reduce<TurnRecord | undefined>(
+      (latest, one) => (latest === undefined || one.at >= latest.at ? one : latest),
+      undefined,
+    )
 
 /** Waves the verdict away: the turn stays recorded but owes and scores nothing. */
 export const skipVerdict = (
