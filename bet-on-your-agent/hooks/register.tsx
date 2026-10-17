@@ -60,19 +60,31 @@ const showStatus = async ($: EngineInterface) => {
   try {
     const isBusy = await read($, busy)
     const bet = await read($, open)
+    // The engine already prefixes the plugin's own name, so the text says only
+    // what to do next, which is what a status line is for.
     if (isBusy) {
-      const said = bet.saidConfidence === undefined ? 'open' : asPercent(bet.saidConfidence)
-      $.ui.status(`bet: ${said}`)
+      if (bet.isDeclined === true) {
+        $.ui.status(undefined)
+
+        return
+      }
+      $.ui.status(
+        bet.saidConfidence === undefined
+          ? 'type 1–5 to call this turn'
+          : `you said ${asPercent(bet.saidConfidence)}`,
+      )
 
       return
     }
     const found = report(await loadTurns($))
     if (found.owed > 0) {
-      $.ui.status(`bet: ${found.owed} verdict${found.owed === 1 ? '' : 's'} owed`)
+      $.ui.status(`did it land? ${found.owed === 1 ? '1 to answer' : `${found.owed} to answer`}`)
 
       return
     }
-    $.ui.status(found.brier === undefined ? undefined : `bet: Brier ${found.brier.toFixed(2)}`)
+    $.ui.status(
+      found.brier === undefined ? undefined : `${headline(found).replace(/\.$/, '')} · /bet`,
+    )
   } catch {
     // Nothing to do: the record is still kept, only unshown.
   }
@@ -212,45 +224,53 @@ export const register: Register = (on, options) => {
       const quoted = shortAsk(bet.ask, room)
       const about = quoted === '' ? '' : ` "${quoted}"`
 
+      // The question and its answers sit on separate lines: on one line, a
+      // pane docked beside the transcript narrowed the band until the question
+      // wrapped around its own buttons.
       if (said === undefined) {
         return (
-          <Box gap={1}>
-            <Text>Will{about} land first try?</Text>
-            {BANDS.map((band, at) => (
-              <Button
-                key={`p${Math.round(band * 100)}`}
-                hotkey={String(at + 1)}
-                plain
-                onPress={() => placeConfidence($, band)}
-              >
-                {asPercent(band)}
+          <Box flexDirection="column">
+            <Text wrap="truncate-end">Will{about} land first try?</Text>
+            <Box gap={2}>
+              {BANDS.map((band, at) => (
+                <Button
+                  key={`p${Math.round(band * 100)}`}
+                  hotkey={String(at + 1)}
+                  plain
+                  onPress={() => placeConfidence($, band)}
+                >
+                  {asPercent(band)}
+                </Button>
+              ))}
+              <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
+                skip
               </Button>
-            ))}
-            <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
-              skip
-            </Button>
+            </Box>
           </Box>
         )
       }
 
       if (bet.saidFiles === undefined) {
         return (
-          <Box gap={1}>
-            <Text dimColor>{asPercent(said)} ·</Text>
-            <Text>how many files?</Text>
-            {FILE_BUCKETS.map((bucket, at) => (
-              <Button
-                key={`f${bucket}`}
-                hotkey={String(at + 1)}
-                plain
-                onPress={() => placeFiles($, bucket)}
-              >
-                {bucket}
+          <Box flexDirection="column">
+            <Text wrap="truncate-end">
+              <Text dimColor>you said {asPercent(said)} · </Text>how many files will it touch?
+            </Text>
+            <Box gap={2}>
+              {FILE_BUCKETS.map((bucket, at) => (
+                <Button
+                  key={`f${bucket}`}
+                  hotkey={String(at + 1)}
+                  plain
+                  onPress={() => placeFiles($, bucket)}
+                >
+                  {bucket}
+                </Button>
+              ))}
+              <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
+                skip
               </Button>
-            ))}
-            <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
-              skip
-            </Button>
+            </Box>
           </Box>
         )
       }
@@ -270,20 +290,22 @@ export const register: Register = (on, options) => {
     const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, room)
 
     return (
-      <Box gap={1}>
-        <Text>
+      <Box flexDirection="column">
+        <Text wrap="truncate-end">
           {quoted === '' ? 'That turn' : `"${quoted}"`} — you said{' '}
-          {asPercent(owed.saidConfidence ?? 0)}.
+          {asPercent(owed.saidConfidence ?? 0)}. Did it land?
         </Text>
-        <Button key="landed" hotkey="1" plain onPress={() => giveVerdict($, owed.turnId, true)}>
-          landed
-        </Button>
-        <Button key="fixed" hotkey="2" plain onPress={() => giveVerdict($, owed.turnId, false)}>
-          needed fixing
-        </Button>
-        <Button key="skip" hotkey="3" plain dimColor onPress={() => waveVerdict($, owed.turnId)}>
-          skip
-        </Button>
+        <Box gap={2}>
+          <Button key="landed" hotkey="1" plain onPress={() => giveVerdict($, owed.turnId, true)}>
+            landed
+          </Button>
+          <Button key="fixed" hotkey="2" plain onPress={() => giveVerdict($, owed.turnId, false)}>
+            needed fixing
+          </Button>
+          <Button key="skip" hotkey="3" plain dimColor onPress={() => waveVerdict($, owed.turnId)}>
+            skip
+          </Button>
+        </Box>
       </Box>
     )
   })

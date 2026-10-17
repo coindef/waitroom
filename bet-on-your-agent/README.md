@@ -29,12 +29,16 @@ lands.
 
 ## What it does
 
-It lives in the row above the prompt, which is where you are already looking
+![The forecast row above the prompt, asking whether the running turn will land first try, with answers 1 to 5 and 0 to skip](../docs/waitroom.svg)
+
+
+It lives just above the prompt, which is where you are already looking
 while you wait. **Type a bare digit into an empty composer and it answers** —
 no pane to place, no focus to manage, nothing to click.
 
 ```
-Will "add the retry logic to the client" land first try?  1: 50% 2: 65% 3: 80% 4: 90% 5: 95% 0: skip
+Will "add the retry logic to the client" land first try?
+1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: skip
 ```
 
 `0` waves the turn away and the band goes quiet for the rest of it: a prompt you
@@ -44,7 +48,8 @@ Answer that and it asks the next thing, never both at once, so the digits
 always mean the obvious thing:
 
 ```
-80% · how many files?  1: 0  2: 1  3: 2-3  4: 4+
+you said 80% · how many files will it touch?
+1: 0  2: 1  3: 2-3  4: 4+  0: skip
 ```
 
 - **Will it land first try?** Resolved by your own verdict, which it asks for
@@ -121,7 +126,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 34 tests
+claude plugin test .         # 36 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested

@@ -230,14 +230,21 @@ export const shortAsk = (text: string, room = ASK_ROOM): string => {
   return `${flat.slice(0, room - 1).trimEnd()}…`
 }
 
+/** The most of a live ask the band quotes, however wide the terminal. */
+export const BAND_ASK_ROOM = 64
+
+/** `Will "" land first try?` and the space around it. */
+const QUESTION_CHROME = 26
+
 /**
- * How much of the ask the band can show beside its buttons.
+ * How much of the ask the band's question line can quote.
  *
- * The buttons are the point, so they get the room first: below what they need
- * the ask is dropped rather than wrapped onto a second row.
+ * The answers have a line of their own, so the ask competes only with the
+ * question's own words; below a dozen characters a quote says nothing and is
+ * dropped rather than shown as a stub.
  */
 export const askRoomFor = (bodyColumns: number): number => {
-  const left = Math.min(ASK_ROOM, bodyColumns - 42)
+  const left = Math.min(BAND_ASK_ROOM, bodyColumns - QUESTION_CHROME)
 
   return left < 12 ? 0 : left
 }

@@ -32,8 +32,9 @@ the diff has been reviewed at no dedicated review cost.
 - Leaves out whatever was already uncommitted when the session began, so your
   own work in progress is never offered as the agent's review.
 - Shows one card at a time in a pane, in reading order — each file together,
-  top of the file first. Press `o` (looks right), `f` (flag), `l` (later),
-  `x` (skip the rest of this file), `u` (undo the last call).
+  top of the file first. Give it the keys with `ctrl+x tab` (or click it), then
+  `o` looks right, `f` flag, `l` later, `x` skip the rest of this file, `u`
+  undo. A hunk longer than the pane pages with `j` and `k`.
 - After flagging, `n` opens a box to say why, and that reason goes to Claude
   with the hunk. Optional: flagging stays one press and the box only appears
   when you ask for it.
@@ -102,31 +103,34 @@ A pane nobody asked for is only placed from 144 columns, so on a narrower
 terminal it waits until you ask. When that happens the status line says so:
 
 ```
-review: 3 to read · /wait-review
+wait-review: 3 to read · open with /wait-review
 ```
 
 Running `/wait-review` places it at any width.
 
+## Giving it the keys
+
+The pane's letters only work while it holds the keyboard. Press `o` without that
+and an `o` goes into your prompt instead, so the pane says which it is at the
+bottom: `ctrl+x tab to use these keys · or click them` while it does not have
+them, and `esc hands the keys back to the prompt` while it does.
+
+## Long hunks
+
+A new file is a single hunk as long as the file. Rather than cutting it at the
+pane's height — which meant a new file could never be read past its first
+screen — the pane pages: `lines 1–30 of 200`, `j` to read on, `k` to read back.
+Every page is drawn as a hunk of its own, with a header rewritten to match, so
+it still draws as a diff. Reading to the end is not required before deciding.
+
 ## What the pane looks like
 
-```
-2 to read · 1 read                                   Claude is working
+<img src="../docs/paging.svg" width="480" alt="The review pane paging through a new file, lines 1 to 21 of 44">
 
-src/auth/session.ts                                      file 1 of 2
-line 42 · +3 −1                            2 left here · 3 left
-────────────────────────────────────────────────────────────────────
-  42   const sent = await fetch(url)
-  43 - if (!sent.ok) return retry(url)
-  43 + if (!sent.ok) return undefined
-  44   return sent.json()
-
-o: Looks right   f: Flag   l: Later   x: Skip file
-```
-
-Each control carries its own key, so there is no legend to learn and nothing to
-click. The header says how much is left before you commit to reading: how many
-hunks in this file, how many in all, and which file of how many. Counts that are
-zero are left out rather than shown as zero.
+A real capture from Claude Code 2.1.302. The header says how much is left before
+you commit to reading — hunks in this file, hunks in all, which file of how
+many — and counts that are zero are left out. Each control carries its own key,
+so there is no legend to learn.
 
 ## Saying why
 
@@ -169,7 +173,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 48 tests
+claude plugin test .         # 64 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

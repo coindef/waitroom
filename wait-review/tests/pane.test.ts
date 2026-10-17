@@ -30,7 +30,7 @@ test('the pane draws on every surface, and says so when there is nothing to read
     })
 
     expect(await ui.find({ text: /nothing to read/ })).toBeDefined()
-    expect(await ui.find({ text: /Hunks arrive here as Claude writes/ })).toBeDefined()
+    expect(await ui.find({ text: /each change lands here to read while it works/ })).toBeDefined()
     // Nothing waiting means nothing to act on.
     expect(await ui.findAll({ type: 'Button' })).toHaveLength(0)
 

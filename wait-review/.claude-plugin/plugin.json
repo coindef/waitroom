@@ -1,10 +1,13 @@
 {
   "name": "wait-review",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turns the wait while Claude works into incremental review of the diff it already wrote.",
   "author": {
     "name": "coindef"
   },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/wait-review",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
   "types": "./types/index.d.ts",
   "userConfig": {
     "contextLines": {

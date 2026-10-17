@@ -1,10 +1,13 @@
 {
   "name": "bet-on-your-agent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Forecast how a turn will go from the row above the prompt, and get scored on your calibration.",
   "author": {
     "name": "coindef"
   },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/bet-on-your-agent",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
   "types": "./types/index.d.ts",
   "userConfig": {
     "autoOpen": {

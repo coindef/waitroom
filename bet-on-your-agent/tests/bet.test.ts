@@ -275,11 +275,13 @@ test('an ask is flattened to one line and cut to the room there is', async () =>
   expect(shortAsk('anything', 0)).toBe('')
 })
 
-test('the ask yields the band to its buttons when there is no room', async () => {
-  expect(askRoomFor(200)).toBe(48)
-  expect(askRoomFor(80)).toBe(38)
-  // Too narrow to show both, so the buttons win and the ask is dropped.
-  expect(askRoomFor(50)).toBe(0)
+test('the question line quotes as much of the ask as its own words leave room for', async () => {
+  expect(askRoomFor(200)).toBe(64)
+  expect(askRoomFor(80)).toBe(54)
+  // Beside a docked pane the band is narrow, and still quotes something useful.
+  expect(askRoomFor(50)).toBe(24)
+  // Under a dozen characters a quote says nothing, so it is dropped.
+  expect(askRoomFor(37)).toBe(0)
 })
 
 test('the report names the worst calls once there are any', async () => {

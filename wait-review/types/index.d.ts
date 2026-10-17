@@ -47,6 +47,9 @@ export type Hunk = {
 /** The last call the person made, kept so one press can take it back. */
 export type Decision = { id: string; from: HunkStatus }
 
+/** How far into a long hunk the reader has paged, and which hunk that was. */
+export type Page = { id: string; offset: number }
+
 declare module 'claude-code' {
   interface PluginState {
     'wait-review': {
@@ -78,6 +81,8 @@ declare module 'claude-code' {
        * the review hotkeys: the note box is only up while it is wanted.
        */
       noting: string | null
+      /** Paging through the current hunk; a different hunk starts at the top. */
+      page: Page | null
     }
   }
 }

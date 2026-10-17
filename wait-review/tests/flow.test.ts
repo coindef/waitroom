@@ -358,3 +358,150 @@ test('the full review card is drawable on every surface', async ($, on) => {
     await ui.unmount()
   }
 })
+
+/** A new file as git diffs it: one hunk as long as the file. */
+const NEW_FILE_DIFF = [
+  'diff --git src/big.ts src/big.ts',
+  'new file mode 100644',
+  '--- /dev/null',
+  '+++ src/big.ts',
+  '@@ -0,0 +1,80 @@',
+  ...Array.from({ length: 80 }, (_, at) => `+export const line${at + 1} = ${at + 1}`),
+  '',
+].join('\n')
+
+const queueOne = async ($: Engine, on: On, diff: string, turnId: string) => {
+  const repo: Repo = { vsBase: '', vsHead: '', revParses: 0 }
+  engineBottom(on, repo)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  repo.vsBase = diff
+  repo.vsHead = diff
+  await $.turn.start({ text: 'write it', turnId })
+  await $.turn.complete({ turnId, answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer' })
+}
+
+test('a new file longer than the pane is read page by page, to its end', async ($, on) => {
+  await queueOne($, on, NEW_FILE_DIFF, 'turn-p1')
+  const ui = await mountPane($, 'terminal')
+
+  // The pane holds 30 rows, so the 80-line file cannot be shown at once.
+  expect(await ui.find({ text: /lines 1–\d+ of 80/ })).toBeDefined()
+  expect(await ui.find({ key: 'back' })).toBeUndefined()
+  // `line1 = 1` and not `line10 = 10`: the lookahead refuses a following digit.
+  const firstLine = /line1 = 1(?!\d)/
+  expect(await ui.find({ text: firstLine })).toBeDefined()
+
+  await ui.press({ key: 'more' })
+  expect(await ui.find({ key: 'back' })).toBeDefined()
+  expect(await ui.find({ text: firstLine })).toBeUndefined()
+
+  // And back again lands on the first page.
+  await ui.press({ key: 'back' })
+  expect(await ui.find({ text: firstLine })).toBeDefined()
+  await ui.press({ key: 'more' })
+
+  // Paging all the way reaches the last line, and then there is no more.
+  for (let at = 0; at < 10 && (await ui.find({ key: 'more' })); at++) await ui.press({ key: 'more' })
+  expect(await ui.find({ text: /line80 = 80/ })).toBeDefined()
+  expect(await ui.find({ text: /of 80/ })).toBeDefined()
+
+  // Reading the whole thing is not required before deciding on it.
+  await ui.press({ key: 'ok' })
+  expect(await ui.find({ text: /Diff read/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a short hunk shows no paging at all', async ($, on) => {
+  await queueOne($, on, AUTH_DIFF, 'turn-p2')
+  const ui = await mountPane($, 'terminal')
+
+  expect(await ui.find({ key: 'more' })).toBeUndefined()
+  expect(await ui.find({ text: /lines \d+–/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the pane says how to give it the keys, and how to hand them back', async ($, on) => {
+  await queueOne($, on, AUTH_DIFF, 'turn-p3')
+
+  // Unfocused, `o` would type into the prompt, so the pane says what to do.
+  const away = await $.ui.mount({
+    plugin: 'wait-review',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'wait-review',
+    props: { ...PANE_PROPS, isFocused: false },
+    viewport: { columns: 100, rows: 30 },
+  })
+  expect(await away.find({ text: /ctrl\+x tab to use these keys/ })).toBeDefined()
+  await away.unmount()
+
+  const here = await mountPane($, 'terminal')
+  expect(await here.find({ text: /esc hands the keys back/ })).toBeDefined()
+  expect(await here.find({ text: /ctrl\+x tab/ })).toBeUndefined()
+  await here.unmount()
+})
+
+test('the status line names the count and the way in, not the plugin again', async ($, on) => {
+  const said: (string | undefined)[] = []
+  on('ui.status', ($$, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+  // No pane is placed in a test, as on a terminal under 144 columns.
+  await queueOne($, on, AUTH_DIFF, 'turn-s1')
+
+  expect(said.at(-1)).toBe('1 to read · open with /wait-review')
+  expect(said.every(text => text === undefined || !text.startsWith('review'))).toBe(true)
+})
+
+test('a long changed line reaches the drawing whole, wrapped rather than cut', async ($, on) => {
+  // Found in a live session: the pane cut `AbortSignal.timeout(10_0…` at its
+  // edge, hiding exactly the change being reviewed.
+  const LONG = [
+    'diff --git src/client.ts src/client.ts',
+    '--- src/client.ts',
+    '+++ src/client.ts',
+    '@@ -4,1 +4,1 @@',
+    '-  const sent = await fetch(url)',
+    '+  const sent = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { accept: "application/json" } })',
+    '',
+  ].join('\n')
+  await queueOne($, on, LONG, 'turn-w1')
+  const ui = await mountPane($, 'terminal')
+
+  const code = await ui.find({ type: 'Code' })
+  expect(code?.props.wrap).toBe('wrap')
+  expect(String(code?.props.source)).toContain('timeout(10_000), headers: { accept: "application/json" } })')
+  await ui.unmount()
+})
+
+test('a page is sized to the pane body, not to the whole terminal', async ($, on) => {
+  // Found live: pages were sized to the terminal's rows, but the prompt and
+  // status rows sit below the pane, so a long hunk's first page pushed the
+  // controls off the bottom.
+  await queueOne($, on, NEW_FILE_DIFF, 'turn-h1')
+  const shownAt = async (bodyRows: number) => {
+    const ui = await $.ui.mount({
+      plugin: 'wait-review',
+      surface: 'terminal',
+      component: 'Pane',
+      requestId: 'wait-review',
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows } },
+      // The terminal is the same height both times; only the pane differs.
+      viewport: { columns: 100, rows: 50 },
+    })
+    const label = String((await ui.find({ text: /lines 1–\d+ of 80/ }))?.text ?? '')
+    await ui.unmount()
+
+    return Number(/1–(\d+)/.exec(label)?.[1] ?? 0)
+  }
+
+  const short = await shownAt(24)
+  const tall = await shownAt(44)
+
+  expect(short).toBeGreaterThan(0)
+  expect(tall - short).toBe(20)
+  // The card's own chrome leaves room for the controls in a 24-row pane.
+  expect(short).toBeLessThanOrEqual(24 - 10)
+})
