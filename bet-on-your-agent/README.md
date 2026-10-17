@@ -8,7 +8,8 @@ how calibrated you were.
 /plugin install bet-on-your-agent --marketplace coindef/waitroom
 ```
 
-(Answer `y` to add the marketplace, then pick a scope.)
+(Answer `y` to add the marketplace, then pick a scope. Needs Claude Code
+2.1.292 or later; `claude update` if `claude --version` says otherwise.)
 
 ## Why calibration, not a wager
 
