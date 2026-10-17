@@ -22,6 +22,11 @@ the whole install — the plugin is active in that session straight away, and in
 every session after it. Nothing to configure, no key, no service, and nothing
 written to your repository.
 
+It needs **Claude Code 2.1.292 or later** — `claude --version` says which you
+have, `claude update` moves you on. An older build installs it without
+complaint and then shows it as `failed to load`; see
+[If a plugin shows an error](#if-a-plugin-shows-an-error).
+
 The source is the repository path; the marketplace it adds is called
 **`waitroom`**, which is the name everything after the first install goes by:
 
@@ -84,8 +89,11 @@ so your calibration starts fresh under the new name.
 
 ## Requirements
 
-- **Claude Code, run interactively.** Tested on 2.1.300 and 2.1.302. Check with
-  `claude --version`, and `claude update` if you are on something older.
+- **Claude Code 2.1.292 or later, run interactively.** 2.1.292 is the current
+  stable release; tested on it, 2.1.300 and 2.1.302. Builds before 2.1.242
+  cannot read the hooks module both plugins are built on, so they fail to load;
+  builds in between load them but are untested. `claude update` if you are
+  behind.
 - **A git repository** for wait-review. It reads the diff, so outside one it
   has nothing to show. bet-on-your-agent works anywhere.
 - Plugins that hook Claude Code's own events are **early access**. See
@@ -172,7 +180,20 @@ make of what the agent wrote, the other what you expect from what it is writing.
 
 ## If a plugin shows an error
 
-First check whether they are running at all. Open `/plugin`: when both are
+**`failed to load`, or `✗ 1 error` on its row in `/plugin`, most likely means
+Claude Code is too old.** The error itself reads like this:
+
+```
+Hook load failed: [ { "expected": "record", "code": "invalid_type",
+  "path": [ "hooks" ], "message": "Invalid input: expected record, received undefined" } ]
+```
+
+Builds before 2.1.242 cannot read the hooks module these plugins are built on,
+so every plugin built that way fails to load the same way — including ones from
+other marketplaces. Run `claude update`, restart, and they load. (Reproduced on
+2.1.200 and 2.1.241; 2.1.242 is the first build that reads it.)
+
+Otherwise, check whether they are running at all. Open `/plugin`: when both are
 loaded, the line under the tabs reads
 
 ```
@@ -214,9 +235,8 @@ rollout switch. The end of the line says which state it is in:
   account. Nothing in these mods can turn it on, and they load by themselves
   once it reads on.
 
-A quick way to tell the switch from a problem with these mods: the switch puts
-the error on every plugin that carries a hooks module, including ones from other
-marketplaces that have nothing to do with these.
+Either way the switch is not about these mods in particular: it holds back
+every installed plugin that carries a hooks module, whoever made it.
 
 ## What the installer says on the way in
 

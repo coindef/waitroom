@@ -7,7 +7,8 @@ review of the diff it has already written.
 /plugin install wait-review --marketplace coindef/waitroom
 ```
 
-(Answer `y` to add the marketplace, then pick a scope.)
+(Answer `y` to add the marketplace, then pick a scope. Needs Claude Code
+2.1.292 or later; `claude update` if `claude --version` says otherwise.)
 
 ## Why this and not a loading-screen game
 
