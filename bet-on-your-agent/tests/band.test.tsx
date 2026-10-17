@@ -230,6 +230,40 @@ test('a bet left unanswered for hours is not what the next session opens on', as
   await pane.unmount()
 })
 
+test('the turn that just landed is the one asked about, not an older one', async ($, on) => {
+  engineBottom(on)
+  const betOn = async (turnId: string, text: string) => {
+    await $.turn.start({ text, turnId })
+    const betting = await $.ui.mount({
+      plugin: 'bet-on-your-agent',
+      surface: 'terminal',
+      ...BAND,
+      props: bandProps(true),
+    })
+    await betting.press({ key: 'p80' })
+    await betting.unmount()
+    await $.turn.complete({ turnId, answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer' })
+  }
+
+  // The first is left unanswered; the second is the one just watched.
+  await betOn('turn-first', 'explain what the retry helper does')
+  await betOn('turn-second', 'list the exported functions')
+
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  expect(await idle.find({ text: /list the exported functions/ })).toBeDefined()
+  expect(await idle.find({ text: /explain what the retry helper/ })).toBeUndefined()
+
+  // Answered, the older one comes up behind it.
+  await idle.press({ key: 'landed' })
+  expect(await idle.find({ text: /explain what the retry helper/ })).toBeDefined()
+  await idle.unmount()
+})
+
 test('the band yields to a survey of the engine’s own', async ($, on) => {
   engineBottom(on)
   await $.turn.start({ text: 'anything', turnId: 'turn-4' })

@@ -1,5 +1,13 @@
 # Changelog
 
+## bet-on-your-agent 0.2.2
+
+- **The turn that just landed is the one asked about.** With more than one
+  verdict owed, the band asked about the oldest. Found in a live session: bet
+  on a turn, watch it land, and the band asked about one from forty minutes
+  earlier instead. It now asks about the latest, and the older ones wait
+  behind it until they lapse.
+
 ## bet-on-your-agent 0.2.1
 
 - **A bet left unanswered lapses after four hours.** "Did it land?" waited for

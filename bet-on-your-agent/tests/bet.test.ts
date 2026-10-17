@@ -206,14 +206,16 @@ test('undoing a verdict returns the turn to owed, win or skip alike', async () =
   expect(undoVerdict(neverBet, 'c')).toEqual(neverBet)
 })
 
-test('the verdict asked for is the oldest one owed', async () => {
+test('the verdict asked for is the latest one owed', async () => {
   const records = [
-    turn({ turnId: 'new', at: 900, saidConfidence: 0.8 }),
     turn({ turnId: 'old', at: 100, saidConfidence: 0.8 }),
-    turn({ turnId: 'done', at: 50, saidConfidence: 0.8, landed: true }),
+    turn({ turnId: 'new', at: 900, saidConfidence: 0.8 }),
+    turn({ turnId: 'done', at: 950, saidConfidence: 0.8, landed: true }),
   ]
 
-  expect(owedVerdict(records)?.turnId).toBe('old')
+  expect(owedVerdict(records)?.turnId).toBe('new')
+  // Once the latest is answered, the one behind it is next.
+  expect(owedVerdict(setVerdict(records, 'new', true))?.turnId).toBe('old')
   expect(owedVerdict([turn()])).toBeUndefined()
 })
 
