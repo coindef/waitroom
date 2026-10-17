@@ -5,6 +5,12 @@ is the one moment you are already holding the problem in your head and have
 nothing to do with it; these spend it on the diff the agent just wrote, and on
 how well you called the turn.
 
+![Claude Code with the review pane docked on the right, a colored diff of the change Claude just made, and a row above the prompt asking how the running turn will go](docs/waitroom.svg)
+
+*A real session, not a mockup: Claude Code 2.1.302 with both mods. On the right,
+the diff Claude already wrote, a hunk at a time. Above the prompt, a one-keystroke
+forecast for the turn it is running now.*
+
 ## Install
 
 ```
@@ -36,40 +42,60 @@ exist answers the same way.
 
 Start with `wait-review` if you only want one.
 
+## Requirements
+
+- **Claude Code, run interactively.** Tested on 2.1.300 and 2.1.302. Check with
+  `claude --version`; if you are on something older, `claude update` first —
+  it is the likeliest fix if a plugin shows an error after installing.
+- **A git repository** for wait-review. It reads the diff, so outside one it
+  has nothing to show. bet-on-your-agent works anywhere.
+- Plugins that hook Claude Code's own events are **early access**. See
+  [If a plugin shows an error](#if-a-plugin-shows-an-error).
+
 ## The first minute
 
 **wait-review** needs no setup. Ask Claude for a change; when the turn ends, the
-pane starts offering the diff a hunk at a time:
+pane starts offering the diff a hunk at a time — here paging through a new file
+longer than the pane:
 
-```
-2 to read · 1 read                                   Claude is working
+<img src="docs/paging.svg" width="480" alt="The review pane showing a new file, lines 1 to 21 of 44, with controls for looks right, flag, later, skip file and undo">
 
-src/auth/session.ts                                      file 1 of 2
-line 42 · +3 −1                            2 left here · 3 left
-────────────────────────────────────────────────────────────────────
-  42   const sent = await fetch(url)
-  43 - if (!sent.ok) return retry(url)
-  43 + if (!sent.ok) return undefined
-  44   return sent.json()
+**Give the pane the keys first: `ctrl+x tab`** (or click it). Its letters only
+work while it holds the keyboard — press `o` without that and you type an `o`
+into your prompt. The pane reminds you at the bottom, and `esc` hands the keys
+back when you are done.
 
-o: Looks right   f: Flag   l: Later   x: Skip file
-```
+| Key | Does |
+|---|---|
+| `o` | Looks right — next hunk |
+| `f` | Flag it; it goes to Claude with your next message |
+| `n` | After `f`: say why, in a line |
+| `l` | Later — comes back once the rest are read |
+| `x` | Skip the rest of this file |
+| `u` | Undo the last call |
+| `j` / `k` | Read on / back through a hunk longer than the pane |
 
-Press the letter. That is the whole interface. Flag something and your reason
-goes to Claude with your next message.
+A new file is a single hunk as long as the file, so `j` matters more than it
+looks: the pane shows `lines 1–30 of 200` and pages through the rest.
+
+Running `/wait-review` opens the pane already holding the keyboard, so the
+letters answer at once. The pane that opens by itself at the start of a session
+deliberately does not take the keys: it would eat the first keystrokes of a
+prompt you have not sent yet.
 
 If the pane never appears, your terminal is under 144 columns — a pane nobody
 asked for needs that much room. Run `/wait-review` and it opens at any width.
 The status line tells you so:
 
 ```
-review: 3 to read · /wait-review
+wait-review: 3 to read · open with /wait-review
 ```
 
-**bet-on-your-agent** puts one row above the prompt while a turn runs:
+**bet-on-your-agent** puts a question above the prompt while a turn runs:
 
 ```
-Will "add the retry logic to the client" land first try?  1: 50% 2: 65% 3: 80% 4: 90% 5: 95% 0: skip
+Will "add the retry logic to the client" land first try?
+1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip
 ```
 
 Type a bare digit into the empty composer and it answers — no pane, no focus,
@@ -102,7 +128,7 @@ be abandoned mid-thought:
   vibes.
 
 They compose rather than compete for room: **wait-review** takes the pane, and
-**bet-on-your-agent** takes the single row above the prompt. One asks what you
+**bet-on-your-agent** takes the space just above the prompt. One asks what you
 make of what the agent wrote, the other what you expect from what it is writing.
 
 ## If a plugin shows an error
@@ -142,11 +168,27 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 48 tests
+claude plugin test     ./wait-review          # 65 tests
 
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 34 tests
+claude plugin test     ./bet-on-your-agent    # 37 tests
 ```
+
+Neither of those runs a real type checker, so also run `tsc` from each mod's
+folder once it has loaded at least once (that's what writes
+`.claude-plugin/types/`, which the mod's `tsconfig.json` points at):
+
+```
+npx -y -p typescript@5.7 tsc -p .
+```
+
+(`typescript@latest` currently ships a rewritten `tsc` whose CLI rejects
+`-p` outright — pin a 5.x release rather than chasing that down again.) A
+clean run prints nothing. This caught a real bug once already (two call
+sites where a status literal silently widened to `string` inside a `.map`,
+erasing the protection `HunkStatus` was there to give) that 84 passing tests
+and a clean `validate` both missed — run it after any change to either
+mod's `hooks/`, not just when something looks wrong.
 
 Run a working copy without installing it, or install from this clone so edits
 reload in place:
@@ -165,3 +207,8 @@ module beside it and a `types/index.d.ts` state contract that
 
 `.claude-plugin/types/` inside a mod is written by the engine on each load and
 is not checked in.
+
+## License
+
+MIT — see [LICENSE](./LICENSE). What changed in each release is in
+[CHANGELOG.md](./CHANGELOG.md).

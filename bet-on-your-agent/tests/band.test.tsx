@@ -116,14 +116,24 @@ test('a bet placed while the turn runs is the verdict owed once it lands', async
 
   await idle.press({ key: 'fixed' })
 
-  // Answered, so the band has nothing left to ask.
+  // Answered, so the band has nothing left to ask - only what it recorded.
   expect(await idle.find({ text: /you said/ })).toBeUndefined()
+  expect(await idle.find({ text: /Recorded: Needed fixing/ })).toBeDefined()
+
+  // One press puts it back to owed, for a misread verdict.
+  await idle.press({ key: 'undo' })
+  expect(await idle.find({ text: /you said 95%/ })).toBeDefined()
+
+  // Answered again, so the record below sees exactly one scored turn.
+  await idle.press({ key: 'fixed' })
   await idle.unmount()
 
   // And the call shows up in the record, scored and named.
   const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
   expect(await pane.find({ text: /overconfident/ })).toBeDefined()
   expect(await pane.find({ text: /refactor the auth layer/ })).toBeDefined()
+  // Its own stat, on its own line, not packed into one dim run-on sentence.
+  expect(await pane.find({ text: /Lands first try 0% \(0\/1\)/ })).toBeDefined()
   await pane.unmount()
 })
 
@@ -207,4 +217,62 @@ test('a bet can be waved away, and the band then leaves the row alone', async ($
   expect(await ui.findAll({ type: 'Button' })).toHaveLength(0)
 
   await ui.unmount()
+})
+
+test('the status line says what to do next, not the plugin name again', async ($, on) => {
+  engineBottom(on)
+  const said: (string | undefined)[] = []
+  on('ui.status', ($$, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+
+  await $.turn.start({ text: 'add the retry logic', turnId: 'turn-s1' })
+  // While the turn runs and nothing is called, it teaches the one keystroke.
+  expect(said.at(-1)).toBe('type 1–5 to call this turn')
+
+  const ui = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await ui.press({ key: 'p80' })
+  await ui.unmount()
+  expect(said.at(-1)).toBe('you said 80%')
+
+  await $.turn.complete({
+    turnId: 'turn-s1',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  expect(said.at(-1)).toBe('did it land? 1 to answer')
+
+  // The engine prefixes the plugin's own name, so none of these repeat it.
+  expect(said.every(text => text === undefined || !text.startsWith('bet'))).toBe(true)
+})
+
+test('a declined turn leaves the status line alone', async ($, on) => {
+  engineBottom(on)
+  const said: (string | undefined)[] = []
+  on('ui.status', ($$, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+
+  await $.turn.start({ text: 'no view on this one', turnId: 'turn-s2' })
+  const ui = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await ui.press({ key: 'decline' })
+  await ui.unmount()
+
+  expect(said.at(-1)).toBeUndefined()
 })

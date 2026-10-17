@@ -146,6 +146,85 @@ export const trimHunk = (text: string, maxLines: number): { text: string; hidden
   return { text: [rewritten, ...kept].join('\n'), hidden: body.length - kept.length }
 }
 
+/** The rows one body line takes once wrapped to `columns`, at least one. */
+export const rowsFor = (line: string, columns: number): number => {
+  // The first character is the diff marker, which the gutter draws instead.
+  const width = line.slice(1).replace(/\t/g, '    ').length
+
+  return Math.max(1, Math.ceil(width / Math.max(1, columns)))
+}
+
+/**
+ * How many body lines from `offset` fit in `rows` once each wraps to
+ * `columns`, never fewer than one.
+ *
+ * The diff wraps rather than truncates, because cutting a changed line at the
+ * pane's edge hid exactly the change being reviewed. A page is therefore
+ * measured in rows, so a run of long lines does not push the controls off the
+ * bottom of the pane.
+ */
+export const linesThatFit = (text: string, offset: number, rows: number, columns: number): number => {
+  const body = text.split('\n').slice(1)
+  let used = 0
+  let count = 0
+  for (const line of body.slice(Math.max(0, offset))) {
+    const need = rowsFor(line, columns)
+    if (count > 0 && used + need > rows) break
+    used += need
+    count++
+  }
+
+  return Math.max(1, count)
+}
+
+/** One page of a hunk: the drawable text, and where it sits in the whole. */
+export type Slice = {
+  text: string
+  /** Index of the first body line shown, from 0. */
+  first: number
+  /** Index one past the last body line shown. */
+  last: number
+  /** Body lines in the whole hunk. */
+  total: number
+}
+
+/**
+ * A page of `room` body lines from `offset`, with a header rewritten to match.
+ *
+ * A new file is a single hunk as long as the file, so cutting every hunk to
+ * the room in the pane meant a new file could never actually be read. Paging
+ * instead keeps each page a valid hunk of its own: the start lines move on by
+ * the lines already passed on each side, and the counts are the page's own,
+ * because a header that disagrees with its body is not drawn as a diff.
+ *
+ * The last page is pulled back to stay full rather than ending half empty.
+ */
+export const sliceHunk = (text: string, offset: number, room: number): Slice => {
+  const lines = text.split('\n')
+  const header = lines[0] ?? ''
+  const body = lines.slice(1)
+  const total = body.length
+  const size = Math.max(1, Math.floor(room))
+  if (total <= size) return { text, first: 0, last: total, total }
+
+  const first = Math.max(0, Math.min(Math.floor(offset), total - size))
+  const kept = body.slice(first, first + size)
+  const head = HUNK_HEAD.exec(header)
+  if (!head) return { text: [header, ...kept].join('\n'), first, last: first + kept.length, total }
+
+  const passed = countSides(body.slice(0, first))
+  const sides = countSides(kept)
+  const minus = Number(head[1]) + passed.removed
+  const plus = Number(head[3]) + passed.added
+
+  return {
+    text: [`@@ -${minus},${sides.removed} +${plus},${sides.added} @@${head[5] ?? ''}`, ...kept].join('\n'),
+    first,
+    last: first + kept.length,
+    total,
+  }
+}
+
 /**
  * The order a person reads in: each file together, top of the file first.
  *

@@ -208,6 +208,15 @@ export const setVerdict = (
   landed: boolean,
 ): TurnRecord[] => records.map(one => (one.turnId === turnId ? { ...one, landed } : one))
 
+/** Puts a turn back to owed: undoes `setVerdict` or `skipVerdict` on it. */
+export const undoVerdict = (records: readonly TurnRecord[], turnId: string): TurnRecord[] =>
+  records.map(one => {
+    if (one.turnId !== turnId) return one
+    const { landed: _landed, isVerdictSkipped: _skipped, ...rest } = one
+
+    return rest
+  })
+
 export const asPercent = (value: number): string => `${Math.round(value * 100)}%`
 
 /** `48s`, or `2m 5s` once a turn runs past a minute. */
@@ -230,14 +239,21 @@ export const shortAsk = (text: string, room = ASK_ROOM): string => {
   return `${flat.slice(0, room - 1).trimEnd()}…`
 }
 
+/** The most of a live ask the band quotes, however wide the terminal. */
+export const BAND_ASK_ROOM = 64
+
+/** `Will "" land first try?` and the space around it. */
+const QUESTION_CHROME = 26
+
 /**
- * How much of the ask the band can show beside its buttons.
+ * How much of the ask the band's question line can quote.
  *
- * The buttons are the point, so they get the room first: below what they need
- * the ask is dropped rather than wrapped onto a second row.
+ * The answers have a line of their own, so the ask competes only with the
+ * question's own words; below a dozen characters a quote says nothing and is
+ * dropped rather than shown as a stub.
  */
 export const askRoomFor = (bodyColumns: number): number => {
-  const left = Math.min(ASK_ROOM, bodyColumns - 42)
+  const left = Math.min(BAND_ASK_ROOM, bodyColumns - QUESTION_CHROME)
 
   return left < 12 ? 0 : left
 }
@@ -308,7 +324,10 @@ export const asText = (found: Report): string => {
 
   lines.push('')
   if (found.files) lines.push(`File count called right ${found.files.right}/${found.files.of}.`)
-  if (found.landed) lines.push(`The agent landed it first try ${found.landed.yes}/${found.landed.of}.`)
+  if (found.landed) {
+    const percent = asPercent(found.landed.yes / found.landed.of)
+    lines.push(`The agent landed it first try ${percent} (${found.landed.yes}/${found.landed.of}).`)
+  }
   if (found.medianMs !== undefined) lines.push(`Median turn ${asDuration(found.medianMs)}.`)
   if (found.owed > 0) lines.push(`${found.owed} bet${found.owed === 1 ? '' : 's'} waiting on your verdict.`)
 

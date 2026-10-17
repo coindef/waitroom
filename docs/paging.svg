@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="590" height="640" viewBox="0 0 590 640" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+<rect width="100%" height="100%" rx="8" fill="#0f1115"/>
+<rect x="14.0" y="14.0" width="538.2" height="17" fill="#262626"/>
+<rect x="552.2" y="14.0" width="7.8" height="17" fill="#262626"/>
+<text x="552.2" y="26.5" fill="#999999" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">✕</text>
+<rect x="560.0" y="14.0" width="7.8" height="17" fill="#262626"/>
+<rect x="14.0" y="31.0" width="140.4" height="17" fill="#262626"/>
+<text x="14.0" y="43.5" fill="#999999" textLength="140.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1 to read · 2 read</text>
+<rect x="154.4" y="31.0" width="413.4" height="17" fill="#262626"/>
+<rect x="14.0" y="48.0" width="553.8" height="17" fill="#262626"/>
+<rect x="14.0" y="65.0" width="117.0" height="17" fill="#262626"/>
+<text x="14.0" y="77.5" fill="#d6d9de" textLength="117.0" lengthAdjust="spacingAndGlyphs" font-weight="700" xml:space="preserve">src/timeouts.ts</text>
+<rect x="131.0" y="65.0" width="436.8" height="17" fill="#262626"/>
+<rect x="14.0" y="82.0" width="70.2" height="17" fill="#262626"/>
+<text x="14.0" y="94.5" fill="#999999" textLength="70.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">line 1 · </text>
+<rect x="84.2" y="82.0" width="23.4" height="17" fill="#262626"/>
+<text x="84.2" y="94.5" fill="#225c2b" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+44</text>
+<rect x="107.6" y="82.0" width="7.8" height="17" fill="#262626"/>
+<rect x="115.4" y="82.0" width="15.6" height="17" fill="#262626"/>
+<text x="115.4" y="94.5" fill="#7a2936" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">−0</text>
+<rect x="131.0" y="82.0" width="390.0" height="17" fill="#262626"/>
+<rect x="521.0" y="82.0" width="46.8" height="17" fill="#262626"/>
+<text x="521.0" y="94.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1 left</text>
+<rect x="14.0" y="99.0" width="553.8" height="17" fill="#262626"/>
+<rect x="14.0" y="116.0" width="553.8" height="17" fill="#262626"/>
+<text x="14.0" y="128.5" fill="#999999" textLength="553.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────────────────────────────────────</text>
+<rect x="14.0" y="133.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="145.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  1 +</text>
+<rect x="53.0" y="133.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="145.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">/** Timeouts for every outbound call, in one place. */            </text>
+<rect x="14.0" y="150.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="162.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  2 +</text>
+<rect x="53.0" y="150.0" width="514.8" height="17" fill="#022800"/>
+<rect x="14.0" y="167.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="179.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  3 +</text>
+<rect x="53.0" y="167.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="179.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const fetchTimeout = 10_000                                </text>
+<rect x="14.0" y="184.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="196.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  4 +</text>
+<rect x="53.0" y="184.0" width="514.8" height="17" fill="#022800"/>
+<rect x="14.0" y="201.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="213.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  5 +</text>
+<rect x="53.0" y="201.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="213.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const withFetchTimeout = &lt;T&gt;(run: (signal: AbortSignal) =&gt; </text>
+<rect x="14.0" y="218.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="230.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    +</text>
+<rect x="53.0" y="218.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="230.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Promise&lt;T&gt;) =&gt;                                                    </text>
+<rect x="14.0" y="235.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="247.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  6 +</text>
+<rect x="53.0" y="235.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="247.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  run(AbortSignal.timeout(fetchTimeout))                          </text>
+<rect x="14.0" y="252.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="264.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  7 +</text>
+<rect x="53.0" y="252.0" width="514.8" height="17" fill="#022800"/>
+<rect x="14.0" y="269.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="281.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  8 +</text>
+<rect x="53.0" y="269.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="281.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const uploadTimeout = 60_000                               </text>
+<rect x="14.0" y="286.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="298.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  9 +</text>
+<rect x="53.0" y="286.0" width="514.8" height="17" fill="#022800"/>
+<rect x="14.0" y="303.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="315.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 10 +</text>
+<rect x="53.0" y="303.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="315.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const withUploadTimeout = &lt;T&gt;(run: (signal: AbortSignal) =&gt;</text>
+<rect x="14.0" y="320.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="332.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    +</text>
+<rect x="53.0" y="320.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="332.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Promise&lt;T&gt;) =&gt;                                                   </text>
+<rect x="14.0" y="337.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="349.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 11 +</text>
+<rect x="53.0" y="337.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="349.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  run(AbortSignal.timeout(uploadTimeout))                         </text>
+<rect x="14.0" y="354.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="366.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 12 +</text>
+<rect x="53.0" y="354.0" width="514.8" height="17" fill="#022800"/>
+<rect x="14.0" y="371.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="383.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 13 +</text>
+<rect x="53.0" y="371.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="383.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const authTimeout = 5_000                                  </text>
+<rect x="14.0" y="388.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="400.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 14 +</text>
+<rect x="53.0" y="388.0" width="514.8" height="17" fill="#022800"/>
+<rect x="14.0" y="405.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="417.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 15 +</text>
+<rect x="53.0" y="405.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="417.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const withAuthTimeout = &lt;T&gt;(run: (signal: AbortSignal) =&gt; P</text>
+<rect x="14.0" y="422.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="434.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    +</text>
+<rect x="53.0" y="422.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="434.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">romise&lt;T&gt;) =&gt;                                                     </text>
+<rect x="14.0" y="439.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="451.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 16 +</text>
+<rect x="53.0" y="439.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="451.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  run(AbortSignal.timeout(authTimeout))                           </text>
+<rect x="14.0" y="456.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="468.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 17 +</text>
+<rect x="53.0" y="456.0" width="514.8" height="17" fill="#022800"/>
+<rect x="14.0" y="473.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="485.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 18 +</text>
+<rect x="53.0" y="473.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="485.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const pollTimeout = 30_000                                 </text>
+<rect x="14.0" y="490.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="502.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 19 +</text>
+<rect x="53.0" y="490.0" width="514.8" height="17" fill="#022800"/>
+<rect x="14.0" y="507.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="519.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 20 +</text>
+<rect x="53.0" y="507.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="519.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const withPollTimeout = &lt;T&gt;(run: (signal: AbortSignal) =&gt; P</text>
+<rect x="14.0" y="524.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="536.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    +</text>
+<rect x="53.0" y="524.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="536.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">romise&lt;T&gt;) =&gt;                                                     </text>
+<rect x="14.0" y="541.0" width="39.0" height="17" fill="#022800"/>
+<text x="14.0" y="553.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 21 +</text>
+<rect x="53.0" y="541.0" width="514.8" height="17" fill="#022800"/>
+<text x="53.0" y="553.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  run(AbortSignal.timeout(pollTimeout))                           </text>
+<rect x="14.0" y="558.0" width="124.8" height="17" fill="#262626"/>
+<text x="14.0" y="570.5" fill="#999999" textLength="124.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">lines 1–21 of 44</text>
+<rect x="138.8" y="558.0" width="358.8" height="17" fill="#262626"/>
+<rect x="497.6" y="558.0" width="7.8" height="17" fill="#262626"/>
+<text x="497.6" y="570.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">j</text>
+<rect x="505.4" y="558.0" width="62.4" height="17" fill="#262626"/>
+<text x="505.4" y="570.5" fill="#d6d9de" textLength="62.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: more ↓</text>
+<rect x="14.0" y="575.0" width="553.8" height="17" fill="#262626"/>
+<rect x="14.0" y="592.0" width="7.8" height="17" fill="#262626"/>
+<text x="14.0" y="604.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">o</text>
+<rect x="21.8" y="592.0" width="117.0" height="17" fill="#262626"/>
+<text x="21.8" y="604.5" fill="#d6d9de" textLength="117.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Looks right  </text>
+<rect x="138.8" y="592.0" width="7.8" height="17" fill="#262626"/>
+<text x="138.8" y="604.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">f</text>
+<rect x="146.6" y="592.0" width="62.4" height="17" fill="#262626"/>
+<text x="146.6" y="604.5" fill="#d6d9de" textLength="62.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Flag  </text>
+<rect x="209.0" y="592.0" width="7.8" height="17" fill="#262626"/>
+<text x="209.0" y="604.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">l</text>
+<rect x="216.8" y="592.0" width="54.6" height="17" fill="#262626"/>
+<text x="216.8" y="604.5" fill="#999999" textLength="54.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Later</text>
+<rect x="271.4" y="592.0" width="15.6" height="17" fill="#262626"/>
+<rect x="287.0" y="592.0" width="7.8" height="17" fill="#262626"/>
+<text x="287.0" y="604.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">x</text>
+<rect x="294.8" y="592.0" width="85.8" height="17" fill="#262626"/>
+<text x="294.8" y="604.5" fill="#999999" textLength="85.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Skip file</text>
+<rect x="380.6" y="592.0" width="15.6" height="17" fill="#262626"/>
+<rect x="396.2" y="592.0" width="7.8" height="17" fill="#262626"/>
+<text x="396.2" y="604.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">u</text>
+<rect x="404.0" y="592.0" width="46.8" height="17" fill="#262626"/>
+<text x="404.0" y="604.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Undo</text>
+<rect x="450.8" y="592.0" width="117.0" height="17" fill="#262626"/>
+<rect x="14.0" y="609.0" width="288.6" height="17" fill="#262626"/>
+<text x="14.0" y="621.5" fill="#999999" textLength="288.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">esc hands the keys back to the prompt</text>
+<rect x="302.6" y="609.0" width="265.2" height="17" fill="#262626"/>
+</svg>

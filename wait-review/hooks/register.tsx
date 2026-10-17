@@ -1,9 +1,10 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Decision, Hunk, HunkStatus } from '../types'
+import type { Decision, Hunk, HunkStatus, Page } from '../types'
 import {
   DEFAULT_IGNORE,
+  linesThatFit,
   mergeHunks,
   nextHunk,
   parseDiff,
@@ -11,9 +12,9 @@ import {
   progressOf,
   reviewable,
   reviewNote,
+  sliceHunk,
   summaryOf,
   tally,
-  trimHunk,
 } from './diff'
 
 const PANE = 'wait-review'
@@ -27,13 +28,14 @@ const lastDecision = atom(
   null as Decision | null,
 )
 const noting = atom({ plugin: 'wait-review', key: 'noting' } as const, null as string | null)
+const page = atom({ plugin: 'wait-review', key: 'page' } as const, null as Page | null)
 
 /**
- * Rows the pane spends on its own chrome: counts, path, location, the rule,
- * the controls and the footers. Counted generously, since a hunk cut a little
- * short reads better than one that overflows the pane.
+ * Rows the review card always spends around the diff: the counts, the path,
+ * the location, the rule, the paging row, the controls, the keys hint and the
+ * gaps between them. What only sometimes shows is added where it is drawn.
  */
-const CHROME_ROWS = 12
+const CHROME_ROWS = 10
 /** Untracked files diffed one by one per scan, so a stray folder cannot stall it. */
 const UNTRACKED_LIMIT = 40
 /** Hunk ids remembered as pre-session, enough for any working tree worth reading. */
@@ -61,6 +63,9 @@ const showStatus = async ($: EngineInterface) => {
     const counts = tally(await read($, hunks))
     const parts: string[] = []
     if (counts.pending > 0) parts.push(`${counts.pending} to read`)
+    // Nothing pending but something put off is not "done" - that would make
+    // the status go quiet on exactly the hunks "later" exists to be reminded of.
+    else if (counts.later > 0) parts.push(`${counts.later} put off`)
     if (counts.flagged > 0) parts.push(`${counts.flagged} flagged`)
     if (parts.length === 0) {
       $.ui.status(undefined)
@@ -71,7 +76,7 @@ const showStatus = async ($: EngineInterface) => {
     // this the count is the only sign the mod is there, and no way in.
     const panes = await $.ui.panes().catch(() => [])
     const isShown = panes.some(pane => pane.id === PANE && pane.isPlaced)
-    $.ui.status(`review: ${parts.join(' · ')}${isShown ? '' : ' · /wait-review'}`)
+    $.ui.status(`${parts.join(' · ')}${isShown ? '' : ' · open with /wait-review'}`)
   } catch {
     // Nothing to do: the counts are still right, only unshown.
   }
@@ -172,13 +177,22 @@ const mark = async ($: EngineInterface, id: string, status: HunkStatus) => {
   await update($, noting, () => null)
   const before = (await read($, hunks)).find(one => one.id === id)
   await update($, hunks, old => old.map(one => (one.id === id ? { ...one, status } : one)))
-  await update($, lastDecision, () => (before ? { id, from: before.status } : null))
+  await update($, lastDecision, () => (before ? { changes: [{ id, from: before.status }] } : null))
   await showStatus($)
+}
+
+/** Moves the reader to `offset` lines into the hunk `id`. */
+const turnPage = async ($: EngineInterface, id: string, offset: number) => {
+  await update($, page, () => ({ id, offset: Math.max(0, offset) }))
 }
 
 /** Opens the note box for a hunk, or closes it when given nothing. */
 const setNoting = async ($: EngineInterface, id: string | null) => {
   await update($, noting, () => id)
+  // The Input's own `autoFocus` only wins when the site's ring starts fresh;
+  // the click on "Say why" that got here already moved it there, so the ring
+  // stays on that button unless told otherwise - land it on the box instead.
+  if (id !== null) await $.ui.focus({ requestId: PANE, key: 'note-text' }).catch(() => undefined)
 }
 
 /**
@@ -204,12 +218,13 @@ const saveNote = async ($: EngineInterface, id: string, text: string) => {
   await update($, noting, () => null)
 }
 
-/** Puts the last call back, so misreading a hunk costs one press, not a rescan. */
+/** Puts the last call back, so misreading a hunk (or a whole file) costs one press, not a rescan. */
 const undo = async ($: EngineInterface) => {
   const last = await read($, lastDecision)
   if (!last) return
+  const from = new Map(last.changes.map(one => [one.id, one.from]))
   await update($, hunks, old =>
-    old.map(one => (one.id === last.id ? { ...one, status: last.from } : one)),
+    old.map(one => (from.has(one.id) ? { ...one, status: from.get(one.id) as HunkStatus } : one)),
   )
   await update($, lastDecision, () => null)
   await showStatus($)
@@ -219,17 +234,17 @@ const undo = async ($: EngineInterface) => {
  * Waves away everything still unread in one file.
  *
  * Dropped, not approved: a regenerated file is noise to clear, and the counts
- * should not pretend it was read.
+ * should not pretend it was read. Undoable like any other call: it is the one
+ * that touches the most hunks at once, so it is the one most worth a take-back.
  */
 const dropFile = async ($: EngineInterface, path: string) => {
-  await update($, hunks, old =>
-    old.map(one =>
-      one.path === path && (one.status === 'pending' || one.status === 'later')
-        ? { ...one, status: 'dropped' }
-        : one,
-    ),
-  )
-  await update($, lastDecision, () => null)
+  const before = await read($, hunks)
+  const changes = before
+    .filter(one => one.path === path && (one.status === 'pending' || one.status === 'later'))
+    .map(one => ({ id: one.id, from: one.status }))
+  const ids = new Set(changes.map(one => one.id))
+  await update($, hunks, old => old.map(one => (ids.has(one.id) ? { ...one, status: 'dropped' as const } : one)))
+  await update($, lastDecision, () => (changes.length > 0 ? { changes } : null))
   await showStatus($)
 }
 
@@ -262,8 +277,11 @@ export const register: Register = (on, options) => {
     await scan($, config)
     await showStatus($)
     const counts = tally(await read($, hunks))
+    // Focused only here, not on the autoOpen at session.start: typing `/wait-review`
+    // is asking to use it now, where auto-opening at the start of a session is not -
+    // stealing the composer's focus before a first prompt would eat its keystrokes.
     const opened = await $.ui
-      .open({ id: PANE, title: 'Wait review' })
+      .open({ id: PANE, title: 'Wait review', focus: true })
       .catch(() => ({ isPlaced: false, reason: 'the engine would not place it' }) as const)
     const where = opened.isPlaced ? 'Review pane open.' : `Review pane waiting (${opened.reason}).`
 
@@ -304,7 +322,7 @@ export const register: Register = (on, options) => {
     const done = await next({ ...e, context: [...(e.context ?? []), reviewNote(flagged)] })
     const ids = new Set(flagged.map(one => one.id))
     await update($, hunks, old =>
-      old.map(one => (ids.has(one.id) ? { ...one, status: 'sent' } : one)),
+      old.map(one => (ids.has(one.id) ? { ...one, status: 'sent' as const } : one)),
     )
     await showStatus($)
 
@@ -325,7 +343,13 @@ export const register: Register = (on, options) => {
     const noteFor = await read($, noting)
     const counts = tally(list)
     const current = nextHunk(list)
-    const flagged = last && list.find(one => one.id === last.id)?.status === 'flagged' ? last.id : null
+    // Only a single-hunk decision can be "the hunk just flagged" - a dropped
+    // file is many hunks at once and none of them is an offer to say why.
+    const flaggedId = last?.changes.length === 1 ? last.changes[0]?.id : undefined
+    const flagged =
+      flaggedId !== undefined && list.find(one => one.id === flaggedId)?.status === 'flagged'
+        ? flaggedId
+        : null
     const width = Math.max(20, e.props.bodyColumns)
 
     const summary = summaryOf(list)
@@ -362,7 +386,7 @@ export const register: Register = (on, options) => {
         <Box flexDirection="column" gap={1}>
           {head}
           <Box flexDirection="column">
-            <Text wrap="truncate-start" bold>
+            <Text wrap="truncate-start" weight="bold">
               {target?.path ?? 'that hunk'}
             </Text>
             <Input
@@ -384,11 +408,17 @@ export const register: Register = (on, options) => {
       return (
         <Box flexDirection="column" gap={1}>
           {head}
-          <Text dimColor>
-            {isFresh
-              ? 'Nothing to read yet. Hunks arrive here as Claude writes.'
-              : 'Diff read. Nothing waiting on you.'}
-          </Text>
+          {isFresh ? (
+            <Box flexDirection="column">
+              <Text>Nothing to read yet.</Text>
+              <Text dimColor>
+                As Claude changes files, each change lands here to read while it works.
+              </Text>
+              <Text dimColor>o looks right · f flag it for Claude · l later · x skip the file</Text>
+            </Box>
+          ) : (
+            <Text dimColor>Diff read. Nothing waiting on you.</Text>
+          )}
           {noteOffer && <Box>{noteOffer}</Box>}
           {undoButton && <Box>{undoButton}</Box>}
         </Box>
@@ -396,8 +426,31 @@ export const register: Register = (on, options) => {
     }
 
     const where = progressOf(list, current)
-    const room = Math.max(3, (e.viewport?.rows ?? 24) - CHROME_ROWS)
-    const shown = trimHunk(current.text, room)
+    // The pane's own body, not the terminal: the prompt and status rows sit
+    // below it, and sizing pages to the whole screen pushed the controls off
+    // the bottom of a long hunk's first page.
+    const height = e.props.scroll?.bodyRows ?? e.viewport?.rows ?? 24
+    const chrome =
+      CHROME_ROWS +
+      (current.note !== undefined ? 1 : 0) +
+      (noteOffer ? 1 : 0) +
+      (counts.flagged > 0 ? 1 : 0) +
+      // The controls wrap onto a second row in a narrow pane.
+      (width < 60 ? 1 : 0)
+    const room = Math.max(3, height - chrome)
+    const reading = await read($, page)
+    const offset = reading !== null && reading.id === current.id ? reading.offset : 0
+    // The gutter takes the widest line number and its marker; the code wraps in
+    // what is left, so a page is however many lines fill the rows there are.
+    const gutter = String(current.start + current.added + current.removed + 1).length + 4
+    const fit = linesThatFit(current.text, offset, room, Math.max(10, width - gutter))
+    const shown = sliceHunk(current.text, offset, fit)
+    const isPaged = shown.total > shown.last - shown.first
+    // Hotkeys only land while the pane holds the keyboard; say how to give it
+    // the keys, since pressing `o` without that types an o into the prompt.
+    const keysHint = e.props.isFocused
+      ? 'esc hands the keys back to the prompt'
+      : 'ctrl+x tab to use these keys · or click them'
 
     return (
       <Box flexDirection="column" gap={1}>
@@ -405,7 +458,7 @@ export const register: Register = (on, options) => {
 
         <Box flexDirection="column">
           <Box justifyContent="space-between" gap={2}>
-            <Text wrap="truncate-start" bold>
+            <Text wrap="truncate-start" weight="bold">
               {current.path}
             </Text>
             {where.ofFiles > 1 && (
@@ -434,11 +487,35 @@ export const register: Register = (on, options) => {
 
         <Box flexDirection="column">
           <Text dimColor>{'─'.repeat(width)}</Text>
-          <Code source={shown.text} format="diff" wrap="truncate-end" />
-          {shown.hidden > 0 && <Text dimColor>… {shown.hidden} more lines in this hunk</Text>}
+          <Code source={shown.text} format="diff" wrap="wrap" />
+          {isPaged && (
+            <Box justifyContent="space-between" gap={2}>
+              <Text dimColor tabular>
+                lines {shown.first + 1}–{shown.last} of {shown.total}
+              </Text>
+              <Box gap={2}>
+                {shown.first > 0 && (
+                  <Button
+                    key="back"
+                    hotkey="k"
+                    plain
+                    dimColor
+                    onPress={() => turnPage($, current.id, shown.first - fit)}
+                  >
+                    back ↑
+                  </Button>
+                )}
+                {shown.last < shown.total && (
+                  <Button key="more" hotkey="j" plain onPress={() => turnPage($, current.id, shown.last)}>
+                    more ↓
+                  </Button>
+                )}
+              </Box>
+            </Box>
+          )}
         </Box>
 
-        <Box flexDirection="column" gap={1}>
+        <Box flexDirection="column">
           <Box gap={2} flexWrap="wrap">
             <Button key="ok" hotkey="o" plain onPress={() => mark($, current.id, 'ok')}>
               Looks right
@@ -460,6 +537,7 @@ export const register: Register = (on, options) => {
               {counts.flagged} flagged → sent to Claude with your next message
             </Text>
           )}
+          <Text dimColor>{keysHint}</Text>
         </Box>
       </Box>
     )

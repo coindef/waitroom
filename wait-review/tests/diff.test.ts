@@ -14,6 +14,9 @@ import {
   parseIgnore,
   reviewNote,
   sidePath,
+  linesThatFit,
+  rowsFor,
+  sliceHunk,
   sortHunks,
   tally,
   trimHunk,
@@ -420,4 +423,109 @@ test('the counts line leaves out every zero', async () => {
 
   expect(mixed).toBe('1 to read · 1 read · 1 flagged')
   expect(mixed).not.toContain('0 ')
+})
+
+/** A new file of `n` lines, as git writes it: one hunk as long as the file. */
+const newFile = (n: number) =>
+  ['@@ -0,0 +1,' + n + ' @@', ...Array.from({ length: n }, (_, at) => `+line ${at + 1}`)].join('\n')
+
+/** The counts a header states, against the counts its own body has. */
+const agrees = (text: string): boolean => {
+  const [header = '', ...body] = text.split('\n')
+  const head = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(header)
+  if (!head) return false
+  const minus = body.filter(line => !line.startsWith('+') && !line.startsWith('\\')).length
+  const plus = body.filter(line => !line.startsWith('-') && !line.startsWith('\\')).length
+
+  return Number(head[1] ?? 1) === minus && Number(head[2] ?? 1) === plus
+}
+
+test('a hunk that fits is drawn exactly as git wrote it', async () => {
+  const text = ['@@ -1,2 +1,2 @@', ' a', '-b', '+B'].join('\n')
+
+  expect(sliceHunk(text, 0, 30)).toEqual({ text, first: 0, last: 3, total: 3 })
+})
+
+test('a new file longer than the pane can be read to its end, page by page', async () => {
+  // The bug this guards: a new file is one hunk, and cutting every hunk to the
+  // pane meant the rest of it could never be seen at all.
+  const file = newFile(70)
+  const one = sliceHunk(file, 0, 30)
+  const two = sliceHunk(file, 30, 30)
+  const three = sliceHunk(file, 60, 30)
+
+  expect(one.text.split('\n')[1]).toBe('+line 1')
+  expect(two.text.split('\n')[1]).toBe('+line 31')
+  expect(three.last).toBe(70)
+  expect(three.text).toContain('+line 70')
+})
+
+test('every page of a hunk is a hunk whose header agrees with its own body', async () => {
+  const mixed = [
+    '@@ -10,12 +10,13 @@ export const call = () => {',
+    ...Array.from({ length: 4 }, (_, at) => ` ctx ${at}`),
+    '-old one',
+    '-old two',
+    '+new one',
+    '+new two',
+    '+new three',
+    ...Array.from({ length: 6 }, (_, at) => ` tail ${at}`),
+  ].join('\n')
+
+  for (const offset of [0, 3, 5, 8, 10]) {
+    const page = sliceHunk(mixed, offset, 5)
+    expect(agrees(page.text)).toBe(true)
+    // The function context after the header survives every page.
+    expect(page.text.split('\n')[0]).toContain('export const call')
+  }
+})
+
+test('a later page starts at the line it shows, on both sides', async () => {
+  const text = ['@@ -10,5 +10,5 @@', ' a', ' b', '-c', '+C', ' d', ' e'].join('\n')
+
+  // Past " a", " b" and "-c": three lines of the old side, two of the new.
+  const page = sliceHunk(text, 3, 3)
+
+  expect(page.text.split('\n')[0]).toBe('@@ -13,2 +12,3 @@')
+})
+
+test('the last page is pulled back to stay full', async () => {
+  const page = sliceHunk(newFile(50), 45, 30)
+
+  expect(page.first).toBe(20)
+  expect(page.last).toBe(50)
+})
+
+test('a page asked for before the start begins at the start', async () => {
+  expect(sliceHunk(newFile(50), -10, 30).first).toBe(0)
+})
+
+test('a new file pages keep the old side at nothing', async () => {
+  const page = sliceHunk(newFile(50), 30, 10)
+
+  expect(page.text.split('\n')[0]).toBe('@@ -0,0 +31,10 @@')
+})
+
+test('a line takes as many rows as it needs to wrap, and never none', async () => {
+  expect(rowsFor('+short', 40)).toBe(1)
+  expect(rowsFor('+' + 'x'.repeat(80), 40)).toBe(2)
+  expect(rowsFor('+' + 'x'.repeat(81), 40)).toBe(3)
+  // The marker is drawn in the gutter, so it does not count toward the width.
+  expect(rowsFor('+' + 'x'.repeat(40), 40)).toBe(1)
+  expect(rowsFor('+', 40)).toBe(1)
+})
+
+test('a page of long lines holds fewer of them, so the controls stay on screen', async () => {
+  const long = ['@@ -0,0 +1,6 @@', ...Array.from({ length: 6 }, () => '+' + 'y'.repeat(90))].join('\n')
+  const short = ['@@ -0,0 +1,6 @@', ...Array.from({ length: 6 }, () => '+z')].join('\n')
+
+  // Each 90-character line wraps to 3 rows at 40 columns: 9 rows hold 3 lines.
+  expect(linesThatFit(long, 0, 9, 40)).toBe(3)
+  expect(linesThatFit(short, 0, 9, 40)).toBe(6)
+})
+
+test('a line too long for the whole pane is still shown, alone', async () => {
+  const huge = ['@@ -0,0 +1,2 @@', '+' + 'w'.repeat(500), '+next'].join('\n')
+
+  expect(linesThatFit(huge, 0, 5, 40)).toBe(1)
 })
