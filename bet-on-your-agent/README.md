@@ -115,9 +115,11 @@ takes.
   actually used, because a single score hides *which kind* of turn you misjudge.
 - **Interrupted turns are recorded but never scored.** Stopping a turn yourself
   says nothing about the agent.
-- **A bet with no verdict waits.** It is never counted as a loss, so leaving one
-  unanswered costs you nothing but the sample. Press `skip` and it is dropped
-  from scoring entirely while the turn stays on the record.
+- **A bet with no verdict waits — for four hours.** It is never counted as a
+  loss, so leaving one unanswered costs you nothing but the sample. Press `skip`
+  and it is dropped from scoring entirely while the turn stays on the record.
+  Leave it longer than four hours and it lapses the same way, so a new session
+  never opens by asking about a turn you no longer remember.
 - **A call that was nearly right is never held up as a worst call.** Only a miss
   wider than a coin flip makes that list.
 - **"Landed" is your judgement**, which is the honest design: the thing being
@@ -130,7 +132,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 37 tests
+claude plugin test .         # 40 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested
