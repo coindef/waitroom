@@ -37,7 +37,7 @@ or installing a plugin that already is, changes nothing. So when in doubt, send
 all three — then `/plugin` should read `2 mods active · wait-review,
 bet-on-your-agent`.
 
-It needs **Claude Code 2.1.292 or later** — `claude --version` says which you
+It needs **Claude Code 2.1.291 or later** — `claude --version` says which you
 have, `claude update` moves you on. An older build installs it without
 complaint and then shows it as `failed to load`; see
 [If a plugin shows an error](#if-a-plugin-shows-an-error).
@@ -94,11 +94,14 @@ so your calibration starts fresh under the new name.
 
 ## Requirements
 
-- **Claude Code 2.1.292 or later, run interactively.** 2.1.292 is the current
-  stable release; tested on it, 2.1.300 and 2.1.302. Builds before 2.1.242
-  cannot read the hooks module both plugins are built on, so they fail to load;
-  builds in between load them but are untested. `claude update` if you are
-  behind.
+- **Claude Code 2.1.291 or later, run interactively** — the current stable
+  release, 2.1.292, is fine. Checked live on 2.1.291, 2.1.292, 2.1.300 and
+  2.1.302. Older builds do not run them, and `claude update` is the fix:
+  - before 2.1.242, the plugins show `failed to load` (below);
+  - 2.1.242 to 2.1.280 install them but reject their hooks module, which uses
+    state helpers those builds predate (`claude plugin validate` says so on
+    2.1.242, 2.1.260 and 2.1.280);
+  - 2.1.281 to 2.1.290 accept the module but were not run live.
 - **A git repository** for wait-review. It reads the diff, so outside one it
   has nothing to show. bet-on-your-agent works anywhere.
 - Plugins that hook Claude Code's own events are **early access**. See

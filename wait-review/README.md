@@ -11,7 +11,7 @@ review of the diff it has already written.
 ```
 
 (Each as its own message; both are safe to send again. Needs Claude Code
-2.1.292 or later; `claude update` if `claude --version` says otherwise.)
+2.1.291 or later; `claude update` if `claude --version` says otherwise.)
 
 ## Why this and not a loading-screen game
 

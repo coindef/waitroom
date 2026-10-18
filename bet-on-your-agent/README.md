@@ -12,7 +12,7 @@ how calibrated you were.
 ```
 
 (Each as its own message; both are safe to send again. Needs Claude Code
-2.1.292 or later; `claude update` if `claude --version` says otherwise.)
+2.1.291 or later; `claude update` if `claude --version` says otherwise.)
 
 ## Why calibration, not a wager
 
