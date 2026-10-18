@@ -13,39 +13,43 @@ forecast for the turn it is running now.*
 
 ## Install
 
+Send these at the Claude Code prompt, each as its own message:
+
 ```
-/plugin install wait-review --marketplace coindef/waitroom
+/plugin marketplace add coindef/waitroom
+```
+```
+/plugin install wait-review@waitroom
+```
+```
+/plugin install bet-on-your-agent@waitroom
 ```
 
-Answer `y` to add the marketplace, then Enter to accept the user scope. That is
-the whole install — the plugin is active in that session straight away, and in
-every session after it. Nothing to configure, no key, no service, and nothing
-written to your repository.
+Each install shows the plugin's options on the way in. Every option has a
+working default, so save them as they are; it answers `Installed and configured
+wait-review. Plugin is now active.` That is the whole install — active in that
+session straight away, and in every session after it. No key, no service, and
+nothing written to your repository. Skip the last line if you only want
+wait-review.
+
+Every line is safe to send again: adding a marketplace that is already there,
+or installing a plugin that already is, changes nothing. So when in doubt, send
+all three — then `/plugin` should read `2 mods active · wait-review,
+bet-on-your-agent`.
 
 It needs **Claude Code 2.1.292 or later** — `claude --version` says which you
 have, `claude update` moves you on. An older build installs it without
 complaint and then shows it as `failed to load`; see
 [If a plugin shows an error](#if-a-plugin-shows-an-error).
 
-The source is the repository path; the marketplace it adds is called
-**`waitroom`**, which is the name everything after the first install goes by:
+The first line adds the marketplace from its repository path,
+`coindef/waitroom`. From then on it goes by its name, **`waitroom`** — the part
+after the `@`.
 
-```
-/plugin install bet-on-your-agent@waitroom
-```
-
-`--marketplace` takes one of two things, and mixing them up is the one way to
-get this wrong:
-
-- **a repository path**, on the first install, to fetch and add the marketplace
-- **a marketplace name**, afterwards, because the add has already happened
-
-So `--marketplace coindef/waitroom` a second time answers `Plugin "..." not found
-in any marketplace` — by then the marketplace is called `waitroom`, and a
-repository path is not a marketplace name. A path to a repository that does not
-exist answers the same way.
-
-Start with `wait-review` if you only want one.
+You may also see the one-line form, `/plugin install wait-review --marketplace
+coindef/waitroom`. It works once. Sent again, it answers `Plugin "wait-review"
+not found in any marketplace`, because by then `--marketplace` wants the name
+`waitroom`, not the repository path. The three lines above have no such trap.
 
 ### Updating
 
@@ -75,7 +79,8 @@ then install again:
 
 ```
 /plugin marketplace remove wait-mods
-/plugin install wait-review --marketplace coindef/waitroom
+/plugin marketplace add coindef/waitroom
+/plugin install wait-review@waitroom
 /plugin install bet-on-your-agent@waitroom
 ```
 
@@ -278,7 +283,7 @@ reload in place:
 ```
 claude --plugin-dir ./wait-review
 # or
-claude plugin marketplace add .     # then /plugin install <mod> --marketplace waitroom
+claude plugin marketplace add .     # then /plugin install <mod>@waitroom
 ```
 
 Each mod keeps the logic that needs no engine in one plain module
