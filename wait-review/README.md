@@ -4,10 +4,13 @@ A Claude Code plugin that turns the wait while Claude works into incremental
 review of the diff it has already written.
 
 ```
-/plugin install wait-review --marketplace coindef/waitroom
+/plugin marketplace add coindef/waitroom
+```
+```
+/plugin install wait-review@waitroom
 ```
 
-(Answer `y` to add the marketplace, then pick a scope. Needs Claude Code
+(Each as its own message; both are safe to send again. Needs Claude Code
 2.1.292 or later; `claude update` if `claude --version` says otherwise.)
 
 ## Why this and not a loading-screen game
