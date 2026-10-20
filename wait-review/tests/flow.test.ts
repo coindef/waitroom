@@ -254,6 +254,9 @@ test('a hunk is flagged with a reason, and the reason reaches Claude', async ($,
   // The note box is a mode: while it is up, no review hotkey is drawn under it.
   await ui.press({ key: 'note-open' })
   expect(await ui.find({ key: 'ok' })).toBeUndefined()
+  // Flagging moved the card on, so the box shows the hunk it asks about.
+  // Found recording the demo: the reason was typed under an empty pane.
+  expect(await ui.find({ type: 'Code', text: /return undefined/ })).toBeDefined()
   await ui.input({ key: 'note-text', text: 'this drops the retry on every 5xx' })
 
   expect(await ui.find({ key: 'note-text' })).toBeUndefined()

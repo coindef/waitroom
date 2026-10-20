@@ -1,5 +1,13 @@
 # Changelog
 
+## wait-review 0.2.3
+
+- **The note box shows the hunk it asks about.** `f` moves the card on to the
+  next hunk, so `n` opened "Why is this wrong?" over an empty pane, and the
+  reason was typed for code no longer on screen. Found while recording the
+  demo. The box now draws the flagged hunk under it, sized to the pane and
+  starting from the page you were reading when you flagged it.
+
 ## wait-review 0.2.2
 
 - **The pane's key hint names the way in that always works.** While a row

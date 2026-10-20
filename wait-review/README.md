@@ -171,6 +171,9 @@ src/auth.ts @@ -10,3 +10,3 @@
 they said: this drops the retry on every 5xx
 ```
 
+The flagged hunk stays on screen under the box while you type, though the card
+behind it has moved on.
+
 It is a mode on purpose. A focused field takes the keys that would otherwise be
 `o`, `f` and `l`, so the box is only up while you want it, and Enter on an empty
 box means the diff speaks for itself.
