@@ -60,8 +60,11 @@ you said 80% · how many files will it touch?
   once the turn lands — with a `skip` if you would rather not say. Answered it
   wrong? The band holds what it recorded for one more press of `u: Undo`,
   until the next turn starts.
-- **How many files?** Resolved automatically from the `Edit`, `Write` and
-  `NotebookEdit` calls the turn actually made, so it needs no verdict at all.
+- **How many files?** Resolved automatically, so it needs no verdict at all.
+  In a git repository it counts every file whose content the turn changed,
+  however it was written — an agent that writes through a shell heredoc makes
+  no `Edit` call. Outside one, it counts the `Edit`, `Write` and
+  `NotebookEdit` calls the turn made.
 
 The forecast is quoted against **what you asked for**, which is the point: a
 score tells you that you are overconfident, the ask tells you what about.
@@ -136,7 +139,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 41 tests
+claude plugin test .         # 44 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested

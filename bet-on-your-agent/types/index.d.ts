@@ -57,6 +57,14 @@ export type OpenBet = {
   ask: string
   /** Distinct paths written so far this turn. */
   files: string[]
+  /**
+   * What git saw changed when the turn started: path to content hash.
+   *
+   * An agent writes through a shell as often as through Edit, and only git
+   * sees both, so the turn's files include every one whose content moved from
+   * this. Absent outside a repository, where the tool calls are all there is.
+   */
+  baseline?: Record<string, string>
   saidConfidence?: number
   saidFiles?: FileBucket
   /**

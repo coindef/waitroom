@@ -1,5 +1,16 @@
 # Changelog
 
+## bet-on-your-agent 0.2.3
+
+- **Files written through the shell count.** The file forecast was resolved
+  from `Edit`, `Write` and `NotebookEdit` calls only. Found while recording the
+  demo: Claude wrote two files with one `cat > … <<'EOF'` command, and the
+  band read `0 written so far` all turn — so the files bet would have been
+  scored as 0. In a git repository it now compares what git sees changed
+  before the turn with after each shell command and at the end, and counts
+  every file whose content moved, alongside the tool calls. Outside a
+  repository nothing changes.
+
 ## bet-on-your-agent 0.2.2
 
 - **The turn that just landed is the one asked about.** With more than one

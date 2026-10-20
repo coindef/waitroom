@@ -11,12 +11,14 @@ import {
   CALIBRATION_HEAD,
   calibrationLine,
   bucketOf,
+  changedSince,
   COIN_FLIP_BRIER,
   FILE_BUCKETS,
   headline,
   keepRecord,
   lapseVerdicts,
   owedVerdict,
+  parseStatus,
   report,
   setVerdict,
   shortAsk,
@@ -147,6 +149,55 @@ const noteFile = async ($: EngineInterface, path: string | undefined) => {
   )
 }
 
+/** Past this many changed files, a look at the working tree is not worth its cost. */
+const WORKTREE_LIMIT = 500
+
+const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string) =>
+  $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
+
+/**
+ * Each file git sees changed in the repository, as path to content hash.
+ *
+ * Undefined outside a repository, or when git does not answer; the tool calls
+ * are then the only count there is.
+ */
+const lookAtWorktree = async ($: EngineInterface): Promise<Record<string, string> | undefined> => {
+  const top = await runGit($, ['rev-parse', '--show-toplevel'])
+  const root = top?.exitCode === 0 ? top.stdout.trim() : ''
+  if (root === '') return undefined
+  const status = await runGit($, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], root)
+  if (status?.exitCode !== 0) return undefined
+  const entries = parseStatus(status.stdout)
+  if (entries.length > WORKTREE_LIMIT) return undefined
+  const present = entries.filter(one => !one.isDeleted).map(one => one.path)
+  const hashed = present.length === 0 ? undefined : await runGit($, ['hash-object', '--', ...present], root)
+  if (present.length > 0 && hashed?.exitCode !== 0) return undefined
+  const hashes = hashed?.stdout.split('\n') ?? []
+  const look: Record<string, string> = {}
+  for (const one of entries) {
+    look[`${root}/${one.path}`] = one.isDeleted ? 'deleted' : (hashes[present.indexOf(one.path)] ?? '')
+  }
+
+  return look
+}
+
+/**
+ * Counts every file whose content moved since the turn started, however it
+ * was written: a shell heredoc or a script makes no Edit call.
+ */
+const noteWorktreeFiles = async ($: EngineInterface) => {
+  const { baseline } = await read($, open)
+  if (baseline === undefined) return
+  const now = await lookAtWorktree($)
+  if (now === undefined) return
+  const moved = changedSince(baseline, now)
+  await update($, open, bet => {
+    const added = moved.filter(path => !bet.files.includes(path))
+
+    return added.length === 0 ? bet : { ...bet, files: [...bet.files, ...added].slice(-200) }
+  })
+}
+
 export const register: Register = (on, options) => {
   const config: Config = { autoOpen: options.autoOpen === true }
 
@@ -190,6 +241,14 @@ export const register: Register = (on, options) => {
     return ran
   }).catch(($, e, next) => next(e))
 
+  // A failed command can still have written files, so only a denied one is skipped.
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    const ran = await next(e)
+    if (!ran.deny) await noteWorktreeFiles($)
+
+    return ran
+  }).catch(($, e, next) => next(e))
+
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
     // The betting window opens here and closes when the turn lands.
@@ -201,6 +260,11 @@ export const register: Register = (on, options) => {
     // A session can run past the window too.
     await lapseStaleVerdicts($)
     await showStatus($)
+    // Taken before the turn runs, so whatever it writes shows as a change.
+    const baseline = await lookAtWorktree($)
+    if (baseline !== undefined) {
+      await update($, open, bet => (bet.turnId === e.turnId ? { ...bet, baseline } : bet))
+    }
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -209,6 +273,7 @@ export const register: Register = (on, options) => {
     const done = await next(e)
     if (e.agentId !== undefined) return done
 
+    await noteWorktreeFiles($)
     const bet = await read($, open)
     const isThisTurn = bet.turnId === e.turnId
     const files = isThisTurn ? bet.files.length : 0

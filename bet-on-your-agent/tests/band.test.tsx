@@ -264,6 +264,68 @@ test('the turn that just landed is the one asked about, not an older one', async
   await idle.unmount()
 })
 
+test('files written through the shell count, not only Edit and Write calls', async ($, on) => {
+  engineBottom(on)
+  // What git reports: nothing changed when the turn starts, two files after
+  // one shell command writes them with a heredoc - which makes no Edit call.
+  const repo = { status: '', hashes: '' }
+  const ran = (stdout: string) => ({
+    value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  })
+  on('process.run', ($$, e) => {
+    const argv = e.argv.join(' ')
+    if (argv.includes('--show-toplevel')) return ran('/work\n')
+    if (argv.includes('status')) return ran(repo.status)
+    if (argv.includes('hash-object')) return ran(repo.hashes)
+
+    return ran('')
+  })
+  on('tool.call', { tool: 'Bash' }, () => {
+    repo.status = [' M src/retry.ts', ' M src/client.ts', ''].join('\0')
+    repo.hashes = 'aaa\nbbb\n'
+
+    return { result: { stdout: '', stderr: '', interrupted: false } } as never
+  })
+
+  await $.turn.start({ text: 'add backoff to retry', turnId: 'turn-sh' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await band.press({ key: 'p80' })
+  await band.press({ key: 'f2-3' })
+  expect(await band.find({ text: /0 written so far/ })).toBeDefined()
+
+  await $.tool.call({ tool: 'Bash', command: "cat > src/retry.ts <<'EOF' ... EOF" } as never)
+  expect(await band.find({ text: /2 written so far/ })).toBeDefined()
+  await band.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-sh',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  // Answered, so the report has a scored turn to show its stats beside.
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  // The file forecast is scored on the two files the shell wrote.
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /File count called right 1\/1/ })).toBeDefined()
+  await pane.unmount()
+})
+
 test('the band yields to a survey of the engine’s own', async ($, on) => {
   engineBottom(on)
   await $.turn.start({ text: 'anything', turnId: 'turn-4' })

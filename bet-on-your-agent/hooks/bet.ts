@@ -25,6 +25,44 @@ export const bucketOf = (files: number): FileBucket => {
   return files <= 3 ? '2-3' : '4+'
 }
 
+/** One path `git status` reports, and whether it is gone from the working tree. */
+export type StatusEntry = { path: string; isDeleted: boolean }
+
+/**
+ * The paths in `git status --porcelain=v1 -z` output.
+ *
+ * Entries are NUL-separated `XY path`; a rename or copy carries its old path
+ * as the next field, which is skipped — the file written is the new one.
+ */
+export const parseStatus = (out: string): StatusEntry[] => {
+  const fields = out.split('\0')
+  const entries: StatusEntry[] = []
+  for (let at = 0; at < fields.length; at++) {
+    const field = fields[at] ?? ''
+    if (field.length < 4) continue
+    const code = field.slice(0, 2)
+    entries.push({ path: field.slice(3), isDeleted: code.includes('D') })
+    if (code.includes('R') || code.includes('C')) at++
+  }
+
+  return entries
+}
+
+/**
+ * The paths whose content moved between two looks at the working tree.
+ *
+ * Each look maps a changed path to a hash of its content. A path new to the
+ * second look was written; so was one in both with a different hash, and one
+ * that dropped out of the second, since it was changed back.
+ */
+export const changedSince = (
+  before: Readonly<Record<string, string>>,
+  after: Readonly<Record<string, string>>,
+): string[] => [
+  ...Object.keys(after).filter(path => before[path] !== after[path]),
+  ...Object.keys(before).filter(path => !(path in after)),
+]
+
 /**
  * The records a confidence forecast can be scored on: one that was bet, has a
  * verdict, and was not interrupted (an interrupted turn says nothing about the

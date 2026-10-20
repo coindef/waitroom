@@ -261,7 +261,7 @@ claude plugin validate ./wait-review
 claude plugin test     ./wait-review          # 65 tests
 
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 41 tests
+claude plugin test     ./bet-on-your-agent    # 44 tests
 ```
 
 Neither of those runs a real type checker, so also run `tsc` from each mod's
