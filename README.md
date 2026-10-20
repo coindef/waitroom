@@ -5,11 +5,12 @@ is the one moment you are already holding the problem in your head and have
 nothing to do with it; these spend it on the diff the agent just wrote, and on
 how well you called the turn.
 
-![Claude Code with the review pane docked on the right, a colored diff of the change Claude just made, and a row above the prompt asking how the running turn will go](docs/waitroom.svg)
+![A Claude Code session: a one-keystroke bet on the running turn above the prompt, the diff reviewed a hunk at a time in a pane on the right, one hunk flagged with a reason, and Claude fixing exactly that from "Fix what I flagged"](docs/demo.gif)
 
-*A real session, not a mockup: Claude Code 2.1.302 with both mods. On the right,
-the diff Claude already wrote, a hunk at a time. Above the prompt, a one-keystroke
-forecast for the turn it is running now.*
+*A real session, not a mockup — Claude Code 2.1.304 with both plugins, sped up
+only while Claude works. Bet on the turn while it runs, read the diff as it
+lands, flag a hunk with a reason, and "Fix what I flagged" is all the next
+message needs. [Full-quality video](docs/demo.mp4).*
 
 ## Install
 
