@@ -308,6 +308,18 @@ module beside it and a `types/index.d.ts` state contract that
 `.claude-plugin/types/` inside a mod is written by the engine on each load and
 is not checked in.
 
+### OpenCode prototypes
+
+[`wait-review-opencode`](./wait-review-opencode) and
+[`bet-on-your-agent-opencode`](./bet-on-your-agent-opencode) are unpublished
+prototypes of the same two mods for [OpenCode](https://opencode.ai)'s own
+plugin API. Each reuses its Claude Code counterpart's engine-free core
+(`hooks/diff.ts`, `hooks/bet.ts`) unmodified; each README explains what's
+ported, what's blocked on OpenCode's API rather than merely unported, and how
+it was verified (type-checked against the real OpenCode/OpenTUI packages,
+not run inside a live session). Not installable, not versioned, not part of
+this marketplace.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE). What changed in each release is in

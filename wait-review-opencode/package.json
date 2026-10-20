@@ -1,0 +1,18 @@
+{
+  "name": "wait-review-opencode",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Prototype: wait-review ported to OpenCode's TUI plugin API. See README.md.",
+  "exports": {
+    "./tui": "./plugin/tui.tsx"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.19.3"
+  },
+  "peerDependencies": {
+    "@opentui/core": ">=0.4.5",
+    "@opentui/keymap": ">=0.4.5",
+    "@opentui/solid": ">=0.4.5"
+  }
+}
