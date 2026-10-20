@@ -462,7 +462,7 @@ test('the pane says how to give it the keys, and how to hand them back', async (
     props: { ...PANE_PROPS, isFocused: false },
     viewport: { columns: 100, rows: 30 },
   })
-  expect(await away.find({ text: /ctrl\+x tab to use these keys/ })).toBeDefined()
+  expect(await away.find({ text: /\/wait-review or ctrl\+x tab to use these keys/ })).toBeDefined()
   await away.unmount()
 
   const here = await mountPane($, 'terminal')

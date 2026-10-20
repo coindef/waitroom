@@ -1,5 +1,16 @@
 # Changelog
 
+## wait-review 0.2.2
+
+- **The pane's key hint names the way in that always works.** While a row
+  above the prompt has buttons up — bet-on-your-agent asking "Did it land?" —
+  `ctrl+x tab` gives the keys to that row, not to this pane, so the pane's
+  `ctrl+x tab to use these keys` sent its letters into the prompt. Found while
+  recording the demo, and checked live: two presses of `ctrl+x tab` never reach
+  the pane while the row asks, and `/wait-review` does. The hint now reads
+  `/wait-review or ctrl+x tab to use these keys · or click them`, and the pane
+  counts the extra row when that wraps.
+
 ## wait-review 0.2.1
 
 - **Works beside Claude Code's new diff panel.** Claude Code 2.1.304 (now the
