@@ -485,6 +485,21 @@ test('the status line names the count and the way in, not the plugin again', asy
   expect(said.every(text => text === undefined || !text.startsWith('review'))).toBe(true)
 })
 
+test('a pane covered by the diff panel says how to uncover it', async ($, on) => {
+  // Found live on 2.1.304: its diff panel opens beside the transcript when
+  // Claude edits and covers this pane, and /wait-review answered 'Review pane
+  // open.' The pane list still calls the pane shown then; only the focus that
+  // /wait-review asks for fails to arrive.
+  on('ui.panes', () => ({
+    value: [{ id: 'wait-review', title: 'Wait review', isPlaced: true, isShown: true, isFocused: false }],
+  }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await queueOne($, on, AUTH_DIFF, 'turn-c1')
+
+  const reply = await $.command.run({ command: 'wait-review', args: '' } as never)
+  expect(JSON.stringify(reply)).toContain('/diff hides that')
+})
+
 test('a long changed line reaches the drawing whole, wrapped rather than cut', async ($, on) => {
   // Found in a live session: the pane cut `AbortSignal.timeout(10_0…` at its
   // edge, hiding exactly the change being reviewed.

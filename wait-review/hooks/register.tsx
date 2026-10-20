@@ -7,6 +7,7 @@ import {
   linesThatFit,
   mergeHunks,
   nextHunk,
+  paneHint,
   parseDiff,
   parseIgnore,
   progressOf,
@@ -72,11 +73,11 @@ const showStatus = async ($: EngineInterface) => {
 
       return
     }
-    // Below 144 columns a pane nobody asked for is never placed, so without
-    // this the count is the only sign the mod is there, and no way in.
+    // Below 144 columns a pane nobody asked for is never placed, and a placed
+    // one can be a tab behind another, so without this the count is the only
+    // sign the mod is there, and no way in.
     const panes = await $.ui.panes().catch(() => [])
-    const isShown = panes.some(pane => pane.id === PANE && pane.isPlaced)
-    $.ui.status(`${parts.join(' · ')}${isShown ? '' : ' · open with /wait-review'}`)
+    $.ui.status(`${parts.join(' · ')}${paneHint(panes.find(pane => pane.id === PANE))}`)
   } catch {
     // Nothing to do: the counts are still right, only unshown.
   }
@@ -283,7 +284,15 @@ export const register: Register = (on, options) => {
     const opened = await $.ui
       .open({ id: PANE, title: 'Wait review', focus: true })
       .catch(() => ({ isPlaced: false, reason: 'the engine would not place it' }) as const)
-    const where = opened.isPlaced ? 'Review pane open.' : `Review pane waiting (${opened.reason}).`
+    // Claude Code's own diff panel (2.1.304 on) holds the side of the
+    // transcript while it is up, and the pane list still calls this pane
+    // shown. What gives it away is the focus just asked for not arriving.
+    const ours = (await $.ui.panes().catch(() => [])).find(pane => pane.id === PANE)
+    const where = !opened.isPlaced
+      ? `Review pane waiting (${opened.reason}).`
+      : ours !== undefined && !ours.isFocused
+        ? "Review pane open. If you can't see it, Claude Code's diff panel is in front: /diff hides that."
+        : 'Review pane open.'
 
     return {
       text: `${where} ${counts.pending} hunk${counts.pending === 1 ? '' : 's'} to read, ${counts.reviewed} reviewed, ${counts.flagged} flagged.`,

@@ -6,6 +6,7 @@ import {
   globToRegExp,
   isIgnored,
   mergeHunks,
+  paneHint,
   progressOf,
   reviewable,
   summaryOf,
@@ -528,4 +529,12 @@ test('a line too long for the whole pane is still shown, alone', async () => {
   const huge = ['@@ -0,0 +1,2 @@', '+' + 'w'.repeat(500), '+next'].join('\n')
 
   expect(linesThatFit(huge, 0, 5, 40)).toBe(1)
+})
+
+test('the status hint says how to reach the pane, and nothing once it is in view', async () => {
+  expect(paneHint(undefined)).toBe(' · open with /wait-review')
+  expect(paneHint({ isPlaced: false, isShown: false })).toBe(' · open with /wait-review')
+  // Placed, but another pane's tab is in front of it.
+  expect(paneHint({ isPlaced: true, isShown: false })).toBe(' · open with /wait-review')
+  expect(paneHint({ isPlaced: true, isShown: true })).toBe('')
 })

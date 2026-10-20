@@ -1,5 +1,18 @@
 # Changelog
 
+## wait-review 0.2.1
+
+- **Works beside Claude Code's new diff panel.** Claude Code 2.1.304 (now the
+  stable release) opens a diff panel of its own beside the transcript when
+  Claude edits, in front of this pane — found while recording the demo, where
+  the review keys went into the prompt instead. `/diff` hides it, and Claude
+  Code remembers that across sessions (checked live). The README says so
+  where the pane is introduced, and `/wait-review`, which used to answer
+  `Review pane open.` with the pane out of sight, now says the diff panel is
+  in front and that `/diff` hides it. It tells by the keyboard focus it asks
+  for not arriving: the pane list Claude Code hands plugins still calls the
+  pane shown while it is covered.
+
 ## bet-on-your-agent 0.2.3
 
 - **Files written through the shell count.** The file forecast was resolved
