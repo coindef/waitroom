@@ -438,14 +438,23 @@ export const register: Register = (on, options) => {
     // The pane's own body, not the terminal: the prompt and status rows sit
     // below it, and sizing pages to the whole screen pushed the controls off
     // the bottom of a long hunk's first page.
+    // Hotkeys only land while the pane holds the keyboard; say how to give it
+    // the keys, since pressing `o` without that types an o into the prompt.
+    // /wait-review comes first because it always works: while a band above the
+    // prompt has buttons up - bet-on-your-agent asking "Did it land?" - ctrl+x
+    // tab gives the keys to that band instead of this pane.
+    const keysHint = e.props.isFocused
+      ? 'esc hands the keys back to the prompt'
+      : '/wait-review or ctrl+x tab to use these keys · or click them'
     const height = e.props.scroll?.bodyRows ?? e.viewport?.rows ?? 24
     const chrome =
       CHROME_ROWS +
       (current.note !== undefined ? 1 : 0) +
       (noteOffer ? 1 : 0) +
       (counts.flagged > 0 ? 1 : 0) +
-      // The controls wrap onto a second row in a narrow pane.
-      (width < 60 ? 1 : 0)
+      // The controls wrap onto a second row in a narrow pane, and so can the hint.
+      (width < 60 ? 1 : 0) +
+      (keysHint.length > width ? 1 : 0)
     const room = Math.max(3, height - chrome)
     const reading = await read($, page)
     const offset = reading !== null && reading.id === current.id ? reading.offset : 0
@@ -455,11 +464,6 @@ export const register: Register = (on, options) => {
     const fit = linesThatFit(current.text, offset, room, Math.max(10, width - gutter))
     const shown = sliceHunk(current.text, offset, fit)
     const isPaged = shown.total > shown.last - shown.first
-    // Hotkeys only land while the pane holds the keyboard; say how to give it
-    // the keys, since pressing `o` without that types an o into the prompt.
-    const keysHint = e.props.isFocused
-      ? 'esc hands the keys back to the prompt'
-      : 'ctrl+x tab to use these keys · or click them'
 
     return (
       <Box flexDirection="column" gap={1}>

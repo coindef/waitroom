@@ -36,9 +36,9 @@ the diff has been reviewed at no dedicated review cost.
 - Leaves out whatever was already uncommitted when the session began, so your
   own work in progress is never offered as the agent's review.
 - Shows one card at a time in a pane, in reading order — each file together,
-  top of the file first. Give it the keys with `ctrl+x tab` (or click it), then
-  `o` looks right, `f` flag, `l` later, `x` skip the rest of this file, `u`
-  undo. A hunk longer than the pane pages with `j` and `k`.
+  top of the file first. Give it the keys with `/wait-review` or `ctrl+x tab`
+  (or click it), then `o` looks right, `f` flag, `l` later, `x` skip the rest
+  of this file, `u` undo. A hunk longer than the pane pages with `j` and `k`.
 - After flagging, `n` opens a box to say why, and that reason goes to Claude
   with the hunk. Optional: flagging stays one press and the box only appears
   when you ask for it.
@@ -136,8 +136,13 @@ panel is in front.
 
 The pane's letters only work while it holds the keyboard. Press `o` without that
 and an `o` goes into your prompt instead, so the pane says which it is at the
-bottom: `ctrl+x tab to use these keys · or click them` while it does not have
-them, and `esc hands the keys back to the prompt` while it does.
+bottom: `/wait-review or ctrl+x tab to use these keys · or click them` while it
+does not have them, and `esc hands the keys back to the prompt` while it does.
+
+`/wait-review` always gives it the keys. `ctrl+x tab` does too, except while a
+row above the prompt has buttons up — bet-on-your-agent asking "Did it land?",
+say — when it gives the keys to that row instead. Answer the row, or use
+`/wait-review`.
 
 ## Long hunks
 

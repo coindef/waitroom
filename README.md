@@ -115,10 +115,12 @@ longer than the pane:
 
 <img src="docs/paging.svg" width="480" alt="The review pane showing a new file, lines 1 to 21 of 44, with controls for looks right, flag, later, skip file and undo">
 
-**Give the pane the keys first: `ctrl+x tab`** (or click it). Its letters only
-work while it holds the keyboard — press `o` without that and you type an `o`
-into your prompt. The pane reminds you at the bottom, and `esc` hands the keys
-back when you are done.
+**Give the pane the keys first: `/wait-review` or `ctrl+x tab`** (or click
+it). Its letters only work while it holds the keyboard — press `o` without that
+and you type an `o` into your prompt. The pane reminds you at the bottom, and
+`esc` hands the keys back when you are done. `/wait-review` always works;
+`ctrl+x tab` gives the keys to the row above the prompt instead while that row
+has buttons up, as it does when bet-on-your-agent asks "Did it land?".
 
 | Key | Does |
 |---|---|
