@@ -9,12 +9,14 @@ import {
   asText,
   bucketOf,
   calibration,
+  changedSince,
   COIN_FLIP_BRIER,
   headline,
   keepRecord,
   lapseVerdicts,
   median,
   owedVerdict,
+  parseStatus,
   report,
   setVerdict,
   shortAsk,
@@ -157,6 +159,27 @@ test('the file forecast is scored on the exact bucket', async () => {
   ])
 
   expect(found.files).toEqual({ right: 1, of: 2 })
+})
+
+test('git status entries are read whole, renames by their new path', async () => {
+  const out = [' M src/retry.ts', '?? notes/new file.md', ' D old.ts', 'R  src/moved.ts', 'src/was.ts', ''].join('\0')
+
+  expect(parseStatus(out)).toEqual([
+    { path: 'src/retry.ts', isDeleted: false },
+    { path: 'notes/new file.md', isDeleted: false },
+    { path: 'old.ts', isDeleted: true },
+    { path: 'src/moved.ts', isDeleted: false },
+  ])
+  expect(parseStatus('')).toEqual([])
+})
+
+test('a file counts as written when its content moved, appeared, or was changed back', async () => {
+  const before = { '/r/a.ts': 'h1', '/r/b.ts': 'h2', '/r/c.ts': 'h3' }
+  const after = { '/r/a.ts': 'h1', '/r/b.ts': 'h9', '/r/d.ts': 'h4' }
+
+  // a is untouched; b changed; c was changed back to clean; d is new.
+  expect(changedSince(before, after).sort()).toEqual(['/r/b.ts', '/r/c.ts', '/r/d.ts'])
+  expect(changedSince({}, {})).toEqual([])
 })
 
 test('the median turn is the middle one, and the mean of two in the middle', async () => {
