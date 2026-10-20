@@ -156,10 +156,12 @@ it still draws as a diff. Reading to the end is not required before deciding.
 
 <img src="../docs/paging.svg" width="480" alt="The review pane paging through a new file, lines 1 to 21 of 44">
 
-A real capture from Claude Code 2.1.302. The header says how much is left before
-you commit to reading — hunks in this file, hunks in all, which file of how
-many — and counts that are zero are left out. Each control carries its own key,
-so there is no legend to learn.
+A real capture. The header carries the pane's name, a bar that fills as you
+read, and the counts — counts that are zero are left out. Under it, the hunk's
+`path:line` and its `+`/`−` counts, then the diff. Each control carries its own
+key, so there is no legend to learn, and the controls are dim until the pane
+holds the keyboard: lit, `Looks right` is green and `Flag` amber, so a glance
+says where a letter will land. Read to the end and it says `✓ All caught up`.
 
 ## Saying why
 
@@ -171,8 +173,10 @@ src/auth.ts @@ -10,3 +10,3 @@
 they said: this drops the retry on every 5xx
 ```
 
-The flagged hunk stays on screen under the box while you type, though the card
-behind it has moved on.
+The box asks `Why flag src/auth.ts:10?` in an amber frame, and the flagged hunk
+stays on screen under it while you type, though the card behind it has moved
+on. Until the flag goes out, an amber bar under the controls says how many are
+flagged and that they go to Claude with your next message.
 
 It is a mode on purpose. A focused field takes the keys that would otherwise be
 `o`, `f` and `l`, so the box is only up while you want it, and Enter on an empty
@@ -205,7 +209,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 67 tests
+claude plugin test .         # 68 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

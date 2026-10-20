@@ -317,8 +317,11 @@ export const shortAsk = (text: string, room = ASK_ROOM): string => {
 /** The most of a live ask the band quotes, however wide the terminal. */
 export const BAND_ASK_ROOM = 64
 
-/** `Will "" land first try?` and the space around it. */
-const QUESTION_CHROME = 26
+/** The `bet` tag, `Will "" land first try?` and the space around them. */
+const QUESTION_CHROME = 32
+
+/** The `bet` tag, `Did it land? you said 95% · ""` and the space around them. */
+export const VERDICT_CHROME = 38
 
 /**
  * How much of the ask the band's question line can quote.
@@ -327,10 +330,57 @@ const QUESTION_CHROME = 26
  * question's own words; below a dozen characters a quote says nothing and is
  * dropped rather than shown as a stub.
  */
-export const askRoomFor = (bodyColumns: number): number => {
-  const left = Math.min(BAND_ASK_ROOM, bodyColumns - QUESTION_CHROME)
+export const askRoomFor = (bodyColumns: number, chrome = QUESTION_CHROME): number => {
+  const left = Math.min(BAND_ASK_ROOM, bodyColumns - chrome)
 
   return left < 12 ? 0 : left
+}
+
+/**
+ * Scored calls before the headline says which way you lean.
+ *
+ * Two calls that missed read as "80 points overconfident", which is a verdict
+ * on almost nothing and stings exactly when someone is deciding whether to keep
+ * betting. Under this many the headline counts up instead.
+ */
+export const MIN_SCORED = 5
+
+/** Whether there are too few scored calls yet for the lean to mean anything. */
+export const isCalibrating = (found: Report): boolean => found.scored < MIN_SCORED
+
+/**
+ * How each file bucket reads as an answer.
+ *
+ * The answers are pressed by digit, so a label that is itself a digit
+ * misleads: `1: 0  2: 1` had "one file" on the 2 key. Words for the two small
+ * buckets keep every key from reading as a different count.
+ */
+export const FILE_LABELS: Readonly<Record<FileBucket, string>> = {
+  '0': 'none',
+  '1': 'one',
+  '2-3': '2–3',
+  '4+': '4+',
+}
+
+/** A file bucket in a sentence: "2–3 files", "1 file", "no files". */
+export const filesPhrase = (bucket: FileBucket): string =>
+  bucket === '0' ? 'no files' : bucket === '1' ? '1 file' : `${FILE_LABELS[bucket]} files`
+
+/**
+ * The worst calls with repeats folded together, so asking the same thing twice
+ * reads as one line marked ×2 rather than the same line twice.
+ */
+export const groupMisses = (misses: readonly Miss[]): { miss: Miss; count: number }[] => {
+  const groups: { miss: Miss; count: number }[] = []
+  for (const miss of misses) {
+    const same = groups.find(
+      one => one.miss.ask === miss.ask && one.miss.said === miss.said && one.miss.landed === miss.landed,
+    )
+    if (same) same.count++
+    else groups.push({ miss, count: 1 })
+  }
+
+  return groups
 }
 
 /**
@@ -340,6 +390,7 @@ export const askRoomFor = (bodyColumns: number): number => {
  * the number backs it up.
  */
 export const headline = (found: Report): string => {
+  if (isCalibrating(found)) return `Calibrating: ${found.scored} of ${MIN_SCORED} calls scored.`
   if (found.lean === 'over') return `You run ${found.gap} points overconfident.`
   if (found.lean === 'under') {
     return `You run ${Math.abs(found.gap ?? 0)} points underconfident.`
@@ -380,7 +431,9 @@ export const asText = (found: Report): string => {
     found.brier < COIN_FLIP_BRIER ? 'better than a coin flip' : 'no better than a coin flip'
   const lines: string[] = [
     headline(found),
-    `Brier ${found.brier.toFixed(3)} over ${found.scored} scored turns — ${skill}.`,
+    isCalibrating(found)
+      ? `The score means something from ${MIN_SCORED} calls; until then, here is what there is.`
+      : `Brier ${found.brier.toFixed(3)} over ${found.scored} scored turns — ${skill}.`,
   ]
 
   if (found.rows.length > 0) {
@@ -390,10 +443,11 @@ export const asText = (found: Report): string => {
 
   if (found.misses.length > 0) {
     lines.push('', 'Worst calls')
-    for (const miss of found.misses) {
+    for (const { miss, count } of groupMisses(found.misses)) {
       const said = asPercent(miss.said)
       const what = miss.landed ? 'and it landed' : 'and it did not'
-      lines.push(`  ${said} ${what} — ${miss.ask ?? 'a turn with no prompt'}`)
+      const times = count > 1 ? ` (×${count})` : ''
+      lines.push(`  ${said} ${what}${times} — ${miss.ask ?? 'a turn with no prompt'}`)
     }
   }
 

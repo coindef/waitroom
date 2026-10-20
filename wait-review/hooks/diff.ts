@@ -294,6 +294,17 @@ export const progressOf = (list: readonly Hunk[], current: Hunk): Progress => {
   }
 }
 
+/**
+ * How many of a progress bar's cells are filled: never a full bar before the
+ * last hunk is decided, and never an empty one once any is.
+ */
+export const filledCells = (done: number, total: number, cells: number): number => {
+  if (total <= 0 || cells <= 0 || done <= 0) return 0
+  if (done >= total) return cells
+
+  return Math.min(cells - 1, Math.max(1, Math.round((done / total) * cells)))
+}
+
 /** The counts worth showing: a zero says nothing, so it is left out. */
 export const summaryOf = (list: readonly Hunk[]): string => {
   const counts = tally(list)

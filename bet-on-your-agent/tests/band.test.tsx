@@ -76,7 +76,7 @@ test('one question at a time, each answered by a bare digit', async ($, on) => {
 
   await ui.press({ key: 'f2-3' })
 
-  expect(await ui.find({ text: /bet 80% · 2-3 files/ })).toBeDefined()
+  expect(await ui.find({ text: /bet 80% · 2–3 files/ })).toBeDefined()
   expect(await ui.findAll({ type: 'Button' })).toHaveLength(0)
 
   await ui.unmount()

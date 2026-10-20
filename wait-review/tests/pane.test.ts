@@ -29,8 +29,8 @@ test('the pane draws on every surface, and says so when there is nothing to read
       viewport: { columns: 100, rows: 30 },
     })
 
-    expect(await ui.find({ text: /nothing to read/ })).toBeDefined()
-    expect(await ui.find({ text: /each change lands here to read while it works/ })).toBeDefined()
+    expect(await ui.find({ text: /Nothing to read yet/ })).toBeDefined()
+    expect(await ui.find({ text: /lands here, a hunk at a time, to read while it works/ })).toBeDefined()
     // Nothing waiting means nothing to act on.
     expect(await ui.findAll({ type: 'Button' })).toHaveLength(0)
 

@@ -260,7 +260,7 @@ test('a hunk is flagged with a reason, and the reason reaches Claude', async ($,
   await ui.input({ key: 'note-text', text: 'this drops the retry on every 5xx' })
 
   expect(await ui.find({ key: 'note-text' })).toBeUndefined()
-  expect((await ui.find({ key: 'note-open' }))?.props.label).toBe('Edit note')
+  expect((await ui.find({ key: 'note-open' }))?.props.label).toBe('Edit the reason')
   await ui.unmount()
 
   await $.prompt.submit({ text: 'carry on', wait: false, origin: { kind: 'composer' } })
@@ -386,7 +386,7 @@ test('the full review card is drawable on every surface', async ($, on) => {
     expect(await ui.drawn()).toMatchObject({ type: 'Box' })
     // The diff itself is drawn as a diff, not as plain text.
     expect(await ui.find({ type: 'Code' })).toBeDefined()
-    expect(await ui.find({ text: /line 10/ })).toBeDefined()
+    expect(await ui.find({ text: /:10/ })).toBeDefined()
 
     await ui.unmount()
   }
@@ -440,7 +440,7 @@ test('a new file longer than the pane is read page by page, to its end', async (
 
   // Reading the whole thing is not required before deciding on it.
   await ui.press({ key: 'ok' })
-  expect(await ui.find({ text: /Diff read/ })).toBeDefined()
+  expect(await ui.find({ text: /All caught up/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -550,6 +550,7 @@ test('a page is sized to the pane body, not to the whole terminal', async ($, on
 
   expect(short).toBeGreaterThan(0)
   expect(tall - short).toBe(20)
-  // The card's own chrome leaves room for the controls in a 24-row pane.
-  expect(short).toBeLessThanOrEqual(24 - 10)
+  // The card's own chrome (nine rows: header, path, rule, paging, controls,
+  // hint and the gaps) leaves room for the controls in a 24-row pane.
+  expect(short).toBeLessThanOrEqual(24 - 9)
 })

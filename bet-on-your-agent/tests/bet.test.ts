@@ -11,6 +11,8 @@ import {
   calibration,
   changedSince,
   COIN_FLIP_BRIER,
+  FILE_LABELS,
+  filesPhrase,
   headline,
   keepRecord,
   lapseVerdicts,
@@ -22,6 +24,7 @@ import {
   shortAsk,
   skipVerdict,
   undoVerdict,
+  VERDICT_CHROME,
   VERDICT_WINDOW_MS,
   worstCalls,
 } from '../hooks/bet'
@@ -256,6 +259,9 @@ test('the report stands up with nothing in it, and names the numbers once there 
     report([
       turn({ saidConfidence: 0.9, landed: false, saidFiles: '1', filesBucket: '4+' }),
       turn({ saidConfidence: 0.9, landed: false }),
+      turn({ saidConfidence: 0.9, landed: false }),
+      turn({ saidConfidence: 0.9, landed: false }),
+      turn({ saidConfidence: 0.9, landed: false }),
     ]),
   )
 
@@ -266,7 +272,19 @@ test('the report stands up with nothing in it, and names the numbers once there 
   expect(text).toContain('90% →      0%')
   // The percentage and the raw count agree, rather than one surface showing
   // a fraction and another a percent for the same number.
-  expect(text).toContain('The agent landed it first try 0% (0/2).')
+  expect(text).toContain('The agent landed it first try 0% (0/5).')
+})
+
+test('under five scored calls the report counts up instead of judging', async () => {
+  const text = asText(
+    report([turn({ saidConfidence: 0.9, landed: false }), turn({ saidConfidence: 0.9, landed: false })]),
+  )
+
+  // Two misses are not "90 points overconfident": too few to say which way you lean.
+  expect(text).toStartWith('Calibrating: 2 of 5 calls scored.')
+  expect(text).not.toContain('Brier')
+  // What there is still shows, so the calls are not lost.
+  expect(text).toContain('90% →      0%')
 })
 
 test('a waved-away verdict owes nothing and scores nothing', async () => {
@@ -330,15 +348,13 @@ test('a call that was nearly right is not held up as a worst call', async () => 
 })
 
 test('the headline says the lean in words before any score', async () => {
-  const over = report([
-    turn({ saidConfidence: 0.9, landed: false }),
-    turn({ saidConfidence: 0.9, landed: false }),
-  ])
+  const misses = (n: number) => Array.from({ length: n }, () => turn({ saidConfidence: 0.9, landed: false }))
 
-  expect(headline(over)).toBe('You run 90 points overconfident.')
-  expect(headline(report([turn({ saidConfidence: 0.5, landed: true }), turn({ saidConfidence: 0.5, landed: false })]))).toBe(
-    'Your forecasts match what happens.',
-  )
+  expect(headline(report(misses(5)))).toBe('You run 90 points overconfident.')
+  const even = [true, false, true, false, true, false].map(landed => turn({ saidConfidence: 0.5, landed }))
+  expect(headline(report(even))).toBe('Your forecasts match what happens.')
+  // Below five it says how far along the sample is, not which way it leans.
+  expect(headline(report(misses(4)))).toBe('Calibrating: 4 of 5 calls scored.')
 })
 
 test('an ask is flattened to one line and cut to the room there is', async () => {
@@ -351,11 +367,13 @@ test('an ask is flattened to one line and cut to the room there is', async () =>
 
 test('the question line quotes as much of the ask as its own words leave room for', async () => {
   expect(askRoomFor(200)).toBe(64)
-  expect(askRoomFor(80)).toBe(54)
+  expect(askRoomFor(80)).toBe(48)
   // Beside a docked pane the band is narrow, and still quotes something useful.
-  expect(askRoomFor(50)).toBe(24)
+  expect(askRoomFor(50)).toBe(18)
   // Under a dozen characters a quote says nothing, so it is dropped.
-  expect(askRoomFor(37)).toBe(0)
+  expect(askRoomFor(43)).toBe(0)
+  // The verdict line has more words of its own, so its quote gets less room.
+  expect(askRoomFor(80, VERDICT_CHROME)).toBe(42)
 })
 
 test('the report names the worst calls once there are any', async () => {
@@ -363,12 +381,27 @@ test('the report names the worst calls once there are any', async () => {
     report([
       turn({ saidConfidence: 0.95, landed: false, ask: 'refactor the auth layer' }),
       turn({ saidConfidence: 0.95, landed: false, ask: 'rename a thing' }),
+      turn({ saidConfidence: 0.95, landed: false, ask: 'rename a thing' }),
+      turn({ saidConfidence: 0.95, landed: false, ask: 'add a cache' }),
+      turn({ saidConfidence: 0.95, landed: false, ask: 'add a cache' }),
     ]),
   )
 
   expect(text).toStartWith('You run 95 points overconfident.')
   expect(text).toContain('Worst calls')
   expect(text).toContain('refactor the auth layer')
+  // The same ask missed twice is one line marked twice, not the line again.
+  expect(text).toContain('and it did not (×2) — rename a thing')
+  expect(text.split('rename a thing').length - 1).toBe(1)
+})
+
+test('file buckets read as words where a digit would mislead', async () => {
+  // Pressed by digit: "1: 0  2: 1" put "one file" on the 2 key.
+  expect(FILE_LABELS['0']).toBe('none')
+  expect(FILE_LABELS['1']).toBe('one')
+  expect(filesPhrase('2-3')).toBe('2–3 files')
+  expect(filesPhrase('1')).toBe('1 file')
+  expect(filesPhrase('0')).toBe('no files')
 })
 
 test('a calibration row pads to the width of its heading', async () => {
