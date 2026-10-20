@@ -14,9 +14,14 @@ import {
   changedSince,
   COIN_FLIP_BRIER,
   FILE_BUCKETS,
+  FILE_LABELS,
+  filesPhrase,
+  groupMisses,
   headline,
+  isCalibrating,
   keepRecord,
   lapseVerdicts,
+  MIN_SCORED,
   owedVerdict,
   parseStatus,
   report,
@@ -24,6 +29,7 @@ import {
   shortAsk,
   skipVerdict,
   undoVerdict,
+  VERDICT_CHROME,
 } from './bet'
 
 const PANE = 'bet-on-your-agent'
@@ -314,6 +320,12 @@ export const register: Register = (on, options) => {
     await read($, revision)
     const { Box, Text, Button } = $.ui.resolve(e)
     const room = askRoomFor(e.props.bodyColumns)
+    // Names the row, so a question that appears above the prompt says whose it is.
+    const tag = (
+      <Text backgroundColor="claude" color="inverseText" weight="bold">
+        {' bet '}
+      </Text>
+    )
 
     if (e.props.isWorking && bet.turnId !== '' && bet.isDeclined !== true) {
       const said = bet.saidConfidence
@@ -326,7 +338,7 @@ export const register: Register = (on, options) => {
         return (
           <Box flexDirection="column">
             <Text wrap="truncate-end">
-              Will{' '}
+              {tag} Will{' '}
               {quoted !== '' && <Text dimColor>"{quoted}" </Text>}
               land first try?
             </Text>
@@ -353,7 +365,7 @@ export const register: Register = (on, options) => {
         return (
           <Box flexDirection="column">
             <Text wrap="truncate-end">
-              <Text dimColor>you said {asPercent(said)} · </Text>how many files will it touch?
+              {tag} <Text dimColor>you said {asPercent(said)} · </Text>how many files will it touch?
             </Text>
             <Box gap={2}>
               {FILE_BUCKETS.map((bucket, at) => (
@@ -363,7 +375,7 @@ export const register: Register = (on, options) => {
                   plain
                   onPress={() => placeFiles($, bucket)}
                 >
-                  {bucket}
+                  {FILE_LABELS[bucket]}
                 </Button>
               ))}
               <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
@@ -377,15 +389,21 @@ export const register: Register = (on, options) => {
       const isOver =
         FILE_BUCKETS.indexOf(bucketOf(bet.files.length)) > FILE_BUCKETS.indexOf(bet.saidFiles)
 
+      // A bet in play is background: quiet, with only the tag in color and the
+      // count turning warning-colored once it runs past what was called.
       return (
-        <Box>
+        <Text wrap="truncate-end">
+          <Text color="claude" weight="bold">
+            bet
+          </Text>
           <Text dimColor>
-            bet {asPercent(said)} · {bet.saidFiles} files ·{' '}
+            {' '}
+            {asPercent(said)} · {filesPhrase(bet.saidFiles)} ·{' '}
           </Text>
           <Text dimColor={!isOver} color={isOver ? 'warning' : undefined}>
             {bet.files.length} written so far
           </Text>
-        </Box>
+        </Text>
       )
     }
 
@@ -399,7 +417,15 @@ export const register: Register = (on, options) => {
 
       return (
         <Box gap={1}>
-          <Text dimColor>Recorded: {label}</Text>
+          <Text>
+            <Text dimColor>Recorded: </Text>
+            <Text
+              color={last.result === 'landed' ? 'success' : last.result === 'fixed' ? 'warning' : undefined}
+              dimColor={last.result === 'skipped'}
+            >
+              {label}
+            </Text>
+          </Text>
           <Button key="undo" hotkey="u" plain dimColor onPress={() => undoLastVerdict($)}>
             Undo
           </Button>
@@ -407,20 +433,25 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, room)
+    // The question leads and the quote trails, so a narrow band cuts the
+    // quote and never the question: "Did it…" was the first thing to go.
+    const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, askRoomFor(e.props.bodyColumns, VERDICT_CHROME))
 
     return (
       <Box flexDirection="column">
         <Text wrap="truncate-end">
-          <Text dimColor>{quoted === '' ? 'That turn' : `"${quoted}"`}</Text> — you said{' '}
-          {asPercent(owed.saidConfidence ?? 0)}. Did it land?
+          {tag} <Text weight="bold">Did it land?</Text>{' '}
+          <Text dimColor>
+            you said {asPercent(owed.saidConfidence ?? 0)}
+            {quoted === '' ? '' : ` · "${quoted}"`}
+          </Text>
         </Text>
         <Box gap={2}>
           <Button key="landed" hotkey="1" plain onPress={() => giveVerdict($, owed.turnId, true)}>
-            Landed
+            <Text color="success">Landed</Text>
           </Button>
           <Button key="fixed" hotkey="2" plain onPress={() => giveVerdict($, owed.turnId, false)}>
-            Needed fixing
+            <Text color="warning">Needed fixing</Text>
           </Button>
           <Button key="skip" hotkey="0" plain dimColor onPress={() => waveVerdict($, owed.turnId)}>
             Skip
@@ -435,36 +466,64 @@ export const register: Register = (on, options) => {
     const { Box, Text } = $.ui.resolve(e)
     await read($, revision)
     const found = report(await loadTurns($))
+    const width = Math.max(20, e.props.bodyColumns)
+    const tag = (
+      <Text backgroundColor="claude" color="inverseText" weight="bold">
+        {' bet-on-your-agent '}
+      </Text>
+    )
 
     if (found.brier === undefined) {
       return (
         <Box flexDirection="column" gap={1}>
-          <Text dimColor>
-            {found.recorded === 0
-              ? 'No turns yet. Call the next one from the row above the prompt.'
-              : `${found.recorded} turns recorded, none scored yet.`}
-          </Text>
-          <Text dimColor>Bet while a turn runs, then say whether it landed.</Text>
+          {tag}
+          <Box flexDirection="column">
+            <Text weight="bold">
+              {found.recorded === 0 ? 'No turns yet.' : `${found.recorded} turns recorded, none scored yet.`}
+            </Text>
+            <Text dimColor>
+              While Claude works, the row above the prompt asks how the turn will go: a digit from 1 to 5
+              answers. When it lands, say whether it landed. Five calls in, this shows how well you call it.
+            </Text>
+          </Box>
         </Box>
       )
     }
 
-    const rows = Math.max(2, (e.viewport?.rows ?? 24) - 14)
+    const calibrating = isCalibrating(found)
+    const leanColor = (lean: 'over' | 'under' | 'fair' | undefined) =>
+      lean === 'over' ? 'warning' : lean === 'under' ? 'subtle' : 'success'
+    const rows = Math.max(2, (e.viewport?.rows ?? 24) - 16)
 
     return (
       <Box flexDirection="column" gap={1}>
-        <Box flexDirection="column">
-          <Text
-            weight="bold"
-            color={found.lean === 'over' ? 'warning' : found.lean === 'under' ? 'subtle' : 'success'}
-          >
-            {headline(found)}
-          </Text>
-          <Text dimColor>
-            Brier {found.brier.toFixed(3)} over {found.scored} turns ·{' '}
-            {found.brier < COIN_FLIP_BRIER ? 'better than a coin flip' : 'no better than a coin flip'}
-          </Text>
-        </Box>
+        {tag}
+
+        {calibrating ? (
+          <Box flexDirection="column">
+            <Text weight="bold">
+              Calibrating{' '}
+              <Text color="claude">
+                {'●'.repeat(found.scored)}
+                <Text dimColor>{'○'.repeat(MIN_SCORED - found.scored)}</Text>
+              </Text>{' '}
+              <Text dimColor>
+                {found.scored} of {MIN_SCORED} calls
+              </Text>
+            </Text>
+            <Text dimColor>The score means something from {MIN_SCORED}. Until then, here is what there is.</Text>
+          </Box>
+        ) : (
+          <Box flexDirection="column">
+            <Text weight="bold" color={leanColor(found.lean)}>
+              {headline(found)}
+            </Text>
+            <Text dimColor>
+              Brier {found.brier.toFixed(3)} over {found.scored} turns ·{' '}
+              {found.brier < COIN_FLIP_BRIER ? 'better than a coin flip' : 'no better than a coin flip'}
+            </Text>
+          </Box>
+        )}
 
         <Box flexDirection="column">
           <Text dimColor tabular>
@@ -474,7 +533,8 @@ export const register: Register = (on, options) => {
             <Text
               key={`row${Math.round(row.said * 100)}`}
               tabular
-              color={row.lean === 'over' ? 'warning' : row.lean === 'under' ? 'subtle' : 'success'}
+              color={calibrating ? undefined : leanColor(row.lean)}
+              dimColor={calibrating}
             >
               {calibrationLine(row)}
             </Text>
@@ -484,14 +544,15 @@ export const register: Register = (on, options) => {
         {found.misses.length > 0 && (
           <Box flexDirection="column">
             <Text dimColor>Worst calls</Text>
-            {found.misses.map(miss => (
-              <Text key={`miss${miss.ask ?? ''}${miss.said}`}>
-                {asPercent(miss.said)}{' '}
-                <Text color={miss.landed ? 'success' : 'warning'}>
-                  {miss.landed ? 'and it landed' : 'and it did not'}
-                </Text>{' '}
-                —{' '}
-                <Text dimColor>{miss.ask ?? 'a turn with no prompt'}</Text>
+            {groupMisses(found.misses).map(({ miss, count }) => (
+              <Text key={`miss${miss.ask ?? ''}${miss.said}${miss.landed}`} wrap="truncate-end">
+                <Text tabular>{asPercent(miss.said).padStart(4)}</Text>{' '}
+                <Text color={miss.landed ? 'success' : 'warning'}>{miss.landed ? 'landed' : 'missed'}</Text>
+                {count > 1 && <Text dimColor> ×{count}</Text>}
+                <Text dimColor>
+                  {'  '}
+                  {shortAsk(miss.ask ?? 'a turn with no prompt', width)}
+                </Text>
               </Text>
             ))}
           </Box>

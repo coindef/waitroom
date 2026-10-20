@@ -3,6 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Hunk } from '../types'
 import {
   DEFAULT_IGNORE,
+  filledCells,
   globToRegExp,
   isIgnored,
   mergeHunks,
@@ -537,4 +538,16 @@ test('the status hint says how to reach the pane, and nothing once it is in view
   // Placed, but another pane's tab is in front of it.
   expect(paneHint({ isPlaced: true, isShown: false })).toBe(' · open with /wait-review')
   expect(paneHint({ isPlaced: true, isShown: true })).toBe('')
+})
+
+test('the progress bar is full only when all is read, and empty only before any is', async () => {
+  expect(filledCells(0, 5, 12)).toBe(0)
+  expect(filledCells(5, 5, 12)).toBe(12)
+  // One of many read still shows; all but one is never drawn as done.
+  expect(filledCells(1, 40, 12)).toBe(1)
+  expect(filledCells(39, 40, 12)).toBe(11)
+  expect(filledCells(1, 2, 12)).toBe(6)
+  // Nothing to read, or no room for a bar, draws none.
+  expect(filledCells(0, 0, 12)).toBe(0)
+  expect(filledCells(3, 5, 0)).toBe(0)
 })

@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.3.0 — a design pass, from the user's seat
+
+Both mods, after reviewing every state each one draws in a live session.
+
+### wait-review
+
+- **One header instead of three counters.** "2 to read", "file 1 of 2" and
+  "2 left" said nearly the same thing three ways. The header now carries the
+  pane's name, a bar that fills as you read, and the counts.
+- **`path:line` with colored `+`/`−` counts** on one row, in place of
+  `line 1 · +17 −4` under the path.
+- **You can see where the keys are.** The controls are dim until the pane holds
+  the keyboard; then `Looks right` is green, `Flag` amber, and the hint reads
+  `● esc hands the keys back to the prompt`.
+- **The flag is a callout**, an amber bar under the controls: how many are
+  flagged, that they go to Claude with your next message, and `n: Say why`.
+- **The note box reads as a field.** `Why flag src/client.ts:1?` over an amber
+  frame with an example in it, and a hint for Enter, in place of
+  `Why is this wrong?:Enter on an empty box if the diff says…`.
+- **`✓ All caught up`** when the diff is read, with what was read and whether
+  anything goes to Claude, in place of a dim "Diff read".
+- **One empty state**, with the keys drawn as keys, in place of "nothing to
+  read" twice.
+
+### bet-on-your-agent
+
+- **The row says whose it is**: an orange `bet` tag on every question.
+- **The file answers can no longer be misread.** `1: 0  2: 1  3: 2-3` put "one
+  file" on the 2 key; they are now `1: none  2: one  3: 2–3  4: 4+`.
+- **"Did it land?" leads its line**, so a narrow row cuts the quoted ask, not
+  the question (it used to end `Did it…`). `Landed` is green, `Needed fixing`
+  amber, and so is the result once recorded.
+- **No verdict before there is a sample.** Under five scored calls the
+  headline, the status line and `/bet` say `Calibrating ●●○○○ 2 of 5 calls`
+  instead of "You run 80 points overconfident" off two turns.
+- **`/bet` reads cleaner**: its own tag, worst calls on one line each with
+  repeats folded into `×2`, the table dim while calibrating.
+
 ## wait-review 0.2.3
 
 - **The note box shows the hunk it asks about.** `f` moves the card on to the

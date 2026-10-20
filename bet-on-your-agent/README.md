@@ -41,19 +41,33 @@ while you wait. **Type a bare digit into an empty composer and it answers** —
 no pane to place, no focus to manage, nothing to click.
 
 ```
-Will "add the retry logic to the client" land first try?
+ bet  Will "add the retry logic to the client" land first try?
 1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip
 ```
 
-`0` waves the turn away and the band goes quiet for the rest of it: a prompt you
+The orange `bet` tag names the row, so a question that appears above the
+prompt says whose it is. `0` waves the turn away and the band goes quiet for the rest of it: a prompt you
 cannot dismiss is a nag.
 
 Answer that and it asks the next thing, never both at once, so the digits
 always mean the obvious thing:
 
 ```
-you said 80% · how many files will it touch?
-1: 0  2: 1  3: 2-3  4: 4+  0: Skip
+ bet  you said 80% · how many files will it touch?
+1: none  2: one  3: 2–3  4: 4+  0: Skip
+```
+
+The small counts are words on purpose: pressed by digit, `1: 0  2: 1` put "one
+file" on the 2 key.
+
+While the turn runs the row goes quiet — `bet 80% · 2–3 files · 1 written so
+far` — and the count turns amber once it passes what you called. When the turn
+lands, the question leads and the ask trails, so a narrow row cuts the ask and
+never the question:
+
+```
+ bet  Did it land?  you said 80% · "add the retry logic to the client"
+1: Landed  2: Needed fixing  0: Skip
 ```
 
 - **Will it land first try?** Resolved by your own verdict, which it asks for
@@ -89,6 +103,11 @@ File count called right 14/23.
 The agent landed it first try 65% (15/23).
 Median turn 42s.
 ```
+
+Until five calls are scored it says `Calibrating ●●○○○ 2 of 5 calls` instead,
+and so does the status line: two misses read as "80 points overconfident",
+which is a verdict on almost nothing. Repeats of the same ask fold into one
+worst-call line marked `×2`.
 
 The headline is in words because "Brier 0.147" means nothing on its own. The
 table is the part that teaches, and **Worst calls** is the part that teaches
@@ -139,7 +158,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 44 tests
+claude plugin test .         # 46 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested

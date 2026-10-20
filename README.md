@@ -159,7 +159,7 @@ and see nothing, its reply says when this is why.
 **bet-on-your-agent** puts a question above the prompt while a turn runs:
 
 ```
-Will "add the retry logic to the client" land first try?
+ bet  Will "add the retry logic to the client" land first try?
 1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip
 ```
 
@@ -268,10 +268,10 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 67 tests
+claude plugin test     ./wait-review          # 68 tests
 
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 44 tests
+claude plugin test     ./bet-on-your-agent    # 46 tests
 ```
 
 Neither of those runs a real type checker, so also run `tsc` from each mod's

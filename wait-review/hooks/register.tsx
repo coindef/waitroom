@@ -5,6 +5,7 @@ import type { Decision, Hunk, HunkStatus, Page } from '../types'
 import type { Slice } from './diff'
 import {
   DEFAULT_IGNORE,
+  filledCells,
   linesThatFit,
   mergeHunks,
   nextHunk,
@@ -33,16 +34,17 @@ const noting = atom({ plugin: 'wait-review', key: 'noting' } as const, null as s
 const page = atom({ plugin: 'wait-review', key: 'page' } as const, null as Page | null)
 
 /**
- * Rows the review card always spends around the diff: the counts, the path,
- * the location, the rule, the paging row, the controls, the keys hint and the
- * gaps between them. What only sometimes shows is added where it is drawn.
+ * Rows the review card always spends around the diff: the header, the path
+ * with its counts, the rule, the paging row, the controls, the keys hint and
+ * the gaps between them. What only sometimes shows is added where it is drawn.
  */
-const CHROME_ROWS = 10
+const CHROME_ROWS = 9
 /**
- * Rows the note box takes around the hunk it shows: summary, path, input,
- * the gaps between them, and a "lines a–b of n" row when the hunk is cut.
+ * Rows the note box takes around the hunk it shows: the header, the question,
+ * the bordered field (three rows), its hint, the gaps between them, and a
+ * "lines a–b of n" row when the hunk is cut.
  */
-const NOTE_CHROME_ROWS = 7
+const NOTE_CHROME_ROWS = 10
 /** Untracked files diffed one by one per scan, so a stray folder cannot stall it. */
 const UNTRACKED_LIMIT = 40
 /** Hunk ids remembered as pre-session, enough for any working tree worth reading. */
@@ -368,9 +370,28 @@ export const register: Register = (on, options) => {
     const width = Math.max(20, e.props.bodyColumns)
 
     const summary = summaryOf(list)
+    const decided = list.length - (counts.pending + counts.later)
+    // A bar for the reading so far: a count says how many, the bar says how far.
+    const barCells = width >= 56 && list.length > 0 ? 12 : 0
+    const filled = filledCells(decided, list.length, barCells)
     const head = (
-      <Box justifyContent="space-between">
-        <Text dimColor>{summary === '' ? 'nothing to read' : summary}</Text>
+      <Box justifyContent="space-between" gap={1}>
+        <Box gap={1}>
+          <Text backgroundColor="suggestion" color="inverseText" weight="bold">
+            {' wait-review '}
+          </Text>
+          {barCells > 0 && (
+            <Text>
+              <Text color="success">{'━'.repeat(filled)}</Text>
+              <Text dimColor>{'━'.repeat(barCells - filled)}</Text>
+            </Text>
+          )}
+          {summary !== '' && (
+            <Text dimColor tabular wrap="truncate-end">
+              {summary}
+            </Text>
+          )}
+        </Box>
         {isBusy && <Text color="claude">Claude is working</Text>}
       </Box>
     )
@@ -387,8 +408,21 @@ export const register: Register = (on, options) => {
     const hasNote = flagged !== null && list.find(one => one.id === flagged)?.note !== undefined
     const noteOffer = flagged !== null && hasInput && (
       <Button key="note-open" hotkey="n" plain onPress={() => setNoting($, flagged)}>
-        {hasNote ? 'Edit note' : 'Say why'}
+        {hasNote ? 'Edit the reason' : 'Say why'}
       </Button>
+    )
+    // What is flagged and where it goes, set apart by a bar in the flag's
+    // color, so the one thing that leaves this pane is never just another line.
+    const flagCallout = counts.flagged > 0 && (
+      <Box borderStyle="quote" borderColor="warning" paddingLeft={1} flexDirection="column">
+        <Text>
+          <Text color="warning" weight="bold">
+            {counts.flagged} flagged
+          </Text>
+          <Text dimColor> · goes to Claude with your next message</Text>
+        </Text>
+        {noteOffer && <Box>{noteOffer}</Box>}
+      </Box>
     )
 
     // The note box is a mode and does not depend on a card being up, so it is
@@ -413,17 +447,24 @@ export const register: Register = (on, options) => {
         <Box flexDirection="column" gap={1}>
           {head}
           <Box flexDirection="column">
-            <Text wrap="truncate-start" weight="bold">
-              {target?.path ?? 'that hunk'}
+            <Text wrap="truncate-start">
+              <Text weight="bold">Why flag </Text>
+              <Text weight="bold">{target?.path ?? 'that hunk'}</Text>
+              {target !== undefined && <Text dimColor>:{target.start}</Text>}
+              <Text weight="bold">?</Text>
             </Text>
-            <Input
-              key="note-text"
-              label="Why is this wrong?"
-              placeholder="Enter on an empty box if the diff says it"
-              submitLabel="Attach"
-              autoFocus
-              onSubmit={value => saveNote($, noteFor, value)}
-            />
+            <Box borderStyle="round" borderColor="warning" paddingX={1}>
+              <Input
+                key="note-text"
+                placeholder="e.g. this drops the retry on every 5xx"
+                submitLabel="Attach"
+                autoFocus
+                onSubmit={value => saveNote($, noteFor, value)}
+              />
+            </Box>
+            <Text dimColor wrap="truncate-end">
+              Enter attaches it · an empty Enter sends the hunk without a reason
+            </Text>
           </Box>
           {context && (
             <Box flexDirection="column">
@@ -441,45 +482,72 @@ export const register: Register = (on, options) => {
 
     if (!current) {
       const isFresh = counts.reviewed === 0 && counts.dropped === 0 && counts.flagged === 0
+      const key = (letter: string, does: string) => (
+        <Text>
+          <Text color="suggestion" weight="bold">
+            {letter}
+          </Text>{' '}
+          <Text dimColor>{does}</Text>
+        </Text>
+      )
 
       return (
         <Box flexDirection="column" gap={1}>
           {head}
           {isFresh ? (
-            <Box flexDirection="column">
-              <Text>Nothing to read yet.</Text>
-              <Text dimColor>
-                As Claude changes files, each change lands here to read while it works.
-              </Text>
-              <Text dimColor>o looks right · f flag it for Claude · l later · x skip the file</Text>
+            <Box flexDirection="column" gap={1}>
+              <Box flexDirection="column">
+                <Text weight="bold">Nothing to read yet.</Text>
+                <Text dimColor>
+                  {isBusy
+                    ? 'Claude is working. Its first change lands here the moment it is written.'
+                    : 'Each change Claude makes lands here, a hunk at a time, to read while it works.'}
+                </Text>
+              </Box>
+              <Box columnGap={2} flexWrap="wrap">
+                {key('o', 'looks right')}
+                {key('f', 'flag it for Claude')}
+                {key('l', 'later')}
+                {key('x', 'skip the file')}
+              </Box>
             </Box>
           ) : (
-            <Text dimColor>Diff read. Nothing waiting on you.</Text>
+            <Box flexDirection="column">
+              <Text color="success" weight="bold">
+                ✓ All caught up
+              </Text>
+              <Text dimColor>
+                {decided} {decided === 1 ? 'hunk' : 'hunks'} read
+                {counts.flagged > 0 ? '' : ', nothing to send Claude'}. New changes land here as Claude
+                makes them.
+              </Text>
+            </Box>
           )}
-          {noteOffer && <Box>{noteOffer}</Box>}
+          {flagCallout}
           {undoButton && <Box>{undoButton}</Box>}
         </Box>
       )
     }
 
     const where = progressOf(list, current)
-    // The pane's own body, not the terminal: the prompt and status rows sit
-    // below it, and sizing pages to the whole screen pushed the controls off
-    // the bottom of a long hunk's first page.
     // Hotkeys only land while the pane holds the keyboard; say how to give it
     // the keys, since pressing `o` without that types an o into the prompt.
     // /wait-review comes first because it always works: while a band above the
     // prompt has buttons up - bet-on-your-agent asking "Did it land?" - ctrl+x
     // tab gives the keys to that band instead of this pane.
-    const keysHint = e.props.isFocused
+    const isFocused = e.props.isFocused
+    const keysHint = isFocused
       ? 'esc hands the keys back to the prompt'
       : '/wait-review or ctrl+x tab to use these keys · or click them'
+    // The pane's own body, not the terminal: the prompt and status rows sit
+    // below it, and sizing pages to the whole screen pushed the controls off
+    // the bottom of a long hunk's first page.
     const height = e.props.scroll?.bodyRows ?? e.viewport?.rows ?? 24
     const chrome =
       CHROME_ROWS +
       (current.note !== undefined ? 1 : 0) +
+      (counts.flagged > 0 ? 2 : 0) +
       (noteOffer ? 1 : 0) +
-      (counts.flagged > 0 ? 1 : 0) +
       // The controls wrap onto a second row in a narrow pane, and so can the hint.
       (width < 60 ? 1 : 0) +
       (keysHint.length > width ? 1 : 0)
@@ -499,29 +567,25 @@ export const register: Register = (on, options) => {
 
         <Box flexDirection="column">
           <Box justifyContent="space-between" gap={2}>
-            <Text wrap="truncate-start" weight="bold">
-              {current.path}
+            <Text wrap="truncate-start">
+              <Text weight="bold">{current.path}</Text>
+              <Text dimColor>:{current.start}</Text>
+              {current.status === 'later' && <Text color="warning"> · put off</Text>}
             </Text>
-            {where.ofFiles > 1 && (
-              <Text dimColor tabular>
-                file {where.atFile} of {where.ofFiles}
-              </Text>
-            )}
-          </Box>
-          <Box justifyContent="space-between" gap={2}>
-            <Text dimColor tabular>
-              line {current.start} · <Text color="diffAdded">+{current.added}</Text>{' '}
+            <Text tabular>
+              <Text color="diffAdded">+{current.added}</Text>{' '}
               <Text color="diffRemoved">−{current.removed}</Text>
-              {current.status === 'later' ? ' · put off' : ''}
-            </Text>
-            <Text dimColor tabular>
-              {where.hereLeft > 1 ? `${where.hereLeft} left here · ` : ''}
-              {where.totalLeft} left
+              {where.ofFiles > 1 && (
+                <Text dimColor>
+                  {' '}
+                  · file {where.atFile} of {where.ofFiles}
+                </Text>
+              )}
             </Text>
           </Box>
           {current.note !== undefined && (
             <Text color="warning" wrap="truncate-end">
-              note: {current.note}
+              your reason: {current.note}
             </Text>
           )}
         </Box>
@@ -557,12 +621,14 @@ export const register: Register = (on, options) => {
         </Box>
 
         <Box flexDirection="column">
-          <Box gap={2} flexWrap="wrap">
-            <Button key="ok" hotkey="o" plain onPress={() => mark($, current.id, 'ok')}>
-              Looks right
+          {/* Dim until the pane holds the keyboard, so a glance says whether a
+              letter will land here or in the prompt. */}
+          <Box columnGap={2} flexWrap="wrap">
+            <Button key="ok" hotkey="o" plain dimColor={!isFocused} onPress={() => mark($, current.id, 'ok')}>
+              <Text color={isFocused ? 'success' : undefined}>Looks right</Text>
             </Button>
-            <Button key="flag" hotkey="f" plain onPress={() => mark($, current.id, 'flagged')}>
-              Flag
+            <Button key="flag" hotkey="f" plain dimColor={!isFocused} onPress={() => mark($, current.id, 'flagged')}>
+              <Text color={isFocused ? 'warning' : undefined}>Flag</Text>
             </Button>
             <Button key="later" hotkey="l" plain dimColor onPress={() => mark($, current.id, 'later')}>
               Later
@@ -572,14 +638,13 @@ export const register: Register = (on, options) => {
             </Button>
             {undoButton}
           </Box>
-          {noteOffer && <Box>{noteOffer}</Box>}
-          {counts.flagged > 0 && (
-            <Text color="warning">
-              {counts.flagged} flagged → sent to Claude with your next message
-            </Text>
-          )}
-          <Text dimColor>{keysHint}</Text>
+          <Text dimColor={!isFocused} color={isFocused ? 'suggestion' : undefined} wrap="truncate-end">
+            {isFocused ? '● ' : ''}
+            {keysHint}
+          </Text>
         </Box>
+
+        {flagCallout}
       </Box>
     )
   })
