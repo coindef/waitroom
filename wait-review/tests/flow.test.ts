@@ -394,6 +394,162 @@ test('the full review card is drawable on every surface', async ($, on) => {
   }
 })
 
+test('untracked files nobody reviews do not crowd a real one out of the scan budget', async ($, on) => {
+  // The untracked scan is capped (one git process per file), so an ignored
+  // folder with more untracked files in it than the cap must not spend the
+  // whole budget before the scan ever reaches a file worth reviewing.
+  const REAL = 'src/new-feature.ts'
+  const NEW_FILE_DIFF = [
+    'diff --git /dev/null src/new-feature.ts',
+    '--- /dev/null',
+    '+++ src/new-feature.ts',
+    '@@ -0,0 +1,1 @@',
+    '+export const x = 1',
+    '',
+  ].join('\n')
+  // Alphabetically first, the way git actually lists untracked paths, and
+  // past the cap, so the old, unfiltered slice would never reach REAL.
+  const junk = Array.from({ length: 45 }, (_, at) => `build/junk${String(at).padStart(2, '0')}.js`)
+  // Written only once the turn runs, so the session-start snapshot (taken
+  // before either file exists) does not file REAL as the person's own work.
+  let written = false
+
+  mock.clock(on)
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  on('command.register', ($$, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($$, e) => ({ text: e.answer }))
+  on('process.run', ($$, e) => {
+    const argv = e.argv.join(' ')
+    if (argv.includes('--show-toplevel')) return ran(`${ROOT}\n`)
+    if (argv.includes('rev-parse')) return ran(`${BASE}\n`)
+    if (argv.includes('ls-files')) return ran(written ? [...junk, REAL].join('\n') : '')
+    if (argv.includes(`--no-index -- /dev/null ${REAL}`)) return ran(NEW_FILE_DIFF)
+
+    return ran('')
+  })
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  written = true
+  await $.turn.start({ text: 'add a feature', turnId: 'turn-10' })
+  await $.turn.complete({
+    turnId: 'turn-10',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const ui = await mountPane($, 'terminal')
+  expect(await ui.find({ text: /src\/new-feature\.ts/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a scan truncated by the untracked cap says so, quietly, in the pane and the command', async ($, on) => {
+  // 45 reviewable untracked files, 5 past UNTRACKED_LIMIT (40): the scan
+  // cannot reach all of them, and silently showing only part of the queue
+  // would read as "fully read" when it was not.
+  const files = Array.from({ length: 45 }, (_, at) => `src/new${String(at).padStart(2, '0')}.ts`)
+
+  mock.clock(on)
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  on('command.register', ($$, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($$, e) => ({ text: e.answer }))
+  on('process.run', ($$, e) => {
+    const argv = e.argv.join(' ')
+    if (argv.includes('--show-toplevel')) return ran(`${ROOT}\n`)
+    if (argv.includes('rev-parse')) return ran(`${BASE}\n`)
+    if (argv.includes('ls-files')) return ran(files.join('\n'))
+
+    return ran('')
+  })
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'add many files', turnId: 'turn-11' })
+  await $.turn.complete({
+    turnId: 'turn-11',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const ui = await mountPane($, 'terminal')
+  expect(await ui.find({ text: /\+5 more files not shown/ })).toBeDefined()
+  await ui.unmount()
+
+  const result = await $.command.run({ command: 'wait-review' } as never)
+  expect(result.text).toContain('+5 more files not shown')
+})
+
+test('a repository with no commits still snapshots what was already there', async ($, on) => {
+  // The bug this guards: beginSession used to return early when there was no
+  // HEAD to anchor to, so the preexisting snapshot was never taken, and every
+  // file already uncommitted before the agent touched anything — the
+  // person's own work in progress — was offered as if it were the agent's.
+  const NOTES_DIFF = [
+    'diff --git /dev/null notes.md',
+    '--- /dev/null',
+    '+++ notes.md',
+    '@@ -0,0 +1,1 @@',
+    '+scratch',
+    '',
+  ].join('\n')
+  const FEATURE_DIFF = [
+    'diff --git /dev/null src/feature.ts',
+    '--- /dev/null',
+    '+++ src/feature.ts',
+    '@@ -0,0 +1,1 @@',
+    '+export const x = 1',
+    '',
+  ].join('\n')
+  let written = false
+
+  mock.clock(on)
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  on('command.register', ($$, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($$, e) => ({ text: e.answer }))
+  on('process.run', ($$, e) => {
+    const argv = e.argv.join(' ')
+    if (argv.includes('--show-toplevel')) return ran(`${ROOT}\n`)
+    // A repository with no commits yet: `rev-parse HEAD` fails.
+    if (argv.includes('rev-parse')) {
+      return {
+        value: {
+          exitCode: 128,
+          stdout: '',
+          stderr: "fatal: ambiguous argument 'HEAD'",
+          isStdoutTruncated: false,
+          isStderrTruncated: false,
+        },
+      }
+    }
+    if (argv.includes('ls-files')) return ran(written ? 'notes.md\nsrc/feature.ts' : 'notes.md')
+    if (argv.includes('--no-index -- /dev/null notes.md')) return ran(NOTES_DIFF)
+    if (argv.includes('--no-index -- /dev/null src/feature.ts')) return ran(FEATURE_DIFF)
+
+    return ran('')
+  })
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  written = true
+  await $.turn.start({ text: 'add a feature', turnId: 'turn-12' })
+  await $.turn.complete({
+    turnId: 'turn-12',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const ui = await mountPane($, 'terminal')
+  expect(await ui.find({ text: /src\/feature\.ts/ })).toBeDefined()
+  expect(await ui.find({ text: /notes\.md/ })).toBeUndefined()
+  await ui.unmount()
+})
+
 /** A new file as git diffs it: one hunk as long as the file. */
 const NEW_FILE_DIFF = [
   'diff --git src/big.ts src/big.ts',

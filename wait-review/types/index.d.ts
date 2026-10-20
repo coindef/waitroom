@@ -89,6 +89,21 @@ declare module 'claude-code' {
       noting: string | null
       /** Paging through the current hunk; a different hunk starts at the top. */
       page: Page | null
+      /**
+       * Whether `beginSession` has already run this session.
+       *
+       * `base` cannot serve as that flag: in a repository with no commits yet
+       * it stays null forever, which reads the same as "never began".
+       */
+      began: boolean
+      /**
+       * Untracked, reviewable files the last scan found past the scan cap.
+       *
+       * The pane says so rather than silently dropping them, so a repository
+       * with more new files than the cap does not look like it was fully read
+       * when it was not.
+       */
+      truncatedFiles: number
     }
   }
 }

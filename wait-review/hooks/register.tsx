@@ -6,6 +6,7 @@ import type { Slice } from './diff'
 import {
   DEFAULT_IGNORE,
   filledCells,
+  isIgnored,
   linesThatFit,
   mergeHunks,
   nextHunk,
@@ -26,6 +27,14 @@ const hunks = atom({ plugin: 'wait-review', key: 'hunks' } as const, [] as Hunk[
 const busy = atom({ plugin: 'wait-review', key: 'busy' } as const, false)
 const preexisting = atom({ plugin: 'wait-review', key: 'preexisting' } as const, [] as string[])
 const base = atom({ plugin: 'wait-review', key: 'base' } as const, null as string | null)
+/**
+ * Whether `beginSession` has already run, including in a repository with no
+ * commits yet. `base` cannot serve as that flag by itself: it stays `null`
+ * forever in that repository, which reads the same as "never began".
+ */
+const began = atom({ plugin: 'wait-review', key: 'began' } as const, false)
+/** Untracked, reviewable files the last scan found past `UNTRACKED_LIMIT`. */
+const truncatedFiles = atom({ plugin: 'wait-review', key: 'truncatedFiles' } as const, 0)
 const lastDecision = atom(
   { plugin: 'wait-review', key: 'lastDecision' } as const,
   null as Decision | null,
@@ -128,9 +137,11 @@ const repoRoot = async ($: EngineInterface): Promise<string | undefined> => {
  * agent may write a file through any tool, and a shell heredoc leaves no Edit
  * call to watch. git is the only witness that cannot be fooled.
  */
-const scanRepo = async ($: EngineInterface, config: Config): Promise<Hunk[]> => {
+type Scan = { hunks: Hunk[]; truncatedFiles: number }
+
+const scanRepo = async ($: EngineInterface, config: Config): Promise<Scan> => {
   const root = await repoRoot($)
-  if (root === undefined) return []
+  if (root === undefined) return { hunks: [], truncatedFiles: 0 }
 
   const anchor = await read($, base)
   const unified = `--unified=${config.contextLines}`
@@ -155,11 +166,15 @@ const scanRepo = async ($: EngineInterface, config: Config): Promise<Hunk[]> => 
   // A file the agent created is untracked: no blob on either side, so plain
   // `git diff` says nothing about it at all.
   const others = await runGit($, ['ls-files', '--others', '--exclude-standard'], root)
-  const untracked = (others?.stdout ?? '')
+  const reviewableUntracked = (others?.stdout ?? '')
     .split('\n')
     .map(line => line.trim())
     .filter(Boolean)
-    .slice(0, UNTRACKED_LIMIT)
+    // Ignored before the cap, not after: an untracked build folder nobody
+    // reviews would otherwise spend the whole budget and starve out the
+    // actual new source files the cap exists to make room for.
+    .filter(path => !isIgnored(path, config.ignore))
+  const untracked = reviewableUntracked.slice(0, UNTRACKED_LIMIT)
   for (const path of untracked) {
     // --no-index exits 1 when the two sides differ, which is the point here.
     const one = await runGit(
@@ -170,7 +185,7 @@ const scanRepo = async ($: EngineInterface, config: Config): Promise<Hunk[]> => 
     if (one && one.exitCode <= 1) found.push(...parseDiff(one.stdout))
   }
 
-  return found
+  return { hunks: found, truncatedFiles: reviewableUntracked.length - untracked.length }
 }
 
 /**
@@ -182,23 +197,28 @@ const scanRepo = async ($: EngineInterface, config: Config): Promise<Hunk[]> => 
  * pre-existing and empty the queue.
  */
 const beginSession = async ($: EngineInterface, config: Config) => {
-  if ((await read($, base)) !== null) return
+  if (await read($, began)) return
+  await update($, began, () => true)
+
   const found = await runGit($, ['rev-parse', 'HEAD'])
   const sha = found?.exitCode === 0 ? found.stdout.trim() : ''
-  if (sha === '') return
-  await update($, base, () => sha)
+  // A repository with no commits yet has no sha to anchor to; `base` stays
+  // null, which the diff falls back on, but the snapshot below must still be
+  // taken, or every pre-existing untracked file is offered as the agent's own.
+  if (sha !== '') await update($, base, () => sha)
 
   // What was uncommitted before the agent touched anything is the person's own
   // work in progress, not a review the agent owes them.
   const already = await scanRepo($, config)
-  await update($, preexisting, () => already.map(one => one.id).slice(0, SNAPSHOT_LIMIT))
+  await update($, preexisting, () => already.hunks.map(one => one.id).slice(0, SNAPSHOT_LIMIT))
 }
 
 /** Re-reads the repository and merges what it finds into the queue. */
 const scan = async ($: EngineInterface, config: Config) => {
   const before = await read($, preexisting)
-  const found = reviewable(await scanRepo($, config), config.ignore, before)
-  await update($, hunks, old => mergeHunks(old, found))
+  const found = await scanRepo($, config)
+  await update($, hunks, old => mergeHunks(old, reviewable(found.hunks, config.ignore, before)))
+  await update($, truncatedFiles, () => found.truncatedFiles)
 }
 
 const mark = async ($: EngineInterface, id: string, status: HunkStatus) => {
@@ -320,9 +340,11 @@ export const register: Register = (on, options) => {
       : focused === false
         ? "Review pane open. If you can't see it, Claude Code's diff panel is in front: /diff hides that."
         : 'Review pane open.'
+    const truncatedCount = await read($, truncatedFiles)
+    const truncatedNote = truncatedCount > 0 ? ` +${truncatedCount} more files not shown.` : ''
 
     return {
-      text: `${where} ${counts.pending} hunk${counts.pending === 1 ? '' : 's'} to read, ${counts.reviewed} reviewed, ${counts.flagged} flagged.`,
+      text: `${where} ${counts.pending} hunk${counts.pending === 1 ? '' : 's'} to read, ${counts.reviewed} reviewed, ${counts.flagged} flagged.${truncatedNote}`,
     }
   })
 
@@ -377,6 +399,7 @@ export const register: Register = (on, options) => {
     const isBusy = await read($, busy)
     const last = await read($, lastDecision)
     const noteFor = await read($, noting)
+    const truncatedCount = await read($, truncatedFiles)
     const counts = tally(list)
     const current = nextHunk(list)
     // Only a single-hunk decision can be "the hunk just flagged" - a dropped
@@ -394,24 +417,27 @@ export const register: Register = (on, options) => {
     const barCells = width >= 56 && list.length > 0 ? 12 : 0
     const filled = filledCells(decided, list.length, barCells)
     const head = (
-      <Box justifyContent="space-between" gap={1}>
-        <Box gap={1}>
-          <Text backgroundColor="suggestion" color="inverseText" weight="bold">
-            {' wait-review '}
-          </Text>
-          {barCells > 0 && (
-            <Text>
-              <Text color="success">{'━'.repeat(filled)}</Text>
-              <Text dimColor>{'━'.repeat(barCells - filled)}</Text>
+      <Box flexDirection="column">
+        <Box justifyContent="space-between" gap={1}>
+          <Box gap={1}>
+            <Text backgroundColor="suggestion" color="inverseText" weight="bold">
+              {' wait-review '}
             </Text>
-          )}
-          {summary !== '' && (
-            <Text dimColor tabular wrap="truncate-end">
-              {summary}
-            </Text>
-          )}
+            {barCells > 0 && (
+              <Text>
+                <Text color="success">{'━'.repeat(filled)}</Text>
+                <Text dimColor>{'━'.repeat(barCells - filled)}</Text>
+              </Text>
+            )}
+            {summary !== '' && (
+              <Text dimColor tabular wrap="truncate-end">
+                {summary}
+              </Text>
+            )}
+          </Box>
+          {isBusy && <Text color="claude">Claude is working</Text>}
         </Box>
-        {isBusy && <Text color="claude">Claude is working</Text>}
+        {truncatedCount > 0 && <Text dimColor>+{truncatedCount} more files not shown</Text>}
       </Box>
     )
 
@@ -567,6 +593,7 @@ export const register: Register = (on, options) => {
       (current.note !== undefined ? 1 : 0) +
       (counts.flagged > 0 ? 2 : 0) +
       (noteOffer ? 1 : 0) +
+      (truncatedCount > 0 ? 1 : 0) +
       // The controls wrap onto a second row in a narrow pane, and so can the hint.
       (width < 60 ? 1 : 0) +
       (keysHint.length > width ? 1 : 0)
