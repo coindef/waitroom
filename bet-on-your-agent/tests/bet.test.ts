@@ -275,6 +275,15 @@ test('the report stands up with nothing in it, and names the numbers once there 
   expect(text).toContain('The agent landed it first try 0% (0/5).')
 })
 
+test('the file count shows in the text report before any turn is scored', async () => {
+  // A person who always skips the landed/fixed verdict still generates
+  // file-count forecasts, and should still see that stat.
+  const text = asText(report([turn({ saidFiles: '2-3', filesBucket: '2-3' })]))
+
+  expect(text).toContain('none scored yet')
+  expect(text).toContain('File count called right 1/1')
+})
+
 test('under five scored calls the report counts up instead of judging', async () => {
   const text = asText(
     report([turn({ saidConfidence: 0.9, landed: false }), turn({ saidConfidence: 0.9, landed: false })]),
@@ -363,6 +372,23 @@ test('an ask is flattened to one line and cut to the room there is', async () =>
   expect(shortAsk('a'.repeat(80)).endsWith('…')).toBe(true)
   expect(shortAsk('short enough', 20)).toBe('short enough')
   expect(shortAsk('anything', 0)).toBe('')
+})
+
+test('a cut landing inside a surrogate pair drops the whole character, not half of it', async () => {
+  // With the default room (48), the cut falls at index 47: 46 plain
+  // characters put the emoji's high surrogate exactly there, so a naive
+  // slice would keep it alone, a broken half-character ahead of the ellipsis.
+  const splitAtEmoji = `${'a'.repeat(46)}😀${'b'.repeat(20)}`
+
+  expect(shortAsk(splitAtEmoji)).toBe(`${'a'.repeat(46)}…`)
+})
+
+test('a surrogate pair that lands clear of the cut survives it whole', async () => {
+  // One character earlier: the cut now falls just past the emoji's low
+  // surrogate, so the whole pair is kept rather than dropped.
+  const wellInside = `${'a'.repeat(45)}😀${'b'.repeat(20)}`
+
+  expect(shortAsk(wellInside)).toBe(`${'a'.repeat(45)}😀…`)
 })
 
 test('the question line quotes as much of the ask as its own words leave room for', async () => {

@@ -305,13 +305,21 @@ export const asDuration = (ms: number): string => {
 /** How wide a slice of the prompt anchors a bet. */
 export const ASK_ROOM = 48
 
+/** A UTF-16 code unit that is the first half of a surrogate pair (an emoji, among others). */
+const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xdbff
+
 /** The opening of a prompt, on one line, for the band and the record. */
 export const shortAsk = (text: string, room = ASK_ROOM): string => {
   const flat = text.replace(/\s+/g, ' ').trim()
   if (room < 1) return ''
   if (flat.length <= room) return flat
 
-  return `${flat.slice(0, room - 1).trimEnd()}…`
+  const cut = room - 1
+  // A cut landing between the two halves of a surrogate pair would otherwise
+  // leave a lone, broken code unit right before the ellipsis.
+  const safeCut = cut > 0 && isHighSurrogate(flat.charCodeAt(cut - 1)) ? cut - 1 : cut
+
+  return `${flat.slice(0, safeCut).trimEnd()}…`
 }
 
 /** The most of a live ask the band quotes, however wide the terminal. */
@@ -422,9 +430,10 @@ export const calibrationLine = (row: CalibrationRow): string => {
 export const asText = (found: Report): string => {
   if (found.recorded === 0) return 'No turns recorded yet. Call the next one while it runs.'
   if (found.brier === undefined) {
+    const files = found.files ? ` File count called right ${found.files.right}/${found.files.of}.` : ''
     const owed = found.owed > 0 ? ` ${found.owed} waiting on your verdict.` : ''
 
-    return `${found.recorded} turns recorded, none scored yet.${owed}`
+    return `${found.recorded} turns recorded, none scored yet.${files}${owed}`
   }
 
   const skill =

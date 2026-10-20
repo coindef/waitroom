@@ -485,6 +485,11 @@ export const register: Register = (on, options) => {
               While Claude works, the row above the prompt asks how the turn will go: a digit from 1 to 5
               answers. When it lands, say whether it landed. Five calls in, this shows how well you call it.
             </Text>
+            {found.files && (
+              <Text dimColor>
+                files called {found.files.right}/{found.files.of}
+              </Text>
+            )}
           </Box>
         </Box>
       )

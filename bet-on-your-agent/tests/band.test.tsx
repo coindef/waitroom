@@ -50,6 +50,13 @@ const engineBottom = (on: On) => {
 
     return <Box />
   })
+  // A denied call never reaches a tool, so a file it names was never
+  // written; '/denied.ts' stands in for one here.
+  on('tool.call', { tool: 'Edit' }, ($, e) =>
+    e.file_path === '/denied.ts' ? { deny: 'denied for test' } : ({ result: {} as never }),
+  )
+  on('tool.call', { tool: 'Write' }, () => ({ result: {} as never }))
+  on('tool.call', { tool: 'NotebookEdit' }, () => ({ result: {} as never }))
 }
 
 test('one question at a time, each answered by a bare digit', async ($, on) => {
@@ -134,6 +141,55 @@ test('a bet placed while the turn runs is the verdict owed once it lands', async
   expect(await pane.find({ text: /refactor the auth layer/ })).toBeDefined()
   // Its own stat, on its own line, not packed into one dim run-on sentence.
   expect(await pane.find({ text: /Lands first try 0% \(0\/1\)/ })).toBeDefined()
+  await pane.unmount()
+})
+
+test('files are counted from Edit, Write and NotebookEdit calls, the same path once', async ($, on) => {
+  engineBottom(on)
+  await $.turn.start({ text: 'add a feature', turnId: 'turn-6' })
+
+  // The same file edited twice counts once; a denied call counts not at all.
+  await $.tool.call({ tool: 'Edit', file_path: '/a.ts', old_string: 'x', new_string: 'y' })
+  await $.tool.call({ tool: 'Edit', file_path: '/a.ts', old_string: 'y', new_string: 'z' })
+  await $.tool.call({ tool: 'Edit', file_path: '/denied.ts', old_string: 'x', new_string: 'y' })
+  await $.tool.call({ tool: 'Write', file_path: '/b.ts', content: 'hi' })
+  await $.tool.call({ tool: 'NotebookEdit', notebook_path: '/c.ipynb', new_source: 'print(1)' })
+
+  const betting = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  expect(await betting.find({ text: /3 written so far/ })).toBeUndefined()
+  await betting.press({ key: 'p80' })
+  await betting.press({ key: 'f2-3' })
+  expect(await betting.find({ text: /bet 80% · 2–3 files · 3 written so far/ })).toBeDefined()
+  await betting.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-6',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  // The files stat surfaces even for someone who always skips the
+  // landed/fixed verdict: it comes from the Edit/Write/NotebookEdit calls,
+  // not from scoring.
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'skip' })
+  await idle.unmount()
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  // Called 2-3 and landed on exactly 3 distinct files: a right call.
+  expect(await pane.find({ text: /files called 1\/1/ })).toBeDefined()
   await pane.unmount()
 })
 
