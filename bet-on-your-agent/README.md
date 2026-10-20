@@ -33,7 +33,7 @@ lands.
 
 ## What it does
 
-![The forecast row above the prompt, asking whether the running turn will land first try, with answers 1 to 5 and 0 to skip](../docs/waitroom.svg)
+![Claude Code just after a turn lands: above the prompt the bet row asks "Did it land?" with 1: Landed, 2: Needed fixing, 0: Skip, beside the review pane showing the diff the turn wrote](../docs/waitroom.svg)
 
 
 It lives just above the prompt, which is where you are already looking

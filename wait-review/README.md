@@ -154,7 +154,7 @@ it still draws as a diff. Reading to the end is not required before deciding.
 
 ## What the pane looks like
 
-<img src="../docs/paging.svg" width="480" alt="The review pane paging through a new file, lines 1 to 21 of 44">
+<img src="../docs/paging.svg" width="480" alt="The review pane mid-page through src/retry.ts, lines 1 to 17 of 29, controls lit, one hunk flagged">
 
 A real capture. The header carries the pane's name, a bar that fills as you
 read, and the counts — counts that are zero are left out. Under it, the hunk's
