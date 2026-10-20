@@ -111,10 +111,10 @@ so your calibration starts fresh under the new name.
 ## The first minute
 
 **wait-review** needs no setup. Ask Claude for a change; when the turn ends, the
-pane starts offering the diff a hunk at a time — here paging through a new file
-longer than the pane:
+pane starts offering the diff a hunk at a time — here paging through a hunk
+longer than the pane, with one already flagged:
 
-<img src="docs/paging.svg" width="480" alt="The review pane showing a new file, lines 1 to 21 of 44, with controls for looks right, flag, later, skip file and undo">
+<img src="docs/paging.svg" width="480" alt="The review pane: its wait-review tag and a progress bar, src/retry.ts lines 1 to 17 of 29 as a colored diff, the controls lit because the pane holds the keys, and an amber note that one flagged hunk goes to Claude with the next message">
 
 **Give the pane the keys first: `/wait-review` or `ctrl+x tab`** (or click
 it). Its letters only work while it holds the keyboard — press `o` without that
