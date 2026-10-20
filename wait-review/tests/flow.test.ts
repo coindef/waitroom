@@ -53,7 +53,7 @@ type Repo = { vsBase: string; vsHead: string; revParses: number }
 
 /** Stands in for the engine, and for git. */
 const engineBottom = (on: On, repo: Repo) => {
-  mock.clock(on)
+  const clock = mock.clock(on)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
@@ -72,6 +72,8 @@ const engineBottom = (on: On, repo: Repo) => {
 
     return ran('')
   })
+
+  return clock
 }
 
 const PANE_PROPS = {
@@ -405,12 +407,14 @@ const NEW_FILE_DIFF = [
 
 const queueOne = async ($: Engine, on: On, diff: string, turnId: string) => {
   const repo: Repo = { vsBase: '', vsHead: '', revParses: 0 }
-  engineBottom(on, repo)
+  const clock = engineBottom(on, repo)
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   repo.vsBase = diff
   repo.vsHead = diff
   await $.turn.start({ text: 'write it', turnId })
   await $.turn.complete({ turnId, answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer' })
+
+  return clock
 }
 
 test('a new file longer than the pane is read page by page, to its end', async ($, on) => {
@@ -497,10 +501,31 @@ test('a pane covered by the diff panel says how to uncover it', async ($, on) =>
     value: [{ id: 'wait-review', title: 'Wait review', isPlaced: true, isShown: true, isFocused: false }],
   }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  await queueOne($, on, AUTH_DIFF, 'turn-c1')
+  const clock = await queueOne($, on, AUTH_DIFF, 'turn-c1')
 
-  const reply = await $.command.run({ command: 'wait-review', args: '' } as never)
-  expect(JSON.stringify(reply)).toContain('/diff hides that')
+  const replying = $.command.run({ command: 'wait-review', args: '' } as never)
+  await clock.advance(1000)
+  expect(JSON.stringify(await replying)).toContain('/diff hides that')
+})
+
+test('focus that arrives a moment late is not mistaken for a covered pane', async ($, on) => {
+  // Found live, recording the demo: the pane list says unfocused at once and
+  // focused 100-400ms later, so one look said the diff panel was in front of a
+  // pane that was plainly on screen.
+  let looks = 0
+  on('ui.panes', () => {
+    looks++
+
+    return { value: [{ id: 'wait-review', title: 'Wait review', isPlaced: true, isShown: true, isFocused: looks >= 3 }] }
+  })
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const clock = await queueOne($, on, AUTH_DIFF, 'turn-c2')
+
+  const replying = $.command.run({ command: 'wait-review', args: '' } as never)
+  await clock.advance(1000)
+  const reply = JSON.stringify(await replying)
+  expect(reply).toContain('Review pane open.')
+  expect(reply).not.toContain('/diff')
 })
 
 test('a long changed line reaches the drawing whole, wrapped rather than cut', async ($, on) => {

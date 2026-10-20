@@ -91,6 +91,25 @@ const showStatus = async ($: EngineInterface) => {
   }
 }
 
+/**
+ * Whether the focus a pane was opened with arrives.
+ *
+ * It lands a moment after `$.ui.open` resolves - the pane list says unfocused
+ * at once and focused some 100 to 400ms later, seen live on 2.1.304 - so a
+ * single look raised a false "the diff panel is in front". Undefined where the
+ * list does not name the pane at all.
+ */
+const focusArrives = async ($: EngineInterface): Promise<boolean | undefined> => {
+  for (let look = 0; look < 6; look++) {
+    const ours = (await $.ui.panes().catch(() => [])).find(pane => pane.id === PANE)
+    if (ours === undefined) return undefined
+    if (ours.isFocused) return true
+    await $.clock.sleep(100)
+  }
+
+  return false
+}
+
 const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string) =>
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
@@ -294,11 +313,11 @@ export const register: Register = (on, options) => {
       .catch(() => ({ isPlaced: false, reason: 'the engine would not place it' }) as const)
     // Claude Code's own diff panel (2.1.304 on) holds the side of the
     // transcript while it is up, and the pane list still calls this pane
-    // shown. What gives it away is the focus just asked for not arriving.
-    const ours = (await $.ui.panes().catch(() => [])).find(pane => pane.id === PANE)
+    // shown. What gives it away is the focus just asked for never arriving.
+    const focused = opened.isPlaced ? await focusArrives($) : undefined
     const where = !opened.isPlaced
       ? `Review pane waiting (${opened.reason}).`
-      : ours !== undefined && !ours.isFocused
+      : focused === false
         ? "Review pane open. If you can't see it, Claude Code's diff panel is in front: /diff hides that."
         : 'Review pane open.'
 
