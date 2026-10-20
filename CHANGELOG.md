@@ -1,5 +1,14 @@
 # Changelog
 
+## wait-review 0.3.1
+
+- **No false "diff panel is in front".** `/wait-review` decided the pane was
+  covered when the focus it asked for had not arrived yet — and focus lands
+  100–400ms after the pane opens (seen live on 2.1.304), so the warning showed
+  beside a pane that was plainly on screen. It now gives focus up to 600ms
+  before saying so. Checked live both ways: three tries with the pane in view
+  say only `Review pane open.`; with the diff panel up, the warning still shows.
+
 ## 0.3.0 — a design pass, from the user's seat
 
 Both mods, after reviewing every state each one draws in a live session.
