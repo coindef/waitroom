@@ -2,6 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Decision, Hunk, HunkStatus, Page } from '../types'
+import type { Slice } from './diff'
 import {
   DEFAULT_IGNORE,
   linesThatFit,
@@ -37,6 +38,11 @@ const page = atom({ plugin: 'wait-review', key: 'page' } as const, null as Page 
  * gaps between them. What only sometimes shows is added where it is drawn.
  */
 const CHROME_ROWS = 10
+/**
+ * Rows the note box takes around the hunk it shows: summary, path, input,
+ * the gaps between them, and a "lines a–b of n" row when the hunk is cut.
+ */
+const NOTE_CHROME_ROWS = 7
 /** Untracked files diffed one by one per scan, so a stray folder cannot stall it. */
 const UNTRACKED_LIMIT = 40
 /** Hunk ids remembered as pre-session, enough for any working tree worth reading. */
@@ -390,6 +396,18 @@ export const register: Register = (on, options) => {
     if (noteFor !== null && hasInput && 'Input' in table) {
       const { Input } = table
       const target = list.find(one => one.id === noteFor)
+      // Flagging moves the card on, so without this the box asks why about a
+      // hunk no longer on screen. It starts where the person was reading it.
+      let context: Slice | undefined
+      if (target !== undefined) {
+        const height = e.props.scroll?.bodyRows ?? e.viewport?.rows ?? 24
+        const reading = await read($, page)
+        const offset = reading !== null && reading.id === target.id ? reading.offset : 0
+        const gutter = String(target.start + target.added + target.removed + 1).length + 4
+        const room = Math.max(3, height - NOTE_CHROME_ROWS)
+        const fit = linesThatFit(target.text, offset, room, Math.max(10, width - gutter))
+        context = sliceHunk(target.text, offset, fit)
+      }
 
       return (
         <Box flexDirection="column" gap={1}>
@@ -407,6 +425,16 @@ export const register: Register = (on, options) => {
               onSubmit={value => saveNote($, noteFor, value)}
             />
           </Box>
+          {context && (
+            <Box flexDirection="column">
+              <Code source={context.text} format="diff" wrap="wrap" />
+              {context.total > context.last - context.first && (
+                <Text dimColor tabular>
+                  lines {context.first + 1}–{context.last} of {context.total}
+                </Text>
+              )}
+            </Box>
+          )}
         </Box>
       )
     }
