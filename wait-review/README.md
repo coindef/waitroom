@@ -117,6 +117,21 @@ unasked, auto-opened-at-start pane drops from 144 columns to 110 for the rest
 of this session and any after — the terminal does not need to be as wide once
 you've shown you want it.
 
+### Claude Code's own diff panel
+
+Claude Code 2.1.304 added a diff panel of its own, which opens beside the
+transcript the first time Claude edits and sits in front of this pane while it
+is up. Send `/diff` once to hide it: Claude Code remembers the choice across
+sessions, so the side is this pane's from then on, and `/diff` brings the
+built-in panel back whenever you want it. The two answer different questions —
+the panel shows what changed, this pane asks whether each change is right and
+sends what you flag back to Claude.
+
+The pane list Claude Code gives plugins still calls this pane shown while the
+diff panel covers it, so the status line cannot tell. `/wait-review` can: it
+asks for the keyboard, and when that does not arrive its reply says the diff
+panel is in front.
+
 ## Giving it the keys
 
 The pane's letters only work while it holds the keyboard. Press `o` without that
@@ -182,7 +197,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 65 tests
+claude plugin test .         # 67 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

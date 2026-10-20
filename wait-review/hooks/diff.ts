@@ -397,6 +397,16 @@ export const isIgnored = (path: string, patterns: readonly string[]): boolean =>
 const NOTE_BUDGET = 12000
 
 /**
+ * What the status line adds about the pane, so a count never points at a pane
+ * the person cannot see: nothing while it is in view, the way in otherwise.
+ *
+ * Unplaced, it waits for a wider terminal or for being asked; placed but not
+ * shown, another pane's tab is in front of it.
+ */
+export const paneHint = (pane: { isPlaced: boolean; isShown: boolean } | undefined): string =>
+  pane !== undefined && pane.isPlaced && pane.isShown ? '' : ' · open with /wait-review'
+
+/**
  * The review notes that ride along with the next prompt: the flagged hunks, as
  * the diff the person was looking at when they flagged them.
  */

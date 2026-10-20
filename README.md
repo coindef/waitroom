@@ -95,8 +95,8 @@ so your calibration starts fresh under the new name.
 ## Requirements
 
 - **Claude Code 2.1.291 or later, run interactively** — the current stable
-  release, 2.1.292, is fine. Checked live on 2.1.291, 2.1.292, 2.1.300 and
-  2.1.302. Older builds do not run them, and `claude update` is the fix:
+  release, 2.1.304, is fine. Checked live on 2.1.291, 2.1.292, 2.1.300,
+  2.1.302 and 2.1.304. Older builds do not run them, and `claude update` is the fix:
   - before 2.1.242, the plugins show `failed to load` (below);
   - 2.1.242 to 2.1.280 install them but reject their hooks module, which uses
     state helpers those builds predate (`claude plugin validate` says so on
@@ -145,6 +145,13 @@ The status line tells you so:
 ```
 wait-review: 3 to read · open with /wait-review
 ```
+
+**On Claude Code 2.1.304 or later**, Claude Code has a diff panel of its own,
+and it opens beside the transcript the first time Claude edits — in front of
+wait-review's pane. Send `/diff` once to hide it. Claude Code remembers that,
+so the side is wait-review's from then on, in later sessions too; `/diff` again
+brings the built-in panel back whenever you want it. If you run `/wait-review`
+and see nothing, its reply says when this is why.
 
 **bet-on-your-agent** puts a question above the prompt while a turn runs:
 
@@ -258,7 +265,7 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 65 tests
+claude plugin test     ./wait-review          # 67 tests
 
 claude plugin validate ./bet-on-your-agent
 claude plugin test     ./bet-on-your-agent    # 44 tests
