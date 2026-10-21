@@ -83,6 +83,12 @@ test('one question at a time, each answered by a bare digit', async ($, on) => {
 
   await ui.press({ key: 'f2-3' })
 
+  // The bonus is a third, rotating question — still one answer at a time.
+  expect(await ui.find({ text: /Bonus: how long will this turn take\?/ })).toBeDefined()
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(4)
+
+  await ui.press({ key: 'b<30s' })
+
   expect(await ui.find({ text: /bet 80% · 2–3 files/ })).toBeDefined()
   expect(await ui.findAll({ type: 'Button' })).toHaveLength(0)
 
@@ -164,6 +170,8 @@ test('files are counted from Edit, Write and NotebookEdit calls, the same path o
   expect(await betting.find({ text: /3 written so far/ })).toBeUndefined()
   await betting.press({ key: 'p80' })
   await betting.press({ key: 'f2-3' })
+  // The bonus question is not under test here.
+  await betting.press({ key: 'decline' })
   expect(await betting.find({ text: /bet 80% · 2–3 files · 3 written so far/ })).toBeDefined()
   await betting.unmount()
 
@@ -352,6 +360,8 @@ test('files written through the shell count, not only Edit and Write calls', asy
   })
   await band.press({ key: 'p80' })
   await band.press({ key: 'f2-3' })
+  // The bonus question is not under test here.
+  await band.press({ key: 'decline' })
   expect(await band.find({ text: /0 written so far/ })).toBeDefined()
 
   await $.tool.call({ tool: 'Bash', command: "cat > src/retry.ts <<'EOF' ... EOF" } as never)
@@ -485,4 +495,172 @@ test('a declined turn leaves the status line alone', async ($, on) => {
   await ui.unmount()
 
   expect(said.at(-1)).toBeUndefined()
+})
+
+/**
+ * Session-start-aware engine bottom: `/bet` and `/bet-recap` both need the
+ * commands registered, which only happens through `session.start`.
+ */
+const fullEngine = (on: On) => {
+  mock.clock(on)
+  mock.store(on)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box />
+  })
+}
+
+test('the bonus question scores against what actually happened, and shows up in the pane', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'tidy the retry helper', turnId: 'turn-bonus-1' })
+
+  const betting = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betting.press({ key: 'p80' })
+  await betting.press({ key: 'f1' })
+  // The first turn of a session rotates to the "duration" dimension.
+  expect(await betting.find({ text: /Bonus: how long will this turn take\?/ })).toBeDefined()
+  await betting.press({ key: 'b<30s' })
+  await betting.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-bonus-1',
+    answer: 'done',
+    durationMs: 20000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  // Scored the moment the turn lands, no land/fail verdict required.
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /Bonus: 1\/1 correct/ })).toBeDefined()
+  await pane.unmount()
+})
+
+test('skipping the bonus question costs nothing and is never scored', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'add a guard clause', turnId: 'turn-bonus-2' })
+
+  const betting = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betting.press({ key: 'p80' })
+  await betting.press({ key: 'f1' })
+  await betting.press({ key: 'decline' })
+  // Skipped: the band has nothing left to ask this turn.
+  expect(await betting.findAll({ type: 'Button' })).toHaveLength(0)
+  await betting.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-bonus-2',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /Bonus/ })).toBeUndefined()
+  await pane.unmount()
+})
+
+test('a rank climb prints a celebratory line once, in the band and the text report', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  const betOn = async (turnId: string, confidenceKey: string, landed: boolean) => {
+    await $.turn.start({ text: 'a turn', turnId })
+    const betting = await $.ui.mount({
+      plugin: 'bet-on-your-agent',
+      surface: 'terminal',
+      ...BAND,
+      props: bandProps(true),
+    })
+    await betting.press({ key: confidenceKey })
+    await betting.unmount()
+    await $.turn.complete({ turnId, answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer' })
+
+    const idle = await $.ui.mount({
+      plugin: 'bet-on-your-agent',
+      surface: 'terminal',
+      ...BAND,
+      props: bandProps(false),
+    })
+    await idle.press({ key: landed ? 'landed' : 'fixed' })
+    const sawRankUp = (await idle.find({ text: /Rank up/ })) !== undefined
+    await idle.unmount()
+
+    return sawRankUp
+  }
+
+  // Five misses at 90%: rolling Brier 0.81, rank Coin-Flipper.
+  for (let at = 0; at < 5; at++) await betOn(`bad-${at}`, 'p90', false)
+
+  const coinFlipper = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await coinFlipper.find({ text: /Coin-Flipper/ })).toBeDefined()
+  await coinFlipper.unmount()
+
+  // Landed calls at 90% pull the rolling mean down; the climb fires exactly
+  // once, on whichever one first crosses a rank's threshold.
+  let climbed = false
+  for (let at = 0; at < 9 && !climbed; at++) climbed = await betOn(`good-${at}`, 'p90', true)
+
+  expect(climbed).toBe(true)
+
+  const reply = await $.command.run({ command: 'bet' } as never)
+  expect(reply.text).toContain('Rank up:')
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /Bronze/ })).toBeDefined()
+  await pane.unmount()
+})
+
+test('/bet-recap prints a shareable, plain-text card for this session', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'add the retry logic', turnId: 'turn-recap-1' })
+
+  const betting = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betting.press({ key: 'p90' })
+  await betting.press({ key: 'f1' })
+  await betting.press({ key: 'decline' })
+  await betting.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-recap-1',
+    answer: 'done',
+    durationMs: 20000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const idle = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(false) })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  const reply = await $.command.run({ command: 'bet-recap' } as never)
+
+  expect(reply.text).toContain('Session recap')
+  expect(reply.text).toContain('Turns bet')
+  // Copy-paste friendly: no ANSI escapes inside the box.
+  expect(reply.text).not.toMatch(/\u001b/)
 })

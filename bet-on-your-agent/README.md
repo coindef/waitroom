@@ -80,6 +80,16 @@ never the question:
   no `Edit` call. Outside one, it counts the `Edit`, `Write` and
   `NotebookEdit` calls the turn made.
 
+Once those are answered, one more optional question rotates in — how long the
+turn will take, how many files (again, as a bucket of three this time), or
+how many tool calls it will make — one dimension per turn, cycling through all
+three over time. Same `skip`, costing nothing:
+
+```
+ bet  Bonus: how long will this turn take?
+1: <30s  2: 30-90s  3: >90s  0: Skip
+```
+
 The forecast is quoted against **what you asked for**, which is the point: a
 score tells you that you are overconfident, the ask tells you what about.
 
@@ -88,6 +98,7 @@ score tells you that you are overconfident, the ask tells you what about.
 ```
 You run 12 points overconfident.
 Brier 0.147 over 23 scored turns — better than a coin flip.
+Rank: Gold.
 
  said     actual   turns
   50% →     60%    5   underconfident
@@ -100,6 +111,7 @@ Worst calls
   80% and it did not — rename the session helpers
 
 File count called right 14/23.
+Bonus: 15/23 correct.
 The agent landed it first try 65% (15/23).
 Median turn 42s.
 ```
@@ -119,11 +131,20 @@ you accumulate the thing that is genuinely hard to intuit: how often your agent
 actually lands it, how many files it actually touches, and how long it actually
 takes.
 
+## Rank
+
+The record also carries a rank, from the Brier score over your last 20 scored
+turns rather than the lifetime one, so it reflects how you are calling it
+lately: `Coin-Flipper`, `Bronze`, `Silver`, `Gold`, `Platinum`, `Oracle` — or
+`Unranked` under five scored turns. It sits beside the pane's own tag, and
+climbing a level prints one line once: `Rank up: Silver -> Gold`.
+
 ## Commands
 
 | Command | What it does |
 | --- | --- |
 | `/bet` | Prints your record and opens the pane |
+| `/bet-recap` | A shareable, plain-text recap card for this session |
 
 ## Settings
 
@@ -158,7 +179,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 46 tests
+claude plugin test .         # 78 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested

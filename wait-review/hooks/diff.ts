@@ -3,7 +3,7 @@
  * directly.
  */
 
-import type { Hunk } from '../types'
+import type { Grade, Hunk, SessionStats } from '../types'
 
 /** FNV-1a, in base 36. Enough to tell one hunk's text from another's. */
 export const hash = (text: string): string => {
@@ -330,6 +330,40 @@ export const tally = (list: readonly Hunk[]) => ({
   reviewed: list.filter(hunk => hunk.status === 'ok' || hunk.status === 'sent').length,
   dropped: list.filter(hunk => hunk.status === 'dropped').length,
 })
+
+/** The fresh stats a new session starts with. */
+export const EMPTY_SESSION: SessionStats = { read: 0, flagged: 0, skipped: 0, combo: 0, longestCombo: 0 }
+
+/**
+ * The grade's own percent cutoffs, named once rather than read off a table by
+ * position.
+ */
+export const GRADE_S_PERCENT = 0.9
+export const GRADE_A_PERCENT = 0.75
+export const GRADE_B_PERCENT = 0.5
+
+/**
+ * The session grade: of every hunk resolved one way or another — decided
+ * individually, or skipped in bulk with a file — how much was actually read
+ * rather than waved away.
+ *
+ * S additionally needs at least one flag: reading everything and finding
+ * nothing wrong is good calibration on the agent's part, not evidence of a
+ * careful read, so it earns one grade short of top marks.
+ */
+export const gradeOf = (stats: SessionStats): Grade => {
+  const resolved = stats.read + stats.skipped
+  const percent = resolved === 0 ? 0 : stats.read / resolved
+  if (percent >= GRADE_S_PERCENT && stats.flagged > 0) return 'S'
+  if (percent >= GRADE_A_PERCENT) return 'A'
+
+  return percent >= GRADE_B_PERCENT ? 'B' : 'C'
+}
+
+/** The session's combo stats and grade, one line shared by the pane and the command. */
+export const sessionSummaryLine = (stats: SessionStats): string =>
+  `Session: ${stats.read} read · ${stats.flagged} flagged · ${stats.skipped} skipped · ` +
+  `longest combo ${stats.longestCombo} — grade ${gradeOf(stats)}.`
 
 /**
  * Files the agent writes but nobody reviews: lockfiles, build output,

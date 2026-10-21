@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.4.0 — playability, phase 1
+
+### bet-on-your-agent
+
+- **A bonus question beyond land/fail.** Once the duration and files bets are
+  answered, one more optional question rotates in — turn duration, file
+  count, or tool-call count, one dimension per turn, cycling through all
+  three over a session. Same `skip`, costing nothing.
+- **Rank, from your rolling calibration.** The record now carries a rank —
+  `Coin-Flipper` through `Oracle`, or `Unranked` under five scored turns —
+  from the Brier score over your last 20 scored turns rather than the
+  lifetime one, so it reflects how you are calling it lately. Climbing a
+  level prints one line once: `Rank up: Silver -> Gold`.
+- **`/bet-recap`**: a shareable, plain-text recap card for the session —
+  turns bet and scored, session Brier, best and worst call, rank, current
+  streak, and the bonus tally.
+
+### wait-review
+
+- **Combo and session grade.** Deciding hunks back-to-back without an
+  intervening skip builds a combo, shown as `combo x5` once it reaches
+  three; skipping a file breaks it back to nothing. The session grades how
+  much of what was resolved was actually read rather than waved away in
+  bulk: `S` needs at least 90% read and one flag, `A` 75%, `B` 50%, else
+  `C`. Both show in the pane and in `/wait-review`'s reply, and an undo
+  reverses them along with the hunk.
+
 ## wait-review 0.3.1
 
 - **No false "diff panel is in front".** `/wait-review` decided the pane was

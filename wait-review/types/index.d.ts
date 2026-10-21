@@ -51,10 +51,38 @@ export type Hunk = {
  * once, each from whatever status it held; marking a single hunk is just a
  * list of one.
  */
-export type Decision = { changes: { id: string; from: HunkStatus }[] }
+export type Decision = {
+  changes: { id: string; from: HunkStatus }[]
+  /** `session` as it stood just before this decision, so undo reverses the combo and the counts too. */
+  fromSession: SessionStats
+}
 
 /** How far into a long hunk the reader has paged, and which hunk that was. */
 export type Page = { id: string; offset: number }
+
+/**
+ * Per-session review stats: the combo and the grade's inputs.
+ *
+ * Tracked as their own counters rather than read off `hunks`'s current
+ * statuses, because a hunk leaves that array entirely once git no longer
+ * reports it (reverted, committed away) — taking its history with it if
+ * nothing else remembered that it was ever read.
+ */
+export type SessionStats = {
+  /** Hunks individually decided — ok, flagged or later — this session, cumulative. */
+  read: number
+  /** Hunks ever flagged this session, cumulative; a subset of `read`. */
+  flagged: number
+  /** Hunks dropped in bulk by skipping a file this session, cumulative. */
+  skipped: number
+  /** The current run of individually-decided hunks, reset to 0 by a skip. */
+  combo: number
+  /** The longest `combo` reached this session. */
+  longestCombo: number
+}
+
+/** The session grade: how much of what was presented actually got read. */
+export type Grade = 'S' | 'A' | 'B' | 'C'
 
 declare module 'claude-code' {
   interface PluginState {
@@ -104,6 +132,12 @@ declare module 'claude-code' {
        * when it was not.
        */
       truncatedFiles: number
+      /**
+       * This session's combo and grade inputs. Absent in a state file written
+       * before this existed; `atom`'s own default fills it in, the same way a
+       * fresh install gets one.
+       */
+      session: SessionStats
     }
   }
 }

@@ -7,7 +7,7 @@
  * calibration rather than counting wins.
  */
 
-import type { FileBucket, TurnRecord } from '../types'
+import type { BonusBucket, BonusDim, Rank, RankChange, FileBucket, TurnRecord } from '../types'
 
 /** The forecasts on offer. Fixed, so each is its own calibration row. */
 export const BANDS = [0.5, 0.65, 0.8, 0.9, 0.95] as const
@@ -24,6 +24,69 @@ export const bucketOf = (files: number): FileBucket => {
 
   return files <= 3 ? '2-3' : '4+'
 }
+
+/**
+ * The bonus question, one dimension beside land/fail: a turn offers exactly
+ * one, rotating through these in order, so no one dimension crowds out the
+ * others over a long session.
+ */
+export const BONUS_DIMS: readonly BonusDim[] = ['duration', 'files', 'toolCalls']
+
+/** Which dimension a turn's bonus question is, from how many have been offered so far. */
+export const bonusDimFor = (offered: number): BonusDim => {
+  const at = BONUS_DIMS[offered % BONUS_DIMS.length]
+
+  return at ?? 'duration'
+}
+
+/** The buckets on offer for each bonus dimension, in the order its buttons show them. */
+export const BONUS_BUCKETS: Readonly<Record<BonusDim, readonly BonusBucket[]>> = {
+  duration: ['<30s', '30-90s', '>90s'],
+  files: ['1', '2-3', '4+'],
+  toolCalls: ['0-2', '3-6', '7+'],
+}
+
+/** What the bonus question asks, per dimension. */
+export const BONUS_QUESTIONS: Readonly<Record<BonusDim, string>> = {
+  duration: 'how long will this turn take?',
+  files: 'how many files will it touch?',
+  toolCalls: 'how many tool calls will it make?',
+}
+
+/**
+ * Where a turn's actual duration, file count or tool-call count falls among
+ * its dimension's three buckets.
+ *
+ * One function covers all three because each is the same shape — a count
+ * split at two cutoffs — and a turn's bonus answer is scored against whichever
+ * of them its rotation offered.
+ */
+export const bonusBucketOf = (dim: BonusDim, value: number): BonusBucket => {
+  if (dim === 'duration') {
+    const seconds = value / 1000
+    if (seconds < 30) return '<30s'
+
+    return seconds <= 90 ? '30-90s' : '>90s'
+  }
+  if (dim === 'files') {
+    if (value <= 1) return '1'
+
+    return value <= 3 ? '2-3' : '4+'
+  }
+  if (value <= 2) return '0-2'
+
+  return value <= 6 ? '3-6' : '7+'
+}
+
+/**
+ * A bonus bucket as a button label.
+ *
+ * The files dimension reuses `FILE_LABELS` so "1 file" never sits on the same
+ * key as the digit 1 — the bug the main files bet already had to fix. The
+ * other two dimensions' labels are not bare digits, so they are fine as is.
+ */
+export const bonusLabel = (dim: BonusDim, bucket: BonusBucket): string =>
+  dim === 'files' ? FILE_LABELS[bucket as FileBucket] : bucket
 
 /** One path `git status` reports, and whether it is gone from the working tree. */
 export type StatusEntry = { path: string; isDeleted: boolean }
@@ -134,6 +197,78 @@ export const median = (numbers: readonly number[]): number | undefined => {
   return sorted.length % 2 === 1 || lower === undefined ? upper : (lower + upper) / 2
 }
 
+/**
+ * Ranks, worst to best, from the rolling Brier score. `Unranked` sits first:
+ * not the worst rank, no rank at all.
+ */
+export const RANKS: readonly Rank[] = ['Unranked', 'Coin-Flipper', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Oracle']
+
+/** Scored turns a rolling rank looks back over; older calls age out of it. */
+export const RANK_WINDOW = 20
+
+/** Fewer scored turns than this and the rank is `Unranked`, not a guess dressed up as one. */
+export const MIN_RANKED = 5
+
+/**
+ * The rank cutoffs, worst first, each its own named threshold rather than a
+ * table read by position — this is the one place they are set, everywhere
+ * else reads `rankOf`.
+ */
+export const COIN_FLIPPER_BRIER = 0.3
+export const BRONZE_BRIER = 0.25
+export const SILVER_BRIER = 0.2
+export const GOLD_BRIER = 0.15
+export const PLATINUM_BRIER = 0.1
+
+const RANK_CUTOFFS: readonly { rank: Rank; atOrAbove: number }[] = [
+  { rank: 'Coin-Flipper', atOrAbove: COIN_FLIPPER_BRIER },
+  { rank: 'Bronze', atOrAbove: BRONZE_BRIER },
+  { rank: 'Silver', atOrAbove: SILVER_BRIER },
+  { rank: 'Gold', atOrAbove: GOLD_BRIER },
+  { rank: 'Platinum', atOrAbove: PLATINUM_BRIER },
+]
+
+/** The rank a rolling Brier score and its scored-turn count land on. */
+export const rankOf = (brier: number | undefined, scoredCount: number): Rank => {
+  if (brier === undefined || scoredCount < MIN_RANKED) return 'Unranked'
+  for (const { rank, atOrAbove } of RANK_CUTOFFS) {
+    if (brier >= atOrAbove) return rank
+  }
+
+  return 'Oracle'
+}
+
+/** Whether `to` sits above `from` in the rank order — a climb, not a fall or a hold. */
+export const rankImproved = (from: Rank, to: Rank): boolean => RANKS.indexOf(to) > RANKS.indexOf(from)
+
+/**
+ * The Brier score over the most recent `window` scored turns, and how many
+ * that was (fewer than `window` early in a history).
+ *
+ * Rolling rather than lifetime, so the rank reflects how you are calling it
+ * lately: a bad week does not haunt a rank forever, and neither does an old
+ * good one prop it up.
+ */
+export const rollingBrier = (
+  records: readonly TurnRecord[],
+  window = RANK_WINDOW,
+): { brier: number | undefined; scored: number } => {
+  const scored = scorable(records).slice(-window)
+  if (scored.length === 0) return { brier: undefined, scored: 0 }
+
+  return {
+    brier: mean(scored.map(one => ((one.saidConfidence as number) - (one.landed ? 1 : 0)) ** 2)),
+    scored: scored.length,
+  }
+}
+
+/** The rank the history stands at right now. */
+export const currentRank = (records: readonly TurnRecord[]): Rank => {
+  const { brier, scored } = rollingBrier(records)
+
+  return rankOf(brier, scored)
+}
+
 export type Report = {
   /** Turns a confidence forecast was scored on. */
   scored: number
@@ -143,6 +278,8 @@ export type Report = {
   rows: CalibrationRow[]
   /** How often the file-count forecast was exactly right. */
   files?: { right: number; of: number }
+  /** How often the bonus question was answered right, whichever dimension it asked each turn. */
+  bonus?: { right: number; of: number }
   /** How often the agent actually landed it first try, by your own verdict. */
   landed?: { yes: number; of: number }
   medianMs?: number
@@ -153,12 +290,15 @@ export type Report = {
   lean?: 'over' | 'under' | 'fair'
   /** Percentage points between what you said on average and what happened. */
   gap?: number
+  /** The rank the rolling Brier score stands at right now. */
+  rank: Rank
 }
 
 export const report = (records: readonly TurnRecord[]): Report => {
   const scored = scorable(records)
   const live = records.filter(one => !one.isAborted)
   const filesBet = live.filter(one => one.saidFiles !== undefined)
+  const bonusBet = live.filter(one => one.saidBonus !== undefined)
   const owed = records.filter(isOwed).length
 
   const base: Report = {
@@ -168,12 +308,20 @@ export const report = (records: readonly TurnRecord[]): Report => {
     owed,
     medianMs: median(live.map(one => one.durationMs)),
     misses: worstCalls(records),
+    rank: currentRank(records),
   }
 
   if (filesBet.length > 0) {
     base.files = {
       right: filesBet.filter(one => one.saidFiles === one.filesBucket).length,
       of: filesBet.length,
+    }
+  }
+
+  if (bonusBet.length > 0) {
+    base.bonus = {
+      right: bonusBet.filter(one => one.saidBonus === one.bonusActual).length,
+      of: bonusBet.length,
     }
   }
 
@@ -264,6 +412,41 @@ export const worstCalls = (records: readonly TurnRecord[], limit = 3): Miss[] =>
     .filter(one => one.error > 0.25)
     .sort((a, b) => b.error - a.error)
     .slice(0, limit)
+
+/**
+ * The single best and single worst scored calls, by squared error — no
+ * threshold, unlike `worstCalls`: the recap wants a worst call even in a
+ * session with nothing bad enough to make that list.
+ */
+export const extremeCalls = (records: readonly TurnRecord[]): { best?: Miss; worst?: Miss } => {
+  const scored = scorable(records)
+    .map(one => {
+      const said = one.saidConfidence as number
+      const landed = one.landed === true
+
+      return { ask: one.ask, said, landed, error: (said - (landed ? 1 : 0)) ** 2 }
+    })
+    .sort((a, b) => a.error - b.error)
+  if (scored.length === 0) return {}
+
+  return { best: scored[0], worst: scored[scored.length - 1] }
+}
+
+/**
+ * Consecutive landed calls counting back from the most recent scored turn,
+ * broken by the first miss. An unscored or skipped turn is neither a hit nor
+ * a break — it is simply not in the scored sequence this walks.
+ */
+export const currentStreak = (records: readonly TurnRecord[]): number => {
+  const scored = scorable(records)
+  let streak = 0
+  for (let at = scored.length - 1; at >= 0; at--) {
+    if (scored[at]?.landed !== true) break
+    streak++
+  }
+
+  return streak
+}
 
 /** Adds or replaces a record, newest last, oldest dropped past `limit`. */
 export const keepRecord = (
@@ -426,14 +609,21 @@ export const calibrationLine = (row: CalibrationRow): string => {
   return `${said} →  ${actual} ${turns}${lean}`
 }
 
-/** The report as the slash command prints it. */
-export const asText = (found: Report): string => {
+/**
+ * The report as the slash command prints it.
+ *
+ * `rankUp` is not derived from `found`: it is the climb, if any, the verdict
+ * that produced this report just caused, read off `LastVerdict` by the
+ * caller. A pure function of the report alone could not say that.
+ */
+export const asText = (found: Report, rankUp?: RankChange): string => {
   if (found.recorded === 0) return 'No turns recorded yet. Call the next one while it runs.'
   if (found.brier === undefined) {
     const files = found.files ? ` File count called right ${found.files.right}/${found.files.of}.` : ''
+    const bonus = found.bonus ? ` Bonus: ${found.bonus.right}/${found.bonus.of} correct.` : ''
     const owed = found.owed > 0 ? ` ${found.owed} waiting on your verdict.` : ''
 
-    return `${found.recorded} turns recorded, none scored yet.${files}${owed}`
+    return `${found.recorded} turns recorded, none scored yet.${files}${bonus}${owed}`
   }
 
   const skill =
@@ -443,7 +633,10 @@ export const asText = (found: Report): string => {
     isCalibrating(found)
       ? `The score means something from ${MIN_SCORED} calls; until then, here is what there is.`
       : `Brier ${found.brier.toFixed(3)} over ${found.scored} scored turns — ${skill}.`,
+    `Rank: ${found.rank}.`,
   ]
+
+  if (rankUp) lines.push(`Rank up: ${rankUp.from} -> ${rankUp.to}`)
 
   if (found.rows.length > 0) {
     lines.push('', CALIBRATION_HEAD)
@@ -462,6 +655,7 @@ export const asText = (found: Report): string => {
 
   lines.push('')
   if (found.files) lines.push(`File count called right ${found.files.right}/${found.files.of}.`)
+  if (found.bonus) lines.push(`Bonus: ${found.bonus.right}/${found.bonus.of} correct.`)
   if (found.landed) {
     const percent = asPercent(found.landed.yes / found.landed.of)
     lines.push(`The agent landed it first try ${percent} (${found.landed.yes}/${found.landed.of}).`)
@@ -470,4 +664,84 @@ export const asText = (found: Report): string => {
   if (found.owed > 0) lines.push(`${found.owed} bet${found.owed === 1 ? '' : 's'} waiting on your verdict.`)
 
   return lines.join('\n')
+}
+
+export type Recap = {
+  turnsBet: number
+  turnsScored: number
+  brier?: number
+  best?: Miss
+  worst?: Miss
+  rank: Rank
+  streak: number
+  bonus?: { right: number; of: number }
+}
+
+/**
+ * The session's recap, computed once so the card itself is pure layout.
+ *
+ * `rank` reads `all` the history, not `session` alone: a rank is who you are
+ * right now, not something that resets at midnight. Everything else is
+ * scoped to `session`, the records since this session began.
+ */
+export const recapOf = (session: readonly TurnRecord[], all: readonly TurnRecord[]): Recap => {
+  const found = report(session)
+  const { best, worst } = extremeCalls(session)
+
+  return {
+    turnsBet: session.filter(one => !one.isAborted && one.saidConfidence !== undefined).length,
+    turnsScored: found.scored,
+    brier: found.brier,
+    best,
+    worst,
+    rank: currentRank(all),
+    streak: currentStreak(session),
+    bonus: found.bonus,
+  }
+}
+
+/** How much of a recap row the ask gets once its own label and verdict are placed. */
+const RECAP_ASK_ROOM = 40
+
+const missLine = (miss: Miss): string => {
+  const prefix = `${asPercent(miss.said)} ${miss.landed ? 'and it landed' : 'and it did not'} — `
+
+  return `${prefix}${shortAsk(miss.ask ?? 'a turn with no prompt', Math.max(0, RECAP_ASK_ROOM - prefix.length))}`
+}
+
+/** A recap row's label column, so every value lines up under the next. */
+const RECAP_LABEL = 14
+
+const recapRow = (label: string, value: string): string => `${label.padEnd(RECAP_LABEL)}${value}`
+
+/**
+ * A shareable, plain-text recap card: box-drawn, no color inside it, so it
+ * pastes cleanly anywhere. Every field the spec names shows on its own row,
+ * in order, with an em dash standing in for one with nothing to say yet
+ * (no scored turn, no bonus answered) — a card keeps its shape whether the
+ * session behind it is thin or full.
+ */
+export const recapCard = (recap: Recap): string => {
+  const title = 'Session recap'
+  const rows = [
+    recapRow('Turns bet', String(recap.turnsBet)),
+    recapRow('Turns scored', String(recap.turnsScored)),
+    recapRow('Session Brier', recap.brier === undefined ? '—' : recap.brier.toFixed(3)),
+    recapRow('Best call', recap.best ? missLine(recap.best) : '—'),
+    recapRow('Worst call', recap.worst ? missLine(recap.worst) : '—'),
+    recapRow('Rank', recap.rank),
+    recapRow('Streak', String(recap.streak)),
+    recapRow('Bonus', recap.bonus ? `${recap.bonus.right}/${recap.bonus.of} correct` : '—'),
+  ]
+  const width = Math.max(title.length, ...rows.map(row => row.length))
+  const border = (corner: readonly [string, string]) => `${corner[0]}${'─'.repeat(width + 2)}${corner[1]}`
+  const line = (text: string) => `│ ${text.padEnd(width)} │`
+
+  return [
+    border(['┌', '┐']),
+    line(title),
+    line('─'.repeat(width)),
+    ...rows.map(line),
+    border(['└', '┘']),
+  ].join('\n')
 }

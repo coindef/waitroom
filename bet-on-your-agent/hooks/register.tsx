@@ -1,18 +1,24 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { FileBucket, LastVerdict, OpenBet, TurnRecord } from '../types'
+import type { BonusBucket, FileBucket, LastVerdict, OpenBet, TurnRecord } from '../types'
 import {
   asDuration,
   askRoomFor,
   asPercent,
   asText,
   BANDS,
+  bonusBucketOf,
+  bonusDimFor,
+  bonusLabel,
+  BONUS_BUCKETS,
+  BONUS_QUESTIONS,
   CALIBRATION_HEAD,
   calibrationLine,
   bucketOf,
   changedSince,
   COIN_FLIP_BRIER,
+  currentRank,
   FILE_BUCKETS,
   FILE_LABELS,
   filesPhrase,
@@ -24,6 +30,9 @@ import {
   MIN_SCORED,
   owedVerdict,
   parseStatus,
+  rankImproved,
+  recapCard,
+  recapOf,
   report,
   setVerdict,
   shortAsk,
@@ -35,7 +44,7 @@ import {
 const PANE = 'bet-on-your-agent'
 const STORE_KEY = 'turns'
 
-const NO_BET: OpenBet = { turnId: '', ask: '', files: [] }
+const NO_BET: OpenBet = { turnId: '', ask: '', files: [], toolCalls: 0 }
 
 const open = atom({ plugin: 'bet-on-your-agent', key: 'open' } as const, NO_BET)
 const busy = atom({ plugin: 'bet-on-your-agent', key: 'busy' } as const, false)
@@ -44,6 +53,13 @@ const lastVerdict = atom(
   null as LastVerdict | null,
 )
 const revision = atom({ plugin: 'bet-on-your-agent', key: 'revision' } as const, 0)
+/** How many turns have offered a bonus question so far; drives the rotation. */
+const bonusRotation = atom({ plugin: 'bet-on-your-agent', key: 'bonusRotation' } as const, 0)
+/** When this session began, for the recap card's "this session". */
+const sessionStartedAt = atom(
+  { plugin: 'bet-on-your-agent', key: 'sessionStartedAt' } as const,
+  null as number | null,
+)
 
 type Config = { autoOpen: boolean }
 
@@ -114,6 +130,17 @@ const placeFiles = async ($: EngineInterface, said: FileBucket) => {
   await showStatus($)
 }
 
+const placeBonus = async ($: EngineInterface, said: BonusBucket) => {
+  await update($, open, bet => ({ ...bet, saidBonus: said }))
+  await showStatus($)
+}
+
+/** Waves this turn's bonus question away: its own skip, costing nothing. */
+const declineBonus = async ($: EngineInterface) => {
+  await update($, open, bet => ({ ...bet, isBonusDeclined: true as const }))
+  await showStatus($)
+}
+
 /** Waves this turn's bet away, so the band stops asking for the rest of it. */
 const declineBet = async ($: EngineInterface) => {
   await update($, open, bet => ({ ...bet, isDeclined: true as const }))
@@ -121,8 +148,16 @@ const declineBet = async ($: EngineInterface) => {
 }
 
 const giveVerdict = async ($: EngineInterface, turnId: string, landed: boolean) => {
-  await saveTurns($, setVerdict(await loadTurns($), turnId, landed))
-  await update($, lastVerdict, () => ({ turnId, result: landed ? 'landed' : 'fixed' }))
+  const before = await loadTurns($)
+  const fromRank = currentRank(before)
+  const after = setVerdict(before, turnId, landed)
+  await saveTurns($, after)
+  const toRank = currentRank(after)
+  await update($, lastVerdict, () => ({
+    turnId,
+    result: landed ? 'landed' : 'fixed',
+    ...(rankImproved(fromRank, toRank) ? { rankUp: { from: fromRank, to: toRank } } : {}),
+  }))
   await showStatus($)
 }
 
@@ -153,6 +188,14 @@ const noteFile = async ($: EngineInterface, path: string | undefined) => {
   await update($, open, bet =>
     bet.files.includes(path) ? bet : { ...bet, files: [...bet.files, path].slice(-200) },
   )
+}
+
+/**
+ * Counts every tool call the turn makes, whichever tool and whether or not it
+ * was denied — the bonus question asks "how many", not "how many that ran".
+ */
+const noteToolCall = async ($: EngineInterface) => {
+  await update($, open, bet => ({ ...bet, toolCalls: bet.toolCalls + 1 }))
 }
 
 /** Past this many changed files, a look at the working tree is not worth its cost. */
@@ -212,7 +255,18 @@ export const register: Register = (on, options) => {
       name: 'bet',
       description: 'How well you call your agent: Brier score and calibration',
     })
+    await $.command.register({
+      name: 'bet-recap',
+      description: 'A shareable, plain-text recap card for this session',
+    })
     if (config.autoOpen) void $.ui.open({ id: PANE, title: 'Bet on your agent' }).catch(() => undefined)
+    // Guarded: session.start fires again on every hot reload while $.state
+    // survives it, so an unconditional write would move "this session" to
+    // whatever moment the reload happened rather than when it truly began.
+    if ((await read($, sessionStartedAt)) === null) {
+      const now = await $.clock.now()
+      await update($, sessionStartedAt, () => now)
+    }
     await lapseStaleVerdicts($)
     await showStatus($)
 
@@ -221,8 +275,17 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'bet' }, async $ => {
     void $.ui.open({ id: PANE, title: 'Bet on your agent' }).catch(() => undefined)
+    const last = await read($, lastVerdict)
 
-    return { text: asText(report(await loadTurns($))) }
+    return { text: asText(report(await loadTurns($)), last?.rankUp) }
+  })
+
+  on('command.run', { command: 'bet-recap' }, async $ => {
+    const all = await loadTurns($)
+    const startedAt = await read($, sessionStartedAt)
+    const session = startedAt === null ? all : all.filter(one => one.at >= startedAt)
+
+    return { text: recapCard(recapOf(session, all)) }
   })
 
   // One hook per tool so `e` narrows to that tool's own input.
@@ -255,10 +318,21 @@ export const register: Register = (on, options) => {
     return ran
   }).catch(($, e, next) => next(e))
 
+  // Unfiltered: every tool the turn calls, not only the ones the hooks above
+  // already watch for files, is a tool call toward the bonus question.
+  on('tool.call', async ($, e, next) => {
+    const ran = await next(e)
+    await noteToolCall($)
+
+    return ran
+  }).catch(($, e, next) => next(e))
+
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
+    const dim = bonusDimFor(await read($, bonusRotation))
+    await update($, bonusRotation, at => at + 1)
     // The betting window opens here and closes when the turn lands.
-    await update($, open, () => ({ turnId: e.turnId, ask: e.text, files: [] }))
+    await update($, open, () => ({ turnId: e.turnId, ask: e.text, files: [], toolCalls: 0, bonusDim: dim }))
     await update($, busy, () => true)
     // A new turn's own questions take over the band; the last verdict is
     // settled by now, or it would still be the one being asked about.
@@ -284,18 +358,27 @@ export const register: Register = (on, options) => {
     const isThisTurn = bet.turnId === e.turnId
     const files = isThisTurn ? bet.files.length : 0
     const ask = isThisTurn ? shortAsk(bet.ask) : ''
+    const dim = isThisTurn ? bet.bonusDim : undefined
+    const actualFor = (value: number) => (dim === undefined ? undefined : bonusBucketOf(dim, value))
+    const bonusActual = isThisTurn
+      ? actualFor(dim === 'duration' ? e.durationMs : dim === 'files' ? files : bet.toolCalls)
+      : undefined
     const record: TurnRecord = {
       turnId: e.turnId,
       at: await $.clock.now(),
       durationMs: e.durationMs,
       files,
       filesBucket: bucketOf(files),
+      toolCalls: isThisTurn ? bet.toolCalls : 0,
       isAborted: e.isAborted,
       ...(ask === '' ? {} : { ask }),
       ...(isThisTurn && bet.saidConfidence !== undefined
         ? { saidConfidence: bet.saidConfidence }
         : {}),
       ...(isThisTurn && bet.saidFiles !== undefined ? { saidFiles: bet.saidFiles } : {}),
+      ...(dim === undefined ? {} : { bonusDim: dim }),
+      ...(isThisTurn && bet.saidBonus !== undefined ? { saidBonus: bet.saidBonus } : {}),
+      ...(bonusActual === undefined ? {} : { bonusActual }),
     }
     await saveTurns($, keepRecord(await loadTurns($), record))
     await update($, busy, () => false)
@@ -386,6 +469,32 @@ export const register: Register = (on, options) => {
         )
       }
 
+      // One rotating bonus question, its own skip: passing on it costs
+      // nothing, and says nothing about the confidence or files bets already
+      // placed this turn.
+      if (bet.bonusDim !== undefined && bet.saidBonus === undefined && bet.isBonusDeclined !== true) {
+        const dim = bet.bonusDim
+        const buckets = BONUS_BUCKETS[dim]
+
+        return (
+          <Box flexDirection="column">
+            <Text wrap="truncate-end">
+              {tag} Bonus: {BONUS_QUESTIONS[dim]}
+            </Text>
+            <Box gap={2}>
+              {buckets.map((bucket, at) => (
+                <Button key={`b${bucket}`} hotkey={String(at + 1)} plain onPress={() => placeBonus($, bucket)}>
+                  {bonusLabel(dim, bucket)}
+                </Button>
+              ))}
+              <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBonus($)}>
+                Skip
+              </Button>
+            </Box>
+          </Box>
+        )
+      }
+
       const isOver =
         FILE_BUCKETS.indexOf(bucketOf(bet.files.length)) > FILE_BUCKETS.indexOf(bet.saidFiles)
 
@@ -416,19 +525,26 @@ export const register: Register = (on, options) => {
         last.result === 'landed' ? 'Landed' : last.result === 'fixed' ? 'Needed fixing' : 'Skipped'
 
       return (
-        <Box gap={1}>
-          <Text>
-            <Text dimColor>Recorded: </Text>
-            <Text
-              color={last.result === 'landed' ? 'success' : last.result === 'fixed' ? 'warning' : undefined}
-              dimColor={last.result === 'skipped'}
-            >
-              {label}
+        <Box flexDirection="column" gap={1}>
+          <Box gap={1}>
+            <Text>
+              <Text dimColor>Recorded: </Text>
+              <Text
+                color={last.result === 'landed' ? 'success' : last.result === 'fixed' ? 'warning' : undefined}
+                dimColor={last.result === 'skipped'}
+              >
+                {label}
+              </Text>
             </Text>
-          </Text>
-          <Button key="undo" hotkey="u" plain dimColor onPress={() => undoLastVerdict($)}>
-            Undo
-          </Button>
+            <Button key="undo" hotkey="u" plain dimColor onPress={() => undoLastVerdict($)}>
+              Undo
+            </Button>
+          </Box>
+          {last.rankUp && (
+            <Text color="success" weight="bold">
+              Rank up: {last.rankUp.from} → {last.rankUp.to}
+            </Text>
+          )}
         </Box>
       )
     }
@@ -466,17 +582,31 @@ export const register: Register = (on, options) => {
     const { Box, Text } = $.ui.resolve(e)
     await read($, revision)
     const found = report(await loadTurns($))
+    const last = await read($, lastVerdict)
     const width = Math.max(20, e.props.bodyColumns)
     const tag = (
       <Text backgroundColor="claude" color="inverseText" weight="bold">
         {' bet-on-your-agent '}
       </Text>
     )
+    // The rank sits right beside the plugin's own tag, so it is the first
+    // thing read whether the pane is calibrating, scored, or empty.
+    const header = (
+      <Box gap={1}>
+        {tag}
+        <Text dimColor>{found.rank}</Text>
+      </Box>
+    )
+    const rankUp = last?.rankUp && (
+      <Text color="success" weight="bold">
+        Rank up: {last.rankUp.from} → {last.rankUp.to}
+      </Text>
+    )
 
     if (found.brier === undefined) {
       return (
         <Box flexDirection="column" gap={1}>
-          {tag}
+          {header}
           <Box flexDirection="column">
             <Text weight="bold">
               {found.recorded === 0 ? 'No turns yet.' : `${found.recorded} turns recorded, none scored yet.`}
@@ -490,7 +620,13 @@ export const register: Register = (on, options) => {
                 files called {found.files.right}/{found.files.of}
               </Text>
             )}
+            {found.bonus && (
+              <Text dimColor>
+                Bonus: {found.bonus.right}/{found.bonus.of} correct
+              </Text>
+            )}
           </Box>
+          {rankUp}
         </Box>
       )
     }
@@ -502,7 +638,8 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column" gap={1}>
-        {tag}
+        {header}
+        {rankUp}
 
         {calibrating ? (
           <Box flexDirection="column">
@@ -566,6 +703,9 @@ export const register: Register = (on, options) => {
         <Box flexDirection="column">
           {found.files !== undefined && (
             <Text dimColor>File count called right {found.files.right}/{found.files.of}.</Text>
+          )}
+          {found.bonus !== undefined && (
+            <Text dimColor>Bonus: {found.bonus.right}/{found.bonus.of} correct.</Text>
           )}
           {found.landed !== undefined && (
             <Text dimColor>

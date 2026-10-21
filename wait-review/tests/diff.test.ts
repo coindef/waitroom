@@ -1,15 +1,18 @@
 import { expect, test } from 'claude-code/testing'
 
-import type { Hunk } from '../types'
+import type { Hunk, SessionStats } from '../types'
 import {
   DEFAULT_IGNORE,
+  EMPTY_SESSION,
   filledCells,
   globToRegExp,
+  gradeOf,
   isIgnored,
   mergeHunks,
   paneHint,
   progressOf,
   reviewable,
+  sessionSummaryLine,
   summaryOf,
   nextHunk,
   parseDiff,
@@ -550,4 +553,35 @@ test('the progress bar is full only when all is read, and empty only before any 
   // Nothing to read, or no room for a bar, draws none.
   expect(filledCells(0, 0, 12)).toBe(0)
   expect(filledCells(3, 5, 0)).toBe(0)
+})
+
+const stats = (over: Partial<SessionStats> = {}): SessionStats => ({ ...EMPTY_SESSION, ...over })
+
+test('the grade is S only at 90% acted on or better, and at least one flag', async () => {
+  expect(gradeOf(stats({ read: 9, skipped: 1, flagged: 1 }))).toBe('S')
+  // Same percent, no flag: good calibration is not evidence of a careful read.
+  expect(gradeOf(stats({ read: 9, skipped: 1, flagged: 0 }))).toBe('A')
+})
+
+test('the grade cutoffs land exactly where the percentages say', async () => {
+  expect(gradeOf(stats({ read: 90, skipped: 10, flagged: 1 }))).toBe('S')
+  expect(gradeOf(stats({ read: 89, skipped: 11, flagged: 1 }))).toBe('A')
+  expect(gradeOf(stats({ read: 75, skipped: 25 }))).toBe('A')
+  expect(gradeOf(stats({ read: 74, skipped: 26 }))).toBe('B')
+  expect(gradeOf(stats({ read: 50, skipped: 50 }))).toBe('B')
+  expect(gradeOf(stats({ read: 49, skipped: 51 }))).toBe('C')
+})
+
+test('nothing resolved yet grades C, not a divide by zero', async () => {
+  expect(gradeOf(EMPTY_SESSION)).toBe('C')
+})
+
+test('the session summary line names every stat and the grade', async () => {
+  const line = sessionSummaryLine(stats({ read: 9, skipped: 1, flagged: 1, longestCombo: 5 }))
+
+  expect(line).toContain('9 read')
+  expect(line).toContain('1 flagged')
+  expect(line).toContain('1 skipped')
+  expect(line).toContain('longest combo 5')
+  expect(line).toContain('grade S')
 })

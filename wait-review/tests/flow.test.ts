@@ -735,3 +735,60 @@ test('a page is sized to the pane body, not to the whole terminal', async ($, on
   // hint and the gaps) leaves room for the controls in a 24-row pane.
   expect(short).toBeLessThanOrEqual(24 - 9)
 })
+
+/** Four files, each a single hunk, so a combo can run past three and a skip can break it. */
+const FOUR_HUNKS_DIFF = ['a', 'b', 'c', 'd']
+  .map(name =>
+    [
+      `diff --git ${name}.ts ${name}.ts`,
+      `--- ${name}.ts`,
+      `+++ ${name}.ts`,
+      '@@ -1,1 +1,1 @@',
+      `-old ${name}`,
+      `+new ${name}`,
+      '',
+    ].join('\n'),
+  )
+  .join('\n')
+
+test('a combo of three or more shows in the pane, and a skip breaks it back to nothing', async ($, on) => {
+  await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-combo')
+  const ui = await mountPane($, 'terminal')
+
+  // `/combo x\d/` and not the bare word: the session summary says "longest
+  // combo 0" from the first hunk read on, which is not the live streak badge.
+  expect(await ui.find({ text: /combo x\d/ })).toBeUndefined()
+  await ui.press({ key: 'ok' }) // a.ts
+  await ui.press({ key: 'ok' }) // b.ts
+  expect(await ui.find({ text: /combo x\d/ })).toBeUndefined()
+  await ui.press({ key: 'ok' }) // c.ts: the third in a row
+  expect(await ui.find({ text: /combo x3/ })).toBeDefined()
+
+  await ui.press({ key: 'drop' }) // skips the last file, d.ts, in bulk
+  expect(await ui.find({ text: /combo x\d/ })).toBeUndefined()
+
+  await ui.unmount()
+})
+
+test('the session summary and grade appear in the /wait-review reply, and undo reverts the combo too', async ($, on) => {
+  await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-grade')
+  const ui = await mountPane($, 'terminal')
+
+  await ui.press({ key: 'ok' })
+  await ui.press({ key: 'ok' })
+  await ui.press({ key: 'ok' })
+  await ui.press({ key: 'drop' })
+
+  // 3 read, 1 skipped: 75% acted on, no flag — grade A.
+  const dropped = await $.command.run({ command: 'wait-review', args: '' } as never)
+  expect(dropped.text).toContain('Session: 3 read · 0 flagged · 1 skipped · longest combo 3 — grade A.')
+
+  await ui.press({ key: 'undo' })
+  // The drop alone is undone: the combo it broke is whole again.
+  expect(await ui.find({ text: /combo x3/ })).toBeDefined()
+
+  const undone = await $.command.run({ command: 'wait-review', args: '' } as never)
+  expect(undone.text).toContain('Session: 3 read · 0 flagged · 0 skipped · longest combo 3 — grade A.')
+
+  await ui.unmount()
+})

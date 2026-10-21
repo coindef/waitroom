@@ -10,6 +10,30 @@
 export type FileBucket = '0' | '1' | '2-3' | '4+'
 
 /**
+ * The rotating bonus question's own dimension: which thing besides land/fail
+ * is being forecast this turn.
+ */
+export type BonusDim = 'duration' | 'files' | 'toolCalls'
+
+/**
+ * Every bucket label across every bonus dimension, in one type, so a
+ * `TurnRecord`'s guess and its outcome share a type regardless of which
+ * dimension was asked that turn.
+ */
+export type BonusBucket = '<30s' | '30-90s' | '>90s' | '1' | '2-3' | '4+' | '0-2' | '3-6' | '7+'
+
+/**
+ * A calibration rank, worst to best, from the rolling Brier score.
+ *
+ * `Unranked` is not the worst rank, it is no rank: too few scored turns for
+ * the number to mean anything yet.
+ */
+export type Rank = 'Unranked' | 'Coin-Flipper' | 'Bronze' | 'Silver' | 'Gold' | 'Platinum' | 'Oracle'
+
+/** A climb from one rank to a better one, worth a celebratory line once. */
+export type RankChange = { from: Rank; to: Rank }
+
+/**
  * One turn, as it was forecast and as it turned out.
  *
  * `saidConfidence` and `saidFiles` are absent on a turn nobody bet on, and
@@ -24,6 +48,8 @@ export type TurnRecord = {
   /** Distinct files the turn wrote. */
   files: number
   filesBucket: FileBucket
+  /** Tool calls the turn made, of any kind, counted whether denied or not. */
+  toolCalls: number
   /** An interrupted turn is recorded but never scored. */
   isAborted: boolean
   /**
@@ -45,10 +71,21 @@ export type TurnRecord = {
    * nothing and is never scored.
    */
   isVerdictSkipped?: true
+  /** Which bonus question this turn's rotation landed on; absent on a turn before this feature shipped. */
+  bonusDim?: BonusDim
+  /** The person's guess at that dimension; absent when the bonus was skipped. */
+  saidBonus?: BonusBucket
+  /** How that dimension actually turned out, set whenever `bonusDim` is. */
+  bonusActual?: BonusBucket
 }
 
 /** The most recent verdict given, kept so one press can take it back. */
-export type LastVerdict = { turnId: string; result: 'landed' | 'fixed' | 'skipped' }
+export type LastVerdict = {
+  turnId: string
+  result: 'landed' | 'fixed' | 'skipped'
+  /** Set when this verdict's score pushed the rolling rank up a level. */
+  rankUp?: RankChange
+}
 
 /** The bet on the turn now running. */
 export type OpenBet = {
@@ -67,6 +104,19 @@ export type OpenBet = {
   baseline?: Record<string, string>
   saidConfidence?: number
   saidFiles?: FileBucket
+  /** Tool calls made so far this turn, of any kind. */
+  toolCalls: number
+  /** Which dimension this turn's rotation offers as the bonus question. */
+  bonusDim?: BonusDim
+  /** The person's guess at `bonusDim`; absent until they answer. */
+  saidBonus?: BonusBucket
+  /**
+   * Set when the person waved the bonus question away.
+   *
+   * Its own skip, separate from `isDeclined`: passing on the bonus costs
+   * nothing and says nothing about the main bet.
+   */
+  isBonusDeclined?: true
   /**
    * Set when the person waved this turn's bet away.
    *
@@ -89,6 +139,19 @@ declare module 'claude-code' {
        * does, so the sites read this to be redrawn when a record lands.
        */
       revision: number
+      /**
+       * How many turns have offered a bonus question, counted forever rather
+       * than off the history array's own length: that array is capped at 500,
+       * so past the cap its length stops growing and the rotation would stall
+       * on whichever dimension the cap landed on.
+       */
+      bonusRotation: number
+      /**
+       * When this session began, epoch milliseconds; null until `session.start`
+       * has set it once. The recap card's "this session" is every record at or
+       * after this.
+       */
+      sessionStartedAt: number | null
     }
   }
 }

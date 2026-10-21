@@ -1,11 +1,13 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Decision, Hunk, HunkStatus, Page } from '../types'
+import type { Decision, Hunk, HunkStatus, Page, SessionStats } from '../types'
 import type { Slice } from './diff'
 import {
   DEFAULT_IGNORE,
+  EMPTY_SESSION,
   filledCells,
+  gradeOf,
   isIgnored,
   linesThatFit,
   mergeHunks,
@@ -16,6 +18,7 @@ import {
   progressOf,
   reviewable,
   reviewNote,
+  sessionSummaryLine,
   sliceHunk,
   summaryOf,
   tally,
@@ -41,6 +44,8 @@ const lastDecision = atom(
 )
 const noting = atom({ plugin: 'wait-review', key: 'noting' } as const, null as string | null)
 const page = atom({ plugin: 'wait-review', key: 'page' } as const, null as Page | null)
+/** This session's combo and grade inputs; reset once per true session start. */
+const session = atom({ plugin: 'wait-review', key: 'session' } as const, EMPTY_SESSION as SessionStats)
 
 /**
  * Rows the review card always spends around the diff: the header, the path
@@ -211,6 +216,9 @@ const beginSession = async ($: EngineInterface, config: Config) => {
   // work in progress, not a review the agent owes them.
   const already = await scanRepo($, config)
   await update($, preexisting, () => already.hunks.map(one => one.id).slice(0, SNAPSHOT_LIMIT))
+  // Guarded by the same `began` check above, so a hot reload mid-session
+  // never zeroes out the combo and grade it was in the middle of building.
+  await update($, session, () => EMPTY_SESSION)
 }
 
 /** Re-reads the repository and merges what it finds into the queue. */
@@ -221,11 +229,32 @@ const scan = async ($: EngineInterface, config: Config) => {
   await update($, truncatedFiles, () => found.truncatedFiles)
 }
 
+/**
+ * `ok`, `flagged` and `later` are each a hunk individually read, as opposed
+ * to one waved away in bulk by skipping its file — that distinction is what
+ * the combo and the session grade are measuring.
+ */
+const noteRead = async ($: EngineInterface, status: HunkStatus) => {
+  await update($, session, stats => {
+    const combo = stats.combo + 1
+
+    return {
+      ...stats,
+      read: stats.read + 1,
+      flagged: status === 'flagged' ? stats.flagged + 1 : stats.flagged,
+      combo,
+      longestCombo: Math.max(stats.longestCombo, combo),
+    }
+  })
+}
+
 const mark = async ($: EngineInterface, id: string, status: HunkStatus) => {
   await update($, noting, () => null)
   const before = (await read($, hunks)).find(one => one.id === id)
+  const fromSession = await read($, session)
   await update($, hunks, old => old.map(one => (one.id === id ? { ...one, status } : one)))
-  await update($, lastDecision, () => (before ? { changes: [{ id, from: before.status }] } : null))
+  await update($, lastDecision, () => (before ? { changes: [{ id, from: before.status }], fromSession } : null))
+  await noteRead($, status)
   await showStatus($)
 }
 
@@ -274,6 +303,10 @@ const undo = async ($: EngineInterface) => {
   await update($, hunks, old =>
     old.map(one => (from.has(one.id) ? { ...one, status: from.get(one.id) as HunkStatus } : one)),
   )
+  // The combo and the counts are part of the call being undone, same as the
+  // hunks' statuses — not reverting them left a drop's "skipped" outliving
+  // its own undo.
+  await update($, session, () => last.fromSession)
   await update($, lastDecision, () => null)
   await showStatus($)
 }
@@ -291,8 +324,13 @@ const dropFile = async ($: EngineInterface, path: string) => {
     .filter(one => one.path === path && (one.status === 'pending' || one.status === 'later'))
     .map(one => ({ id: one.id, from: one.status }))
   const ids = new Set(changes.map(one => one.id))
+  const fromSession = await read($, session)
   await update($, hunks, old => old.map(one => (ids.has(one.id) ? { ...one, status: 'dropped' as const } : one)))
-  await update($, lastDecision, () => (changes.length > 0 ? { changes } : null))
+  await update($, lastDecision, () => (changes.length > 0 ? { changes, fromSession } : null))
+  if (changes.length > 0) {
+    // Waved away, not read: the combo breaks, whatever it was.
+    await update($, session, stats => ({ ...stats, skipped: stats.skipped + changes.length, combo: 0 }))
+  }
   await showStatus($)
 }
 
@@ -342,9 +380,11 @@ export const register: Register = (on, options) => {
         : 'Review pane open.'
     const truncatedCount = await read($, truncatedFiles)
     const truncatedNote = truncatedCount > 0 ? ` +${truncatedCount} more files not shown.` : ''
+    const stats = await read($, session)
+    const sessionNote = stats.read > 0 || stats.skipped > 0 ? ` ${sessionSummaryLine(stats)}` : ''
 
     return {
-      text: `${where} ${counts.pending} hunk${counts.pending === 1 ? '' : 's'} to read, ${counts.reviewed} reviewed, ${counts.flagged} flagged.${truncatedNote}`,
+      text: `${where} ${counts.pending} hunk${counts.pending === 1 ? '' : 's'} to read, ${counts.reviewed} reviewed, ${counts.flagged} flagged.${truncatedNote}${sessionNote}`,
     }
   })
 
@@ -400,6 +440,7 @@ export const register: Register = (on, options) => {
     const last = await read($, lastDecision)
     const noteFor = await read($, noting)
     const truncatedCount = await read($, truncatedFiles)
+    const stats = await read($, session)
     const counts = tally(list)
     const current = nextHunk(list)
     // Only a single-hunk decision can be "the hunk just flagged" - a dropped
@@ -416,6 +457,9 @@ export const register: Register = (on, options) => {
     // A bar for the reading so far: a count says how many, the bar says how far.
     const barCells = width >= 56 && list.length > 0 ? 12 : 0
     const filled = filledCells(decided, list.length, barCells)
+    // A zero says nothing, same as the rest of this pane's counts, so the
+    // summary line only shows once there has been something to resolve.
+    const hasSessionActivity = stats.read > 0 || stats.skipped > 0
     const head = (
       <Box flexDirection="column">
         <Box justifyContent="space-between" gap={1}>
@@ -435,9 +479,17 @@ export const register: Register = (on, options) => {
               </Text>
             )}
           </Box>
-          {isBusy && <Text color="claude">Claude is working</Text>}
+          <Box gap={1}>
+            {stats.combo >= 3 && (
+              <Text color="success" weight="bold">
+                combo x{stats.combo}
+              </Text>
+            )}
+            {isBusy && <Text color="claude">Claude is working</Text>}
+          </Box>
         </Box>
         {truncatedCount > 0 && <Text dimColor>+{truncatedCount} more files not shown</Text>}
+        {hasSessionActivity && <Text dimColor>{sessionSummaryLine(stats)}</Text>}
       </Box>
     )
 

@@ -50,6 +50,16 @@ the diff has been reviewed at no dedicated review cost.
 That last step closes the loop: you read during the wait, flag what is wrong,
 and the correction rides along with whatever you type next. No extra turn.
 
+## Combo and session grade
+
+Deciding a hunk — `o`, `f` or `l` — without an intervening `x` builds a combo,
+shown as `combo x5` once it reaches three; skipping a file breaks it back to
+nothing. The session keeps count of hunks read, flagged and skipped, and the
+longest combo reached, and grades the session on how much of what was
+resolved was actually read rather than waved away in bulk: `S` needs at least
+90% read and one flag, `A` 75%, `B` 50%, else `C`. Both show in the pane and
+in `/wait-review`'s reply, and an undo reverses them along with the hunk.
+
 ## Commands
 
 | Command | What it does |
@@ -209,7 +219,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 69 tests
+claude plugin test .         # 78 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

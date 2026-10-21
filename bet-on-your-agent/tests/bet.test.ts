@@ -7,10 +7,16 @@ import {
   calibrationLine,
   CALIBRATION_HEAD,
   asText,
+  bonusBucketOf,
+  bonusDimFor,
+  bonusLabel,
   bucketOf,
   calibration,
   changedSince,
   COIN_FLIP_BRIER,
+  currentRank,
+  currentStreak,
+  extremeCalls,
   FILE_LABELS,
   filesPhrase,
   headline,
@@ -19,7 +25,12 @@ import {
   median,
   owedVerdict,
   parseStatus,
+  rankImproved,
+  rankOf,
+  recapCard,
+  recapOf,
   report,
+  rollingBrier,
   setVerdict,
   shortAsk,
   skipVerdict,
@@ -39,6 +50,7 @@ const turn = (over: Partial<TurnRecord> = {}): TurnRecord => {
     durationMs: 30000,
     files: 2,
     filesBucket: '2-3',
+    toolCalls: 0,
     isAborted: false,
     ...over,
   }
@@ -444,4 +456,236 @@ test('a row that is honest says nothing about leaning', async () => {
   const line = calibrationLine({ said: 0.5, actual: 0.5, turns: 4, lean: 'fair' })
 
   expect(line).not.toContain('confident')
+})
+
+test('the bonus dimension rotates in a fixed order, wrapping after three', async () => {
+  expect(bonusDimFor(0)).toBe('duration')
+  expect(bonusDimFor(1)).toBe('files')
+  expect(bonusDimFor(2)).toBe('toolCalls')
+  expect(bonusDimFor(3)).toBe('duration')
+  expect(bonusDimFor(5)).toBe('toolCalls')
+})
+
+test('the duration bonus splits at 30s and 90s', async () => {
+  expect(bonusBucketOf('duration', 29999)).toBe('<30s')
+  expect(bonusBucketOf('duration', 30000)).toBe('30-90s')
+  expect(bonusBucketOf('duration', 90000)).toBe('30-90s')
+  expect(bonusBucketOf('duration', 90001)).toBe('>90s')
+})
+
+test('the files bonus splits at 1 and 3, folding no files into the "1" bucket', async () => {
+  expect(bonusBucketOf('files', 0)).toBe('1')
+  expect(bonusBucketOf('files', 1)).toBe('1')
+  expect(bonusBucketOf('files', 2)).toBe('2-3')
+  expect(bonusBucketOf('files', 3)).toBe('2-3')
+  expect(bonusBucketOf('files', 4)).toBe('4+')
+})
+
+test('the tool-call bonus splits at 2 and 6', async () => {
+  expect(bonusBucketOf('toolCalls', 0)).toBe('0-2')
+  expect(bonusBucketOf('toolCalls', 2)).toBe('0-2')
+  expect(bonusBucketOf('toolCalls', 3)).toBe('3-6')
+  expect(bonusBucketOf('toolCalls', 6)).toBe('3-6')
+  expect(bonusBucketOf('toolCalls', 7)).toBe('7+')
+})
+
+test('a bonus bucket is a word where a bare digit would read as a key, else itself', async () => {
+  expect(bonusLabel('files', '1')).toBe('one')
+  expect(bonusLabel('files', '2-3')).toBe('2–3')
+  expect(bonusLabel('duration', '<30s')).toBe('<30s')
+  expect(bonusLabel('toolCalls', '0-2')).toBe('0-2')
+})
+
+test('the bonus question is scored on whichever dimension it actually asked', async () => {
+  const found = report([
+    turn({ saidBonus: '<30s', bonusActual: '<30s', bonusDim: 'duration' }),
+    turn({ saidBonus: '2-3', bonusActual: '4+', bonusDim: 'files' }),
+    turn(),
+  ])
+
+  expect(found.bonus).toEqual({ right: 1, of: 2 })
+})
+
+test('an aborted turn’s bonus guess is recorded but never scored', async () => {
+  const found = report([
+    turn({ saidBonus: '<30s', bonusActual: '<30s', isAborted: true }),
+    turn({ saidBonus: '<30s', bonusActual: '>90s' }),
+  ])
+
+  expect(found.bonus).toEqual({ right: 0, of: 1 })
+})
+
+test('the rank is Unranked under five scored turns, whatever the brier', async () => {
+  expect(rankOf(0.01, 4)).toBe('Unranked')
+  expect(rankOf(undefined, 20)).toBe('Unranked')
+})
+
+test('the rank cutoffs land exactly where the thresholds say, worst to best', async () => {
+  expect(rankOf(0.3, 5)).toBe('Coin-Flipper')
+  expect(rankOf(0.29, 5)).toBe('Bronze')
+  expect(rankOf(0.25, 5)).toBe('Bronze')
+  expect(rankOf(0.24, 5)).toBe('Silver')
+  expect(rankOf(0.2, 5)).toBe('Silver')
+  expect(rankOf(0.19, 5)).toBe('Gold')
+  expect(rankOf(0.15, 5)).toBe('Gold')
+  expect(rankOf(0.14, 5)).toBe('Platinum')
+  expect(rankOf(0.1, 5)).toBe('Platinum')
+  expect(rankOf(0.09, 5)).toBe('Oracle')
+  expect(rankOf(0, 5)).toBe('Oracle')
+})
+
+test('a rank improves only on a climb, never on a hold or a fall', async () => {
+  expect(rankImproved('Silver', 'Gold')).toBe(true)
+  expect(rankImproved('Gold', 'Silver')).toBe(false)
+  expect(rankImproved('Gold', 'Gold')).toBe(false)
+  expect(rankImproved('Unranked', 'Coin-Flipper')).toBe(true)
+})
+
+test('the rolling Brier looks back only the window, aging the oldest calls out', async () => {
+  const good = Array.from({ length: 20 }, () => turn({ saidConfidence: 0.9, landed: true }))
+  const bad = Array.from({ length: 5 }, () => turn({ saidConfidence: 0.9, landed: false }))
+
+  const { brier, scored } = rollingBrier([...good, ...bad])
+
+  // The window holds the last 20: 15 surviving good calls plus all 5 bad.
+  expect(scored).toBe(20)
+  expect(brier?.toFixed(2)).toBe('0.21')
+})
+
+test('fewer than a window of scored turns uses what there is, and none at all is undefined', async () => {
+  const one = rollingBrier([turn({ saidConfidence: 1, landed: true })])
+  expect(one.scored).toBe(1)
+  expect(one.brier).toBe(0)
+  expect(rollingBrier([]).scored).toBe(0)
+  expect(rollingBrier([]).brier).toBeUndefined()
+})
+
+test('the current rank reads the rolling Brier, not the lifetime one', async () => {
+  const good = Array.from({ length: 20 }, () => turn({ saidConfidence: 0.9, landed: true }))
+  const bad = Array.from({ length: 5 }, () => turn({ saidConfidence: 0.9, landed: false }))
+
+  expect(currentRank([...good, ...bad])).toBe('Silver')
+  expect(currentRank([])).toBe('Unranked')
+})
+
+test('the best and worst calls are the smallest and largest errors, not thresholded', async () => {
+  const { best, worst } = extremeCalls([
+    turn({ saidConfidence: 0.9, landed: true, ask: 'tiny miss' }),
+    turn({ saidConfidence: 0.6, landed: false, ask: 'biggest miss' }),
+    turn({ saidConfidence: 0.55, landed: true, ask: 'small miss' }),
+  ])
+
+  expect(best?.ask).toBe('tiny miss')
+  expect(worst?.ask).toBe('biggest miss')
+})
+
+test('with nothing scored, there is no best or worst call', async () => {
+  expect(extremeCalls([])).toEqual({})
+})
+
+test('the current streak counts consecutive landed calls back from the most recent', async () => {
+  expect(
+    currentStreak([
+      turn({ saidConfidence: 0.8, landed: false }),
+      turn({ saidConfidence: 0.8, landed: true }),
+      turn({ saidConfidence: 0.8, landed: true }),
+      turn({ saidConfidence: 0.8, landed: true }),
+    ]),
+  ).toBe(3)
+})
+
+test('a miss at the end breaks the streak back to zero, whatever came before', async () => {
+  expect(
+    currentStreak([
+      turn({ saidConfidence: 0.8, landed: true }),
+      turn({ saidConfidence: 0.8, landed: true }),
+      turn({ saidConfidence: 0.8, landed: false }),
+    ]),
+  ).toBe(0)
+  expect(currentStreak([])).toBe(0)
+})
+
+test('a rank climb prints one celebratory line in the report', async () => {
+  const found = report(Array.from({ length: 5 }, () => turn({ saidConfidence: 0.9, landed: true })))
+
+  expect(asText(found, { from: 'Silver', to: 'Gold' })).toContain('Rank up: Silver -> Gold')
+  expect(asText(found)).not.toContain('Rank up')
+})
+
+test('the report always names the current rank, even while still calibrating', async () => {
+  expect(asText(report([turn({ saidConfidence: 0.9, landed: true })]))).toContain('Rank: Unranked.')
+})
+
+test('the bonus line in the text report shows once a bonus question is answered, scored or not', async () => {
+  const beforeScoring = asText(report([turn({ saidBonus: '<30s', bonusActual: '<30s' })]))
+  expect(beforeScoring).toContain('none scored yet')
+  expect(beforeScoring).toContain('Bonus: 1/1 correct')
+
+  expect(asText(report([turn()]))).not.toContain('Bonus')
+})
+
+test('the recap scopes its totals to the session, but the rank to the whole history', async () => {
+  const sessionTurns = [
+    turn({ saidConfidence: 0.9, landed: true, saidBonus: '<30s', bonusActual: '<30s' }),
+  ]
+  const all = [...Array.from({ length: 4 }, () => turn({ saidConfidence: 0.9, landed: true })), ...sessionTurns]
+
+  const recap = recapOf(sessionTurns, all)
+
+  expect(recap.turnsBet).toBe(1)
+  expect(recap.turnsScored).toBe(1)
+  expect(recap.bonus).toEqual({ right: 1, of: 1 })
+  expect(recap.streak).toBe(1)
+  // Five scored turns across the whole history, all landed: not Unranked.
+  expect(recap.rank).not.toBe('Unranked')
+})
+
+test('a session with nothing scored still produces a complete, if empty, recap', async () => {
+  const recap = recapOf([], [])
+
+  expect(recap.turnsBet).toBe(0)
+  expect(recap.turnsScored).toBe(0)
+  expect(recap.brier).toBeUndefined()
+  expect(recap.best).toBeUndefined()
+  expect(recap.worst).toBeUndefined()
+  expect(recap.rank).toBe('Unranked')
+  expect(recap.streak).toBe(0)
+  expect(recap.bonus).toBeUndefined()
+})
+
+test('the recap card is a box-drawn, plain-text summary with every field on its own row', async () => {
+  const card = recapCard({
+    turnsBet: 7,
+    turnsScored: 5,
+    brier: 0.147,
+    best: { said: 0.95, landed: true, error: 0.0025, ask: 'add retry' },
+    worst: { said: 0.9, landed: false, error: 0.81, ask: 'refactor auth' },
+    rank: 'Gold',
+    streak: 3,
+    bonus: { right: 3, of: 5 },
+  })
+
+  expect(card).toContain('Session recap')
+  expect(card).toContain('Turns bet')
+  expect(card).toContain('0.147')
+  expect(card).toContain('Gold')
+  expect(card).toContain('add retry')
+  expect(card).toContain('refactor auth')
+  expect(card).toContain('3/5 correct')
+  // Copy-paste friendly: no ANSI escapes hiding inside the box.
+  expect(card).not.toMatch(/\u001b/)
+  expect(card.startsWith('┌')).toBe(true)
+  expect(card.endsWith('┘')).toBe(true)
+  // Every row, border included, is the same length: a box that draws straight.
+  const widths = new Set(card.split('\n').map(line => line.length))
+  expect(widths.size).toBe(1)
+})
+
+test('a thin recap still draws a complete card, an em dash standing in for what has not happened yet', async () => {
+  const card = recapCard({ turnsBet: 0, turnsScored: 0, rank: 'Unranked', streak: 0 })
+
+  expect(card).toContain('Session recap')
+  expect(card).toContain('—')
+  const widths = new Set(card.split('\n').map(line => line.length))
+  expect(widths.size).toBe(1)
 })
