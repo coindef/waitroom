@@ -1,12 +1,13 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { BonusBucket, FileBucket, LastVerdict, OpenBet, TurnRecord } from '../types'
+import type { BonusBucket, DailyChallengeRecord, DailyGuess, FileBucket, LastVerdict, OpenBet, TurnRecord } from '../types'
 import {
   asDuration,
   askRoomFor,
   asPercent,
   asText,
+  badges,
   BANDS,
   bonusBucketOf,
   bonusDimFor,
@@ -16,17 +17,24 @@ import {
   CALIBRATION_HEAD,
   calibrationLine,
   bucketOf,
+  challengeFor,
+  challengeQuestion,
+  challengeThreshold,
   changedSince,
   COIN_FLIP_BRIER,
   currentRank,
+  dailyChallengeDimFor,
+  dailyOutcome,
   FILE_BUCKETS,
   FILE_LABELS,
   filesPhrase,
   groupMisses,
   headline,
   isCalibrating,
+  keepDailyChallenge,
   keepRecord,
   lapseVerdicts,
+  localDateKey,
   MIN_SCORED,
   owedVerdict,
   parseStatus,
@@ -43,6 +51,7 @@ import {
 
 const PANE = 'bet-on-your-agent'
 const STORE_KEY = 'turns'
+const DAILY_CHALLENGE_STORE_KEY = 'dailyChallenges'
 
 const NO_BET: OpenBet = { turnId: '', ask: '', files: [], toolCalls: 0 }
 
@@ -53,6 +62,8 @@ const lastVerdict = atom(
   null as LastVerdict | null,
 )
 const revision = atom({ plugin: 'bet-on-your-agent', key: 'revision' } as const, 0)
+/** The most recent "Badge earned" note, shown once beside the band's own scoring output. */
+const badgeNote = atom({ plugin: 'bet-on-your-agent', key: 'badgeNote' } as const, null as string | null)
 /** How many turns have offered a bonus question so far; drives the rotation. */
 const bonusRotation = atom({ plugin: 'bet-on-your-agent', key: 'bonusRotation' } as const, 0)
 /** When this session began, for the recap card's "this session". */
@@ -79,6 +90,30 @@ const loadTurns = async ($: EngineInterface): Promise<TurnRecord[]> => {
 const saveTurns = async ($: EngineInterface, records: readonly TurnRecord[]) => {
   await $.store.set(STORE_KEY, records)
   await update($, revision, at => at + 1)
+}
+
+/** The daily-challenge log, or nothing when the store holds something else. */
+const loadDailyChallenges = async ($: EngineInterface): Promise<DailyChallengeRecord[]> => {
+  const raw = await $.store.get(DAILY_CHALLENGE_STORE_KEY).catch(() => undefined)
+
+  return Array.isArray(raw) ? (raw as DailyChallengeRecord[]) : []
+}
+
+const saveDailyChallenges = async ($: EngineInterface, records: readonly DailyChallengeRecord[]) => {
+  await $.store.set(DAILY_CHALLENGE_STORE_KEY, records)
+  await update($, revision, at => at + 1)
+}
+
+/**
+ * Compares the badge wall before and after a write, and names whatever is
+ * newly earned in one quiet note — the badges computed here need no fact
+ * beyond what `before`/`after` already carry.
+ */
+const noteBadges = async ($: EngineInterface, before: readonly TurnRecord[], after: readonly TurnRecord[]) => {
+  const earnedBefore = new Set(badges(before).filter(one => one.earned).map(one => one.id))
+  const newlyEarned = badges(after).filter(one => one.earned && !earnedBefore.has(one.id))
+  if (newlyEarned.length === 0) return
+  await update($, badgeNote, () => `Badge earned: ${newlyEarned.map(one => one.name).join(', ')}`)
 }
 
 /**
@@ -141,6 +176,17 @@ const declineBonus = async ($: EngineInterface) => {
   await showStatus($)
 }
 
+const placeDailyChallenge = async ($: EngineInterface, said: DailyGuess) => {
+  await update($, open, bet => ({ ...bet, saidDailyChallenge: said }))
+  await showStatus($)
+}
+
+/** Waves today's challenge away: its own skip, marking the day handled without costing anything. */
+const declineDailyChallenge = async ($: EngineInterface) => {
+  await update($, open, bet => ({ ...bet, isDailyChallengeDeclined: true as const }))
+  await showStatus($)
+}
+
 /** Waves this turn's bet away, so the band stops asking for the rest of it. */
 const declineBet = async ($: EngineInterface) => {
   await update($, open, bet => ({ ...bet, isDeclined: true as const }))
@@ -152,6 +198,7 @@ const giveVerdict = async ($: EngineInterface, turnId: string, landed: boolean) 
   const fromRank = currentRank(before)
   const after = setVerdict(before, turnId, landed)
   await saveTurns($, after)
+  await noteBadges($, before, after)
   const toRank = currentRank(after)
   await update($, lastVerdict, () => ({
     turnId,
@@ -284,8 +331,10 @@ export const register: Register = (on, options) => {
     const all = await loadTurns($)
     const startedAt = await read($, sessionStartedAt)
     const session = startedAt === null ? all : all.filter(one => one.at >= startedAt)
+    const dailyChallenges = await loadDailyChallenges($)
+    const today = localDateKey(await $.clock.now())
 
-    return { text: recapCard(recapOf(session, all)) }
+    return { text: recapCard(recapOf(session, all, dailyChallenges, today)) }
   })
 
   // One hook per tool so `e` narrows to that tool's own input.
@@ -331,12 +380,26 @@ export const register: Register = (on, options) => {
     if (e.agentId !== undefined) return next(e)
     const dim = bonusDimFor(await read($, bonusRotation))
     await update($, bonusRotation, at => at + 1)
+    // Today's challenge, if today does not already have one: answered,
+    // declined or left untouched, a day is handled and not offered again on
+    // a later turn.
+    const today = localDateKey(await $.clock.now())
+    const dailyLog = await loadDailyChallenges($)
+    const dailyDim = challengeFor(dailyLog, today) === undefined ? dailyChallengeDimFor(today) : undefined
     // The betting window opens here and closes when the turn lands.
-    await update($, open, () => ({ turnId: e.turnId, ask: e.text, files: [], toolCalls: 0, bonusDim: dim }))
+    await update($, open, () => ({
+      turnId: e.turnId,
+      ask: e.text,
+      files: [],
+      toolCalls: 0,
+      bonusDim: dim,
+      ...(dailyDim === undefined ? {} : { dailyChallengeDim: dailyDim }),
+    }))
     await update($, busy, () => true)
     // A new turn's own questions take over the band; the last verdict is
     // settled by now, or it would still be the one being asked about.
     await update($, lastVerdict, () => null)
+    await update($, badgeNote, () => null)
     // A session can run past the window too.
     await lapseStaleVerdicts($)
     await showStatus($)
@@ -380,7 +443,50 @@ export const register: Register = (on, options) => {
       ...(isThisTurn && bet.saidBonus !== undefined ? { saidBonus: bet.saidBonus } : {}),
       ...(bonusActual === undefined ? {} : { bonusActual }),
     }
-    await saveTurns($, keepRecord(await loadTurns($), record))
+    const before = await loadTurns($)
+    const after = keepRecord(before, record)
+    await saveTurns($, after)
+    await noteBadges($, before, after)
+
+    // The daily challenge, like the bonus question, needs no human verdict:
+    // it is scored the moment the turn lands, against the threshold its own
+    // history stood at before this turn (the very history `before` already is).
+    const challengeDim = isThisTurn ? bet.dailyChallengeDim : undefined
+    if (challengeDim !== undefined && !e.isAborted) {
+      const challengeToday = localDateKey(await $.clock.now())
+      const threshold = challengeThreshold(before, challengeDim)
+      const value = challengeDim === 'duration' ? e.durationMs : challengeDim === 'files' ? files : bet.toolCalls
+      const actual = dailyOutcome(value, threshold)
+      const guess = bet.saidDailyChallenge
+      const dailyLog = await loadDailyChallenges($)
+      if (bet.isDailyChallengeDeclined === true) {
+        await saveDailyChallenges(
+          $,
+          keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isSkipped: true }),
+        )
+      } else if (guess !== undefined) {
+        await saveDailyChallenges(
+          $,
+          keepDailyChallenge(dailyLog, {
+            date: challengeToday,
+            dim: challengeDim,
+            guess,
+            actual,
+            correct: guess === actual,
+          }),
+        )
+      } else {
+        // Offered, but the turn landed before it was answered or declined.
+        // Still needs a record for today, else the identical question comes
+        // back on the next turn — just not a scored one, and not one that
+        // costs the streak.
+        await saveDailyChallenges(
+          $,
+          keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isNotTaken: true }),
+        )
+      }
+    }
+
     await update($, busy, () => false)
     await showStatus($)
 
@@ -495,6 +601,39 @@ export const register: Register = (on, options) => {
         )
       }
 
+      // The daily challenge, its own skip: one optional yes/no about this
+      // turn against the person's own median, offered at most once a day.
+      if (
+        bet.dailyChallengeDim !== undefined &&
+        bet.saidDailyChallenge === undefined &&
+        bet.isDailyChallengeDeclined !== true
+      ) {
+        const dim = bet.dailyChallengeDim
+        // The same history `challengeThreshold` scores this turn's challenge
+        // against at turn.complete: no new turn lands while this is showing,
+        // so reading it fresh here can never drift from what it is judged by.
+        const question = challengeQuestion(await loadTurns($), dim)
+
+        return (
+          <Box flexDirection="column">
+            <Text wrap="truncate-end">
+              {tag} Daily challenge: will this turn {question}
+            </Text>
+            <Box gap={2}>
+              <Button key="yes" hotkey="1" plain onPress={() => placeDailyChallenge($, 'yes')}>
+                Yes
+              </Button>
+              <Button key="no" hotkey="2" plain onPress={() => placeDailyChallenge($, 'no')}>
+                No
+              </Button>
+              <Button key="decline" hotkey="0" plain dimColor onPress={() => declineDailyChallenge($)}>
+                Skip
+              </Button>
+            </Box>
+          </Box>
+        )
+      }
+
       const isOver =
         FILE_BUCKETS.indexOf(bucketOf(bet.files.length)) > FILE_BUCKETS.indexOf(bet.saidFiles)
 
@@ -517,34 +656,37 @@ export const register: Register = (on, options) => {
     }
 
     const owed = owedVerdict(await loadTurns($))
+    const badgeLine = await read($, badgeNote)
     if (!owed) {
       const last = await read($, lastVerdict)
-      if (!last) return next(e)
+      if (!last && !badgeLine) return next(e)
 
-      const label =
-        last.result === 'landed' ? 'Landed' : last.result === 'fixed' ? 'Needed fixing' : 'Skipped'
+      const label = last && (last.result === 'landed' ? 'Landed' : last.result === 'fixed' ? 'Needed fixing' : 'Skipped')
 
       return (
         <Box flexDirection="column" gap={1}>
-          <Box gap={1}>
-            <Text>
-              <Text dimColor>Recorded: </Text>
-              <Text
-                color={last.result === 'landed' ? 'success' : last.result === 'fixed' ? 'warning' : undefined}
-                dimColor={last.result === 'skipped'}
-              >
-                {label}
+          {last && (
+            <Box gap={1}>
+              <Text>
+                <Text dimColor>Recorded: </Text>
+                <Text
+                  color={last.result === 'landed' ? 'success' : last.result === 'fixed' ? 'warning' : undefined}
+                  dimColor={last.result === 'skipped'}
+                >
+                  {label}
+                </Text>
               </Text>
-            </Text>
-            <Button key="undo" hotkey="u" plain dimColor onPress={() => undoLastVerdict($)}>
-              Undo
-            </Button>
-          </Box>
-          {last.rankUp && (
+              <Button key="undo" hotkey="u" plain dimColor onPress={() => undoLastVerdict($)}>
+                Undo
+              </Button>
+            </Box>
+          )}
+          {last?.rankUp && (
             <Text color="success" weight="bold">
               Rank up: {last.rankUp.from} → {last.rankUp.to}
             </Text>
           )}
+          {badgeLine && <Text dimColor>{badgeLine}</Text>}
         </Box>
       )
     }
@@ -573,6 +715,7 @@ export const register: Register = (on, options) => {
             Skip
           </Button>
         </Box>
+        {badgeLine && <Text dimColor>{badgeLine}</Text>}
       </Box>
     )
   })

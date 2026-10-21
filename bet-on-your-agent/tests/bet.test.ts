@@ -1,9 +1,11 @@
 import { expect, test } from 'claude-code/testing'
 
-import type { TurnRecord } from '../types'
+import type { DailyChallengeRecord, TurnRecord } from '../types'
 import {
   asDuration,
   askRoomFor,
+  badges,
+  BONUS_HUNTER_TARGET,
   calibrationLine,
   CALIBRATION_HEAD,
   asText,
@@ -12,16 +14,30 @@ import {
   bonusLabel,
   bucketOf,
   calibration,
+  challengeFor,
+  challengeQuestion,
+  challengeThreshold,
   changedSince,
+  CHALLENGE_QUESTIONS,
+  CHALLENGE_QUESTIONS_FALLBACK,
   COIN_FLIP_BRIER,
   currentRank,
   currentStreak,
+  dailyChallengeDimFor,
+  dailyChallengeStreak,
+  dailyChallengeValue,
+  dailyOutcome,
   extremeCalls,
+  FALLBACK_MEDIAN,
   FILE_LABELS,
   filesPhrase,
+  hasChallengeHistory,
   headline,
+  HOT_STREAK_TARGET,
+  keepDailyChallenge,
   keepRecord,
   lapseVerdicts,
+  localDateKey,
   median,
   owedVerdict,
   parseStatus,
@@ -29,9 +45,11 @@ import {
   rankOf,
   recapCard,
   recapOf,
+  REGULAR_TARGET,
   report,
   rollingBrier,
   setVerdict,
+  SHARPSHOOTER_WINDOW,
   shortAsk,
   skipVerdict,
   undoVerdict,
@@ -630,7 +648,7 @@ test('the recap scopes its totals to the session, but the rank to the whole hist
   ]
   const all = [...Array.from({ length: 4 }, () => turn({ saidConfidence: 0.9, landed: true })), ...sessionTurns]
 
-  const recap = recapOf(sessionTurns, all)
+  const recap = recapOf(sessionTurns, all, [], '2024-01-01')
 
   expect(recap.turnsBet).toBe(1)
   expect(recap.turnsScored).toBe(1)
@@ -638,10 +656,12 @@ test('the recap scopes its totals to the session, but the rank to the whole hist
   expect(recap.streak).toBe(1)
   // Five scored turns across the whole history, all landed: not Unranked.
   expect(recap.rank).not.toBe('Unranked')
+  // The badge wall reads the whole history, not the session alone.
+  expect(recap.badges).toHaveLength(6)
 })
 
 test('a session with nothing scored still produces a complete, if empty, recap', async () => {
-  const recap = recapOf([], [])
+  const recap = recapOf([], [], [], '2024-01-01')
 
   expect(recap.turnsBet).toBe(0)
   expect(recap.turnsScored).toBe(0)
@@ -651,6 +671,8 @@ test('a session with nothing scored still produces a complete, if empty, recap',
   expect(recap.rank).toBe('Unranked')
   expect(recap.streak).toBe(0)
   expect(recap.bonus).toBeUndefined()
+  expect(recap.badges.every(one => !one.earned)).toBe(true)
+  expect(recap.dailyChallenge).toBe('—')
 })
 
 test('the recap card is a box-drawn, plain-text summary with every field on its own row', async () => {
@@ -663,6 +685,11 @@ test('the recap card is a box-drawn, plain-text summary with every field on its 
     rank: 'Gold',
     streak: 3,
     bonus: { right: 3, of: 5 },
+    dailyChallenge: '3-day streak',
+    badges: [
+      { id: 'firstSteps', name: 'First Steps', earned: true },
+      { id: 'hotStreak', name: 'Hot Streak', earned: false, progress: { have: 3, of: 5 } },
+    ],
   })
 
   expect(card).toContain('Session recap')
@@ -672,6 +699,11 @@ test('the recap card is a box-drawn, plain-text summary with every field on its 
   expect(card).toContain('add retry')
   expect(card).toContain('refactor auth')
   expect(card).toContain('3/5 correct')
+  expect(card).toContain('3-day streak')
+  expect(card).toContain('Badges')
+  expect(card).toContain('First Steps')
+  expect(card).toContain('Hot Streak')
+  expect(card).toContain('3/5')
   // Copy-paste friendly: no ANSI escapes hiding inside the box.
   expect(card).not.toMatch(/\u001b/)
   expect(card.startsWith('┌')).toBe(true)
@@ -682,10 +714,256 @@ test('the recap card is a box-drawn, plain-text summary with every field on its 
 })
 
 test('a thin recap still draws a complete card, an em dash standing in for what has not happened yet', async () => {
-  const card = recapCard({ turnsBet: 0, turnsScored: 0, rank: 'Unranked', streak: 0 })
+  const card = recapCard({ turnsBet: 0, turnsScored: 0, rank: 'Unranked', streak: 0, badges: badges([]), dailyChallenge: '—' })
 
   expect(card).toContain('Session recap')
   expect(card).toContain('—')
   const widths = new Set(card.split('\n').map(line => line.length))
   expect(widths.size).toBe(1)
+})
+
+const landed = (count: number) => Array.from({ length: count }, () => turn({ saidConfidence: 0.9, landed: true }))
+const missed = (count: number) => Array.from({ length: count }, () => turn({ saidConfidence: 0.9, landed: false }))
+
+test('with no history, every badge is locked and the wall never changes shape', async () => {
+  const wall = badges([])
+
+  expect(wall).toHaveLength(6)
+  expect(wall.every(one => !one.earned)).toBe(true)
+  expect(wall.find(one => one.id === 'firstSteps')?.progress).toBeUndefined()
+  expect(wall.find(one => one.id === 'hotStreak')?.progress).toEqual({ have: 0, of: 5 })
+})
+
+test('First Steps earns on the first scored bet, not merely a recorded one', async () => {
+  expect(badges([turn({ saidConfidence: 0.8 })]).find(one => one.id === 'firstSteps')?.earned).toBe(false)
+  expect(
+    badges([turn({ saidConfidence: 0.8, landed: true })]).find(one => one.id === 'firstSteps')?.earned,
+  ).toBe(true)
+})
+
+test('Hot Streak earns on five consecutive landed calls anywhere in history, not only the most recent', async () => {
+  // The streak of five sits in the middle, broken by a miss, then two more landed.
+  const history = [...landed(5), ...missed(1), ...landed(2)]
+
+  const hotStreak = badges(history).find(one => one.id === 'hotStreak')
+  expect(hotStreak?.earned).toBe(true)
+  expect(hotStreak?.progress).toBeUndefined()
+})
+
+test('four consecutive landed calls is Hot Streak locked, one short', async () => {
+  const hotStreak = badges(landed(4)).find(one => one.id === 'hotStreak')
+
+  expect(hotStreak?.earned).toBe(false)
+  expect(hotStreak?.progress).toEqual({ have: 4, of: 5 })
+})
+
+test('Sharpshooter earns the moment any ten consecutive scored calls beat a 0.20 Brier', async () => {
+  const sharp = badges(landed(10)).find(one => one.id === 'sharpshooter')
+
+  expect(sharp?.earned).toBe(true)
+})
+
+test('Sharpshooter is not earned exactly at the 0.20 boundary, only strictly under it', async () => {
+  // Eight landed at 60% (error 0.16) and two missed at 60% (error 0.36): a
+  // mean Brier of exactly 0.20 over the ten.
+  const exactlyAtBoundary = [
+    ...Array.from({ length: 8 }, () => turn({ saidConfidence: 0.6, landed: true })),
+    ...Array.from({ length: 2 }, () => turn({ saidConfidence: 0.6, landed: false })),
+  ]
+
+  expect(badges(exactlyAtBoundary).find(one => one.id === 'sharpshooter')?.earned).toBe(false)
+  expect(badges(exactlyAtBoundary).find(one => one.id === 'sharpshooter')?.progress).toEqual({ have: 10, of: 10 })
+})
+
+test('Sharpshooter stays locked on nine scored calls, however good they are', async () => {
+  const sharp = badges(landed(9)).find(one => one.id === 'sharpshooter')
+
+  expect(sharp?.earned).toBe(false)
+  expect(sharp?.progress).toEqual({ have: 9, of: 10 })
+})
+
+test('Oracle Path earns by reaching the rank at least once, read off history the way it stood at the time', async () => {
+  // Five turns at 98%, all landed: a 0.0004 Brier, five scored - Oracle at that point.
+  const greatRun = Array.from({ length: 5 }, () => turn({ saidConfidence: 0.98, landed: true }))
+
+  expect(badges(greatRun).find(one => one.id === 'oraclePath')?.earned).toBe(true)
+})
+
+test('Oracle Path stays earned even after the rank falls back since', async () => {
+  const greatRun = Array.from({ length: 5 }, () => turn({ saidConfidence: 0.98, landed: true }))
+  const badRun = missed(5)
+  const history = [...greatRun, ...badRun]
+
+  // The rank right now has fallen well off Oracle, but the badge does not revoke.
+  expect(currentRank(history)).not.toBe('Oracle')
+  expect(badges(history).find(one => one.id === 'oraclePath')?.earned).toBe(true)
+})
+
+test('Oracle Path stays locked under five scored turns, however good they are', async () => {
+  const almost = Array.from({ length: 4 }, () => turn({ saidConfidence: 0.98, landed: true }))
+
+  expect(badges(almost).find(one => one.id === 'oraclePath')?.earned).toBe(false)
+})
+
+test('Bonus Hunter earns on five correct bonus answers, lifetime', async () => {
+  const bonusHit = (n: number) =>
+    Array.from({ length: n }, () => turn({ saidBonus: '<30s', bonusActual: '<30s' }))
+
+  expect(badges(bonusHit(5)).find(one => one.id === 'bonusHunter')?.earned).toBe(true)
+  const four = badges(bonusHit(4)).find(one => one.id === 'bonusHunter')
+  expect(four?.earned).toBe(false)
+  expect(four?.progress).toEqual({ have: 4, of: 5 })
+})
+
+test('an aborted turn’s bonus guess never counts toward Bonus Hunter', async () => {
+  const abortedHits = Array.from({ length: 5 }, () =>
+    turn({ saidBonus: '<30s', bonusActual: '<30s', isAborted: true }),
+  )
+
+  expect(badges(abortedHits).find(one => one.id === 'bonusHunter')?.earned).toBe(false)
+})
+
+test('Regular earns on five distinct days with a scored bet', async () => {
+  const dayOf = (day: number) => new Date(2024, 0, day).getTime()
+  const fiveDays = Array.from({ length: 5 }, (_, at) =>
+    turn({ at: dayOf(at + 1), saidConfidence: 0.8, landed: true }),
+  )
+
+  expect(badges(fiveDays).find(one => one.id === 'regular')?.earned).toBe(true)
+})
+
+test('two scored bets on the same day count as one day toward Regular', async () => {
+  const sameDay = new Date(2024, 0, 1).getTime()
+  const history = [
+    turn({ at: sameDay, saidConfidence: 0.8, landed: true }),
+    turn({ at: sameDay + 1000, saidConfidence: 0.8, landed: true }),
+    turn({ at: new Date(2024, 0, 2).getTime(), saidConfidence: 0.8, landed: true }),
+  ]
+
+  const regular = badges(history).find(one => one.id === 'regular')
+  expect(regular?.earned).toBe(false)
+  expect(regular?.progress).toEqual({ have: 2, of: 5 })
+})
+
+test('the daily challenge dimension is deterministic from the date alone', async () => {
+  expect(dailyChallengeDimFor('2024-03-01')).toBe(dailyChallengeDimFor('2024-03-01'))
+  expect(dailyChallengeDimFor('2024-03-01')).toBe(dailyChallengeDimFor('2024-03-01'))
+})
+
+test('the daily challenge dimension varies across dates, rather than always landing the same', async () => {
+  const dims = new Set(
+    Array.from({ length: 12 }, (_, at) => dailyChallengeDimFor(`2024-01-${String(at + 1).padStart(2, '0')}`)),
+  )
+
+  // Not every date need differ, but a dozen consecutive days should not all collapse to one.
+  expect(dims.size).toBeGreaterThan(1)
+})
+
+test('the daily challenge dimension does not fall into an obvious day-to-day rotation', async () => {
+  // A whole month of consecutive dates differs in only its last digit or
+  // two, almost every day — exactly the shape that used to put every third
+  // day on the same dimension, for as long as the month ran.
+  const dims = Array.from({ length: 28 }, (_, at) =>
+    dailyChallengeDimFor(`2024-02-${String(at + 1).padStart(2, '0')}`),
+  )
+  const matchesThreeAgo = dims.filter((dim, at) => at >= 3 && dim === dims[at - 3]).length
+
+  // Not every third day need differ, but a fixed 3-day rotation would make
+  // every single one match; this is a spot check that is far looser than that.
+  expect(matchesThreeAgo).toBeLessThan(dims.length - 3)
+})
+
+test('the challenge threshold falls back to a fixed number before there is enough history', async () => {
+  expect(challengeThreshold([], 'files')).toBe(FALLBACK_MEDIAN.files)
+  const thin = Array.from({ length: 4 }, () => turn({ saidConfidence: 0.8, landed: true, files: 10 }))
+  expect(challengeThreshold(thin, 'files')).toBe(FALLBACK_MEDIAN.files)
+})
+
+test('the challenge threshold reads the person’s own median once there is enough history', async () => {
+  const history = [1, 2, 3, 4, 5].map(files => turn({ saidConfidence: 0.8, landed: true, files }))
+
+  expect(challengeThreshold(history, 'files')).toBe(3)
+})
+
+test('hasChallengeHistory is challengeThreshold’s own condition, exposed so the question’s wording can match it', async () => {
+  expect(hasChallengeHistory([])).toBe(false)
+  const thin = Array.from({ length: 4 }, () => turn({ saidConfidence: 0.8, landed: true, files: 10 }))
+  expect(hasChallengeHistory(thin)).toBe(false)
+  const enough = Array.from({ length: 5 }, () => turn({ saidConfidence: 0.8, landed: true, files: 10 }))
+  expect(hasChallengeHistory(enough)).toBe(true)
+})
+
+test('the challenge question does not claim a personal median before there is enough history for one', async () => {
+  expect(challengeQuestion([], 'files')).toBe(CHALLENGE_QUESTIONS_FALLBACK.files)
+  expect(challengeQuestion([], 'duration')).toBe(CHALLENGE_QUESTIONS_FALLBACK.duration)
+  expect(challengeQuestion([], 'toolCalls')).toBe(CHALLENGE_QUESTIONS_FALLBACK.toolCalls)
+  expect(CHALLENGE_QUESTIONS_FALLBACK.files).not.toMatch(/median/)
+
+  const history = Array.from({ length: 5 }, () => turn({ saidConfidence: 0.8, landed: true, files: 2 }))
+  expect(challengeQuestion(history, 'files')).toBe(CHALLENGE_QUESTIONS.files)
+  expect(CHALLENGE_QUESTIONS.files).toMatch(/median/)
+})
+
+test('the daily outcome is "yes" only strictly past the threshold, not merely at it', async () => {
+  expect(dailyOutcome(5, 3)).toBe('yes')
+  expect(dailyOutcome(3, 3)).toBe('no')
+  expect(dailyOutcome(1, 3)).toBe('no')
+})
+
+test('a daily-challenge record is kept once a day, the newest write winning', async () => {
+  const first = keepDailyChallenge([], { date: '2024-01-01', dim: 'files', guess: 'yes', actual: 'no', correct: false })
+  const again = keepDailyChallenge(first, {
+    date: '2024-01-01',
+    dim: 'files',
+    guess: 'yes',
+    actual: 'yes',
+    correct: true,
+  })
+
+  expect(again).toHaveLength(1)
+  expect(again[0]?.correct).toBe(true)
+})
+
+test('challengeFor finds a day’s record, answered or skipped alike, or nothing for a day never offered', async () => {
+  const log: DailyChallengeRecord[] = [
+    { date: '2024-01-01', dim: 'files', guess: 'yes', actual: 'yes', correct: true },
+    { date: '2024-01-02', dim: 'duration', isSkipped: true },
+  ]
+
+  expect(challengeFor(log, '2024-01-01')?.correct).toBe(true)
+  expect(challengeFor(log, '2024-01-02')?.isSkipped).toBe(true)
+  expect(challengeFor(log, '2024-01-03')).toBeUndefined()
+})
+
+test('the streak counts back consecutive right days, broken by a wrong or skipped one', async () => {
+  const right = (date: string): DailyChallengeRecord => ({ date, dim: 'files', guess: 'yes', actual: 'yes', correct: true })
+  const wrong = (date: string): DailyChallengeRecord => ({ date, dim: 'files', guess: 'yes', actual: 'no', correct: false })
+
+  expect(dailyChallengeStreak([right('d1'), right('d2'), right('d3')])).toBe(3)
+  expect(dailyChallengeStreak([right('d1'), wrong('d2'), right('d3')])).toBe(1)
+  expect(dailyChallengeStreak([wrong('d1')])).toBe(0)
+  expect(dailyChallengeStreak([])).toBe(0)
+  // A day skipped, rather than missed, still breaks the run just the same.
+  expect(dailyChallengeStreak([right('d1'), { date: 'd2', dim: 'files', isSkipped: true }])).toBe(0)
+  // A day offered but never touched is neither a hit nor a miss: it does not
+  // extend the streak, but unlike a skip, it does not break it either.
+  expect(
+    dailyChallengeStreak([right('d1'), right('d2'), { date: 'd3', dim: 'files', isNotTaken: true }]),
+  ).toBe(2)
+  expect(dailyChallengeStreak([{ date: 'd1', dim: 'files', isNotTaken: true }])).toBe(0)
+})
+
+test('the recap value is the streak once it is worth naming, else today’s own result', async () => {
+  const right = (date: string): DailyChallengeRecord => ({ date, dim: 'files', guess: 'yes', actual: 'yes', correct: true })
+  const wrong = (date: string): DailyChallengeRecord => ({ date, dim: 'files', guess: 'yes', actual: 'no', correct: false })
+
+  expect(dailyChallengeValue([right('d1'), right('d2'), right('d3')], 'd3')).toBe('3-day streak')
+  // Only today, and it was right: one data point does not read as a "streak".
+  expect(dailyChallengeValue([right('d1')], 'd1')).toBe('right today')
+  expect(dailyChallengeValue([wrong('d1')], 'd1')).toBe('missed today')
+  expect(dailyChallengeValue([{ date: 'd1', dim: 'files', isSkipped: true }], 'd1')).toBe('skipped today')
+  // Offered and left untouched reads distinctly from a day with no turns at
+  // all, which stays a plain em dash.
+  expect(dailyChallengeValue([{ date: 'd1', dim: 'files', isNotTaken: true }], 'd1')).toBe('not taken')
+  expect(dailyChallengeValue([], 'd1')).toBe('—')
 })

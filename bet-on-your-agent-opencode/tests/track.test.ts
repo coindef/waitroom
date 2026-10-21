@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { askFrom, filePathOf, isBusy } from '../plugin/track.ts'
+import { askFrom, filePathOf, isBusy, isNewCompletion } from '../plugin/track.ts'
 
 test('a session is busy only when its status says so', () => {
   assert.equal(isBusy({ type: 'busy' }), true)
@@ -17,28 +17,44 @@ test('a session is busy only when its status says so', () => {
 })
 
 test('a completed edit names the file it touched', () => {
-  const path = filePathOf({ tool: 'edit', state: { status: 'completed', input: { filePath: 'src/a.ts' } } })
+  const path = filePathOf({ id: '1', tool: 'edit', state: { status: 'completed', input: { filePath: 'src/a.ts' } } })
   assert.equal(path, 'src/a.ts')
 })
 
 test('a completed write names the file it touched', () => {
-  const path = filePathOf({ tool: 'write', state: { status: 'completed', input: { filePath: 'src/b.ts' } } })
+  const path = filePathOf({ id: '2', tool: 'write', state: { status: 'completed', input: { filePath: 'src/b.ts' } } })
   assert.equal(path, 'src/b.ts')
 })
 
 test('a tool call still running names no file yet', () => {
-  const path = filePathOf({ tool: 'edit', state: { status: 'running', input: { filePath: 'src/a.ts' } } })
+  const path = filePathOf({ id: '3', tool: 'edit', state: { status: 'running', input: { filePath: 'src/a.ts' } } })
   assert.equal(path, undefined)
 })
 
 test('a tool that does not touch a single file names none', () => {
-  const path = filePathOf({ tool: 'bash', state: { status: 'completed', input: { command: 'ls' } } })
+  const path = filePathOf({ id: '4', tool: 'bash', state: { status: 'completed', input: { command: 'ls' } } })
   assert.equal(path, undefined)
 })
 
 test('apply_patch is left unparsed on purpose, not read as a bare path', () => {
-  const path = filePathOf({ tool: 'apply_patch', state: { status: 'completed', input: { patchText: '...' } } })
+  const path = filePathOf({ id: '5', tool: 'apply_patch', state: { status: 'completed', input: { patchText: '...' } } })
   assert.equal(path, undefined)
+})
+
+test('a tool part counts the first time it completes', () => {
+  const counted = new Set<string>()
+  assert.equal(isNewCompletion({ id: 'a', tool: 'bash', state: { status: 'completed' } }, counted), true)
+})
+
+test('a tool part already counted does not count again', () => {
+  const counted = new Set(['a'])
+  assert.equal(isNewCompletion({ id: 'a', tool: 'bash', state: { status: 'completed' } }, counted), false)
+})
+
+test('a tool part still running or pending does not count yet', () => {
+  const counted = new Set<string>()
+  assert.equal(isNewCompletion({ id: 'a', tool: 'bash', state: { status: 'running' } }, counted), false)
+  assert.equal(isNewCompletion({ id: 'a', tool: 'bash', state: { status: 'pending' } }, counted), false)
 })
 
 test('a user message is flattened from its text parts, in order', () => {

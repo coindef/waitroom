@@ -100,11 +100,26 @@ package to catch up to the docs.
 - The confidence band (1: 50% … 5: 95%, 0: skip) and the file-count band (1:
   0, 2: 1, 3: 2-3, 4: 4+), as real digit hotkeys through
   `api.keymap.registerLayer`, rendered in a `session_prompt_right` slot.
+- The rotating bonus question — duration, files (again, as a three-way
+  bucket), or tool calls, one dimension per turn, same buckets and wording as
+  the Claude Code mod. Tool calls are counted the same unfiltered way the mod's
+  `tool.call` hook does: every completed tool part, not only the file-touching
+  ones `track.ts#filePathOf` already watched for (see `tui.tsx`'s
+  `message.part.updated` handler and `track.ts#isNewCompletion`).
+- Calibration ranks: `rankOf`, `currentRank` and the Brier cutoffs are
+  imported unmodified, so `/bet`'s report already names the rank for free. The
+  rank-up moment itself — "Rank up: Silver → Gold" — is tracked per session
+  (`lastVerdict`, a plain `Map`, the same pattern `open`/`tracking` already
+  use here) and shown once beside the post-turn "Recorded: ..." line, mirroring
+  the Claude Code mod's band.
 - The post-turn verdict (landed / needed fixing / skip), same mechanism.
 - Scoring: `bet-on-your-agent/hooks/bet.ts` imported unmodified — `report`,
-  `calibration`, `worstCalls`, `asText`, all of it.
+  `calibration`, `worstCalls`, `asText`, `rankOf`, `currentRank`, all of it.
 - History persistence through `api.kv`, keyed the same way
   `bet-on-your-agent`'s `$.store` is (see "inferred, not confirmed" below).
+
+Not ported this round, by design: `/bet-recap` and the badge wall. Both are
+Claude Code-only features for now; a later pass can bring them here.
 
 ## Blocked on the API, not merely skipped
 
@@ -147,9 +162,14 @@ package to catch up to the docs.
   node --experimental-strip-types --test bet-on-your-agent-opencode/tests/track.test.ts
   ```
 
-  8 tests, all passing: busy detection, which tools count as file-touching
-  and which don't (including the deliberate `apply_patch` exclusion), and
-  flattening a user message's text parts.
+  11 tests, all passing: busy detection, which tools count as file-touching
+  and which don't (including the deliberate `apply_patch` exclusion),
+  flattening a user message's text parts, and which tool-part updates count
+  toward the bonus question's tool-call tally (the first `'completed'` sight
+  of a part, deduped against a re-fired one).
+- The bonus-bet dimensions, buckets, and rank thresholds `tui.tsx` wires in
+  are `bet-on-your-agent/hooks/bet.ts`'s own exports, already covered by that
+  package's own test suite — nothing here reimplements them.
 
 ## Status
 

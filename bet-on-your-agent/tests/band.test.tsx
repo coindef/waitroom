@@ -89,6 +89,12 @@ test('one question at a time, each answered by a bare digit', async ($, on) => {
 
   await ui.press({ key: 'b<30s' })
 
+  // The daily challenge is a fourth, optional question — still one at a time.
+  expect(await ui.find({ text: /Daily challenge:/ })).toBeDefined()
+  expect(await ui.findAll({ type: 'Button' })).toHaveLength(3)
+
+  await ui.press({ key: 'decline' })
+
   expect(await ui.find({ text: /bet 80% · 2–3 files/ })).toBeDefined()
   expect(await ui.findAll({ type: 'Button' })).toHaveLength(0)
 
@@ -170,7 +176,8 @@ test('files are counted from Edit, Write and NotebookEdit calls, the same path o
   expect(await betting.find({ text: /3 written so far/ })).toBeUndefined()
   await betting.press({ key: 'p80' })
   await betting.press({ key: 'f2-3' })
-  // The bonus question is not under test here.
+  // The bonus question and the daily challenge are not under test here.
+  await betting.press({ key: 'decline' })
   await betting.press({ key: 'decline' })
   expect(await betting.find({ text: /bet 80% · 2–3 files · 3 written so far/ })).toBeDefined()
   await betting.unmount()
@@ -360,7 +367,8 @@ test('files written through the shell count, not only Edit and Write calls', asy
   })
   await band.press({ key: 'p80' })
   await band.press({ key: 'f2-3' })
-  // The bonus question is not under test here.
+  // The bonus question and the daily challenge are not under test here.
+  await band.press({ key: 'decline' })
   await band.press({ key: 'decline' })
   expect(await band.find({ text: /0 written so far/ })).toBeDefined()
 
@@ -561,6 +569,7 @@ test('skipping the bonus question costs nothing and is never scored', async ($, 
   await betting.press({ key: 'p80' })
   await betting.press({ key: 'f1' })
   await betting.press({ key: 'decline' })
+  await betting.press({ key: 'decline' })
   // Skipped: the band has nothing left to ask this turn.
   expect(await betting.findAll({ type: 'Button' })).toHaveLength(0)
   await betting.unmount()
@@ -661,6 +670,243 @@ test('/bet-recap prints a shareable, plain-text card for this session', async ($
 
   expect(reply.text).toContain('Session recap')
   expect(reply.text).toContain('Turns bet')
+  // The badge wall and the daily challenge ride along on the same card.
+  expect(reply.text).toContain('Badges')
+  expect(reply.text).toContain('Daily challenge')
   // Copy-paste friendly: no ANSI escapes inside the box.
   expect(reply.text).not.toMatch(/\u001b/)
+})
+
+test('a newly earned badge prints one quiet line beside the scoring output', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'add a helper', turnId: 'turn-badge-1' })
+
+  const betting = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betting.press({ key: 'p80' })
+  await betting.press({ key: 'f1' })
+  await betting.press({ key: 'decline' }) // the bonus question is not under test here
+  await betting.press({ key: 'decline' }) // nor is the daily challenge
+  await betting.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-badge-1',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const idle = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(false) })
+  await idle.press({ key: 'landed' })
+
+  // The first-ever scored verdict earns First Steps, named beside "Recorded".
+  expect(await idle.find({ text: /Recorded: Landed/ })).toBeDefined()
+  expect(await idle.find({ text: /Badge earned: First Steps/ })).toBeDefined()
+  await idle.unmount()
+})
+
+test('no badge note shows when nothing was newly earned', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'add another helper', turnId: 'turn-badge-2' })
+
+  const betting = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betting.press({ key: 'p80' })
+  await betting.press({ key: 'f1' })
+  await betting.press({ key: 'decline' })
+  await betting.press({ key: 'decline' })
+  await betting.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-badge-2',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  // Skipping the verdict earns nothing, so there is nothing to announce.
+  const idle = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(false) })
+  await idle.press({ key: 'skip' })
+  expect(await idle.find({ text: /Badge earned/ })).toBeUndefined()
+  await idle.unmount()
+})
+
+test('the daily challenge is offered once a day, scored automatically, and not re-offered on a later turn the same day', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'add a cache', turnId: 'turn-daily-1' })
+
+  const first = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await first.press({ key: 'p80' })
+  await first.press({ key: 'f1' })
+  await first.press({ key: 'decline' }) // the bonus question is not under test here
+  expect(await first.find({ text: /Daily challenge:/ })).toBeDefined()
+  await first.press({ key: 'yes' })
+  await first.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-daily-1',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  // A second turn the same (mocked) day finds today already handled.
+  await $.turn.start({ text: 'add a second cache', turnId: 'turn-daily-2' })
+  const second = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await second.press({ key: 'p80' })
+  await second.press({ key: 'f1' })
+  await second.press({ key: 'decline' })
+  expect(await second.find({ text: /Daily challenge:/ })).toBeUndefined()
+  // With nothing further to ask, the band drops straight to its quiet background.
+  expect(await second.findAll({ type: 'Button' })).toHaveLength(0)
+  await second.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-daily-2',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  // Today's result shows in the recap card, right or missed either way.
+  const reply = await $.command.run({ command: 'bet-recap' } as never)
+  expect(reply.text).toMatch(/Daily challenge\s+(right today|missed today)/)
+})
+
+test('a daily challenge offered but never answered or declined is not re-offered on a later turn the same day', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'add a feature', turnId: 'turn-untouched-1' })
+
+  // The main bet is placed and the bonus declined, but the turn lands with
+  // the daily challenge still on screen — never answered, never declined.
+  const first = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await first.press({ key: 'p80' })
+  await first.press({ key: 'f1' })
+  await first.press({ key: 'decline' })
+  expect(await first.find({ text: /Daily challenge:/ })).toBeDefined()
+  await first.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-untouched-1',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  // A later turn the same day must not repeat the identical question.
+  await $.turn.start({ text: 'add another feature', turnId: 'turn-untouched-2' })
+  const second = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await second.press({ key: 'p80' })
+  await second.press({ key: 'f1' })
+  await second.press({ key: 'decline' })
+  expect(await second.find({ text: /Daily challenge:/ })).toBeUndefined()
+  await second.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-untouched-2',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  // Distinct from a day with no turns at all, which reads a plain em dash.
+  const reply = await $.command.run({ command: 'bet-recap' } as never)
+  expect(reply.text).toMatch(/Daily challenge\s+not taken/)
+})
+
+test('a turn with no bet placed at all still handles today’s untouched challenge, so it is not re-offered either', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  // Nobody opens the band this turn — it just runs and lands, with the
+  // challenge assigned at turn.start but never seen, let alone answered.
+  await $.turn.start({ text: 'quick fix', turnId: 'turn-nobet-1' })
+  await $.turn.complete({
+    turnId: 'turn-nobet-1',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  await $.turn.start({ text: 'quick fix again', turnId: 'turn-nobet-2' })
+  const second = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  expect(await second.find({ text: /Daily challenge:/ })).toBeUndefined()
+  await second.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-nobet-2',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const reply = await $.command.run({ command: 'bet-recap' } as never)
+  expect(reply.text).toMatch(/Daily challenge\s+not taken/)
+})
+
+test('the daily challenge asks about a typical turn, not a personal median, before there is enough history', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'add a cache', turnId: 'turn-fallback-1' })
+
+  const ui = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await ui.press({ key: 'p80' })
+  await ui.press({ key: 'f1' })
+  await ui.press({ key: 'decline' }) // the bonus question is not under test here
+
+  // A fresh session has no scored history yet, so the challenge is judged
+  // against the fixed fallback — the question should not claim a median.
+  expect(await ui.find({ text: /than a typical turn\?/ })).toBeDefined()
+  expect(await ui.find({ text: /than your median\?/ })).toBeUndefined()
+  await ui.unmount()
 })

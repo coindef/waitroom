@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.5.0 — playability, phase 2
+
+### bet-on-your-agent
+
+- **A badge wall.** Six badges sit beside the record, always shown whether
+  earned or locked: First Steps, Hot Streak (5 landed calls running),
+  Sharpshooter (ten straight scored calls under a 0.20 Brier), Oracle Path
+  (reaching the top rank once, lifetime), Bonus Hunter (five bonus questions
+  right), and Regular (five distinct days with a scored bet). `/bet-recap`
+  carries the same wall.
+- **A daily challenge.** Once a day, one optional yes/no question — will this
+  turn beat your own median on whichever dimension the date picks — scored
+  the moment the turn lands, no verdict needed. A run of right days shows in
+  `/bet-recap`'s "Daily challenge" row once it reaches two.
+
+### bet-on-your-agent-opencode
+
+- **The rotating bonus question and calibration ranks**, synced with the
+  Claude Code mod: same dimensions, buckets and wording, same rank cutoffs,
+  the same "Rank up: Silver → Gold" line shown once beside the post-turn
+  record. `/bet-recap` and the badge wall are not ported this round.
+
+### Fixes
+
+- **The daily challenge no longer re-asks itself.** A turn that ended with
+  the challenge still on screen — offered, but never answered or declined —
+  left no record for the day, so the next turn repeated the identical
+  question. It is now recorded as "not taken": not scored, and costing
+  nothing either way on the streak, and `/bet-recap` reads it apart from a
+  day with no turns at all, which still reads a plain em dash.
+- **The OpenCode band reads "1 file", not "1 files".** The file-count bucket
+  printed its raw label with a bare "files" suffix; it now reads through the
+  same pluralization the Claude Code mod already uses.
+- **The daily challenge stops claiming a personal median it isn't using.**
+  Under five scored turns the question is judged against a fixed fallback,
+  not your own median — the wording now says so ("…than a typical turn?")
+  instead of asking about "your median" before there is one.
+
 ## 0.4.0 — playability, phase 1
 
 ### bet-on-your-agent

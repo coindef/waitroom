@@ -43,17 +43,25 @@ import {
   asPercent,
   asText,
   BANDS,
+  bonusBucketOf,
+  bonusDimFor,
+  bonusLabel,
+  BONUS_BUCKETS,
+  BONUS_QUESTIONS,
   bucketOf,
+  currentRank,
   FILE_BUCKETS,
+  filesPhrase,
   keepRecord,
   owedVerdict,
+  rankImproved,
   report,
   setVerdict,
   shortAsk,
   skipVerdict,
 } from '../../bet-on-your-agent/hooks/bet.ts'
-import type { FileBucket, TurnRecord } from '../../bet-on-your-agent/types/index.ts'
-import { askFrom, filePathOf, isBusy } from './track.ts'
+import type { BonusBucket, BonusDim, FileBucket, RankChange, TurnRecord } from '../../bet-on-your-agent/types/index.ts'
+import { askFrom, filePathOf, isBusy, isNewCompletion } from './track.ts'
 
 const STORE_KEY = 'turns'
 
@@ -62,16 +70,28 @@ type OpenBet = {
   ask: string
   files: string[]
   startedAt: number
+  toolCalls: number
   saidConfidence?: number
   saidFiles?: FileBucket
   isDeclined?: true
+  bonusDim?: BonusDim
+  saidBonus?: BonusBucket
+  isBonusDeclined?: true
 }
 
-const noBet = (): OpenBet => ({ turnId: '', ask: '', files: [], startedAt: 0 })
+const noBet = (): OpenBet => ({ turnId: '', ask: '', files: [], startedAt: 0, toolCalls: 0 })
+
+/** A verdict just given, kept per session so the slot can name a rank climb once, the same moment the Claude Code mod's band does. */
+type LastVerdict = { result: 'landed' | 'fixed' | 'skipped'; rankUp?: RankChange }
 
 export const tui: TuiPlugin = async api => {
   const open = new Map<string, OpenBet>()
   const tracking = new Set<string>()
+  const lastVerdict = new Map<string, LastVerdict>()
+  const toolCallsCounted = new Map<string, Set<string>>()
+  // How many sessions have offered a bonus question so far; drives the
+  // rotation the same way the Claude Code mod's `bonusRotation` atom does.
+  let bonusRotation = 0
 
   const openFor = (sessionID: string): OpenBet => open.get(sessionID) ?? noBet()
 
@@ -93,12 +113,18 @@ export const tui: TuiPlugin = async api => {
       if (isBusy(status)) {
         if (tracking.has(sessionID)) return
         tracking.add(sessionID)
+        const dim = bonusDimFor(bonusRotation)
+        bonusRotation++
         open.set(sessionID, {
           ...noBet(),
           turnId: crypto.randomUUID(),
           ask: await askForTurn(sessionID),
           startedAt: Date.now(),
+          bonusDim: dim,
         })
+        // A new turn's own questions take over the slot; the last verdict is
+        // settled by now, or it would still be the one being asked about.
+        lastVerdict.delete(sessionID)
 
         return
       }
@@ -106,19 +132,30 @@ export const tui: TuiPlugin = async api => {
       tracking.delete(sessionID)
 
       const bet = openFor(sessionID)
+      const files = bet.files.length
+      const durationMs = Date.now() - bet.startedAt
+      const bonusActual =
+        bet.bonusDim === undefined
+          ? undefined
+          : bonusBucketOf(bet.bonusDim, bet.bonusDim === 'duration' ? durationMs : bet.bonusDim === 'files' ? files : bet.toolCalls)
       const record: TurnRecord = {
         turnId: bet.turnId,
         at: Date.now(),
-        durationMs: Date.now() - bet.startedAt,
-        files: bet.files.length,
-        filesBucket: bucketOf(bet.files.length),
+        durationMs,
+        files,
+        filesBucket: bucketOf(files),
+        toolCalls: bet.toolCalls,
         isAborted: false,
         ...(bet.ask === '' ? {} : { ask: shortAsk(bet.ask) }),
         ...(bet.saidConfidence !== undefined ? { saidConfidence: bet.saidConfidence } : {}),
         ...(bet.saidFiles !== undefined ? { saidFiles: bet.saidFiles } : {}),
+        ...(bet.bonusDim === undefined ? {} : { bonusDim: bet.bonusDim }),
+        ...(bet.saidBonus !== undefined ? { saidBonus: bet.saidBonus } : {}),
+        ...(bonusActual === undefined ? {} : { bonusActual }),
       }
       saveTurns(keepRecord(loadTurns(), record))
       open.delete(sessionID)
+      toolCallsCounted.delete(sessionID)
     }),
   )
 
@@ -128,10 +165,26 @@ export const tui: TuiPlugin = async api => {
       if (part.type !== 'tool') return
       const sessionID = part.sessionID
       if (!tracking.has(sessionID)) return
-      const path = filePathOf(part)
-      if (path === undefined) return
+
       const bet = openFor(sessionID)
-      if (!bet.files.includes(path)) open.set(sessionID, { ...bet, files: [...bet.files, path].slice(-200) })
+      const counted = toolCallsCounted.get(sessionID) ?? new Set<string>()
+      // Every tool call toward the bonus question, not only the ones that
+      // touch a file — the OpenCode equivalent of the Claude Code mod's
+      // unfiltered `tool.call` hook.
+      const isNewToolCall = isNewCompletion(part, counted)
+      if (isNewToolCall) {
+        counted.add(part.id)
+        toolCallsCounted.set(sessionID, counted)
+      }
+      const path = filePathOf(part)
+      const addsFile = path !== undefined && !bet.files.includes(path)
+      if (isNewToolCall || addsFile) {
+        open.set(sessionID, {
+          ...bet,
+          toolCalls: isNewToolCall ? bet.toolCalls + 1 : bet.toolCalls,
+          files: addsFile ? [...bet.files, path as string].slice(-200) : bet.files,
+        })
+      }
     }),
   )
 
@@ -158,8 +211,29 @@ export const tui: TuiPlugin = async api => {
     open.set(sessionID, { ...openFor(sessionID), isDeclined: true })
   }
 
-  const giveVerdict = (turnId: string, landed: boolean) => saveTurns(setVerdict(loadTurns(), turnId, landed))
-  const waveVerdict = (turnId: string) => saveTurns(skipVerdict(loadTurns(), turnId))
+  const placeBonus = (sessionID: string, said: BonusBucket) => {
+    open.set(sessionID, { ...openFor(sessionID), saidBonus: said })
+  }
+
+  const declineBonus = (sessionID: string) => {
+    open.set(sessionID, { ...openFor(sessionID), isBonusDeclined: true })
+  }
+
+  const giveVerdict = (sessionID: string, turnId: string, landed: boolean) => {
+    const before = loadTurns()
+    const fromRank = currentRank(before)
+    const after = setVerdict(before, turnId, landed)
+    saveTurns(after)
+    const toRank = currentRank(after)
+    lastVerdict.set(sessionID, {
+      result: landed ? 'landed' : 'fixed',
+      ...(rankImproved(fromRank, toRank) ? { rankUp: { from: fromRank, to: toRank } } : {}),
+    })
+  }
+  const waveVerdict = (sessionID: string, turnId: string) => {
+    saveTurns(skipVerdict(loadTurns(), turnId))
+    lastVerdict.set(sessionID, { result: 'skipped' })
+  }
 
   const bandCommand = (name: string, run: (sessionID: string) => void) => ({
     name,
@@ -188,16 +262,28 @@ export const tui: TuiPlugin = async api => {
       bandCommand(`bet.digit-${digit}`, sessionID => {
         const bet = openFor(sessionID)
         if (bet.turnId !== '' && bet.isDeclined !== true) {
-          if (digit === 0) return decline(sessionID)
+          // `0` declines whichever phase is open; the confidence and files
+          // phases have no skip of their own, unlike the bonus phase below —
+          // mirrors the Claude Code mod's own band, where the files phase's
+          // skip button is also wired to `declineBet`, not a files-only skip.
           if (bet.saidConfidence === undefined) {
+            if (digit === 0) return decline(sessionID)
             const band = BANDS[digit - 1]
             if (band !== undefined) placeConfidence(sessionID, band)
 
             return
           }
           if (bet.saidFiles === undefined) {
+            if (digit === 0) return decline(sessionID)
             const bucket = FILE_BUCKETS[digit - 1]
             if (bucket !== undefined) placeFiles(sessionID, bucket)
+
+            return
+          }
+          if (bet.bonusDim !== undefined && bet.saidBonus === undefined && bet.isBonusDeclined !== true) {
+            if (digit === 0) return declineBonus(sessionID)
+            const bucket = BONUS_BUCKETS[bet.bonusDim][digit - 1]
+            if (bucket !== undefined) placeBonus(sessionID, bucket)
           }
 
           return
@@ -205,9 +291,9 @@ export const tui: TuiPlugin = async api => {
 
         const owed = owedVerdict(loadTurns())
         if (!owed) return
-        if (digit === 1) giveVerdict(owed.turnId, true)
-        else if (digit === 2) giveVerdict(owed.turnId, false)
-        else if (digit === 3) waveVerdict(owed.turnId)
+        if (digit === 1) giveVerdict(sessionID, owed.turnId, true)
+        else if (digit === 2) giveVerdict(sessionID, owed.turnId, false)
+        else if (digit === 3) waveVerdict(sessionID, owed.turnId)
       }),
     ),
   })
@@ -266,15 +352,52 @@ export const tui: TuiPlugin = async api => {
             )
           }
 
+          // One rotating bonus question, its own skip: passing on it costs
+          // nothing and says nothing about the confidence or files bets
+          // already placed this turn. Mirrors the Claude Code mod's own
+          // band; see `hooks/register.tsx`'s bonus branch.
+          if (bet.bonusDim !== undefined && bet.saidBonus === undefined && bet.isBonusDeclined !== true) {
+            const dim = bet.bonusDim
+            const buckets = BONUS_BUCKETS[dim]
+
+            return (
+              <box flexDirection="row" gap={1}>
+                <text>Bonus: {BONUS_QUESTIONS[dim]}</text>
+                {buckets.map((bucket, at) => (
+                  <text>
+                    {at + 1}: {bonusLabel(dim, bucket)}
+                  </text>
+                ))}
+                <text>0: skip</text>
+              </box>
+            )
+          }
+
           return (
             <text>
-              bet {asPercent(bet.saidConfidence)} · {bet.saidFiles} files · {bet.files.length} written so far
+              bet {asPercent(bet.saidConfidence)} · {filesPhrase(bet.saidFiles)} · {bet.files.length} written so far
             </text>
           )
         }
 
         const owed = owedVerdict(loadTurns())
-        if (!owed) return <box />
+        if (!owed) {
+          const last = lastVerdict.get(sessionID)
+          if (!last) return <box />
+
+          const label = last.result === 'landed' ? 'Landed' : last.result === 'fixed' ? 'Needed fixing' : 'Skipped'
+
+          return (
+            <box flexDirection="row" gap={1}>
+              <text>Recorded: {label}</text>
+              {last.rankUp && (
+                <text>
+                  Rank up: {last.rankUp.from} → {last.rankUp.to}
+                </text>
+              )}
+            </box>
+          )
+        }
 
         const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, room)
 

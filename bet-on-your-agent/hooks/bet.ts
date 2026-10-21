@@ -7,7 +7,16 @@
  * calibration rather than counting wins.
  */
 
-import type { BonusBucket, BonusDim, Rank, RankChange, FileBucket, TurnRecord } from '../types'
+import type {
+  BonusBucket,
+  BonusDim,
+  DailyChallengeRecord,
+  DailyGuess,
+  Rank,
+  RankChange,
+  FileBucket,
+  TurnRecord,
+} from '../types'
 
 /** The forecasts on offer. Fixed, so each is its own calibration row. */
 export const BANDS = [0.5, 0.65, 0.8, 0.9, 0.95] as const
@@ -87,6 +96,163 @@ export const bonusBucketOf = (dim: BonusDim, value: number): BonusBucket => {
  */
 export const bonusLabel = (dim: BonusDim, bucket: BonusBucket): string =>
   dim === 'files' ? FILE_LABELS[bucket as FileBucket] : bucket
+
+/**
+ * The daily challenge's own dimension pool: the same three stats the bonus
+ * question rotates through, asked a different way — not "which bucket" but
+ * "more or less than usual" — so today's question needs no fact the plugin
+ * was not already recording.
+ */
+export const DAILY_CHALLENGE_DIMS: readonly BonusDim[] = ['files', 'duration', 'toolCalls']
+
+/**
+ * A small, stable hash of a string into `0` .. `mod - 1`.
+ *
+ * Deterministic across runs and processes, unlike `Math.random`, so the same
+ * calendar date always lands on the same challenge.
+ *
+ * The rolling sum alone is linear in its input, and two calendar dates in a
+ * row differ by one trailing character almost always — so a plain `% mod`
+ * off it rotated through the dimensions in lockstep, `mod`-ish days at a
+ * time. Murmur3's finalizer, run over the rolling sum, scrambles that
+ * structure out before the final mod.
+ */
+const seededIndex = (key: string, mod: number): number => {
+  let hash = 0
+  for (let at = 0; at < key.length; at++) hash = (Math.imul(hash, 31) + key.charCodeAt(at)) >>> 0
+  hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b) >>> 0
+  hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b) >>> 0
+  hash = (hash ^ (hash >>> 16)) >>> 0
+
+  return hash % mod
+}
+
+/**
+ * The local calendar day a timestamp falls on, `YYYY-MM-DD` — the daily
+ * challenge's seed and the Regular badge's own unit of "a day".
+ */
+export const localDateKey = (ms: number): string => {
+  const at = new Date(ms)
+  const year = at.getFullYear()
+  const month = String(at.getMonth() + 1).padStart(2, '0')
+  const day = String(at.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+/** Which dimension today's challenge asks about — the same all day, from the date alone. */
+export const dailyChallengeDimFor = (dateKey: string): BonusDim =>
+  DAILY_CHALLENGE_DIMS[seededIndex(dateKey, DAILY_CHALLENGE_DIMS.length)] ?? 'files'
+
+/**
+ * The threshold the daily challenge is judged against before there is enough
+ * history to use the person's own median instead — the same rough middle
+ * each of the bonus question's own buckets straddles.
+ */
+export const FALLBACK_MEDIAN: Readonly<Record<BonusDim, number>> = {
+  duration: 60000,
+  files: 2,
+  toolCalls: 4,
+}
+
+/** Whether there is enough scored history to judge the daily challenge against the person's own median, rather than the fixed fallback. */
+export const hasChallengeHistory = (records: readonly TurnRecord[]): boolean => scorable(records).length >= MIN_SCORED
+
+/**
+ * What a turn's forecast is measured against: the person's own median once
+ * there is enough history to trust it, else a fixed stand-in.
+ */
+export const challengeThreshold = (records: readonly TurnRecord[], dim: BonusDim): number => {
+  if (!hasChallengeHistory(records)) return FALLBACK_MEDIAN[dim]
+  const live = records.filter(one => !one.isAborted)
+  const values =
+    dim === 'duration'
+      ? live.map(one => one.durationMs)
+      : dim === 'files'
+        ? live.map(one => one.files)
+        : live.map(one => one.toolCalls)
+
+  return median(values) ?? FALLBACK_MEDIAN[dim]
+}
+
+/** What the daily challenge asks, per dimension, once there is enough history for "median" to mean the person's own. */
+export const CHALLENGE_QUESTIONS: Readonly<Record<BonusDim, string>> = {
+  duration: 'take longer than your median?',
+  files: 'touch more files than your median?',
+  toolCalls: 'use more tool calls than your median?',
+}
+
+/**
+ * The same questions, worded for someone `challengeThreshold` has not yet
+ * seen enough history from: it judges the turn against `FALLBACK_MEDIAN`
+ * then, so the question should not claim a personal median it is not using.
+ */
+export const CHALLENGE_QUESTIONS_FALLBACK: Readonly<Record<BonusDim, string>> = {
+  duration: 'take longer than a typical turn?',
+  files: 'touch more files than a typical turn?',
+  toolCalls: 'use more tool calls than a typical turn?',
+}
+
+/** Which wording the daily challenge asks with — `challengeThreshold`'s own condition decides, so the two can never drift apart. */
+export const challengeQuestion = (records: readonly TurnRecord[], dim: BonusDim): string =>
+  (hasChallengeHistory(records) ? CHALLENGE_QUESTIONS : CHALLENGE_QUESTIONS_FALLBACK)[dim]
+
+/** Where a turn's actual value for a challenge dimension falls against the threshold it was offered. */
+export const dailyOutcome = (value: number, threshold: number): DailyGuess => (value > threshold ? 'yes' : 'no')
+
+/** Adds or replaces today's daily-challenge record, newest last, oldest dropped past `limit`. */
+export const keepDailyChallenge = (
+  records: readonly DailyChallengeRecord[],
+  record: DailyChallengeRecord,
+  limit = 365,
+): DailyChallengeRecord[] => {
+  const without = records.filter(one => one.date !== record.date)
+
+  return [...without, record].slice(-limit)
+}
+
+/** The record for one day, answered or skipped alike — undefined when that day never got one. */
+export const challengeFor = (
+  records: readonly DailyChallengeRecord[],
+  date: string,
+): DailyChallengeRecord | undefined => records.find(one => one.date === date)
+
+/**
+ * Consecutive days, counting back from the most recent record, that the
+ * challenge was both answered and right. A day that was never offered (no
+ * turns ran) leaves no record and so cannot break it; a wrong or skipped day
+ * does, the same way `currentStreak` treats a miss. A day offered but left
+ * untouched (`isNotTaken`) is neither: it is skipped over, counting neither
+ * for nor against the run, the same as a day with no record at all.
+ */
+export const dailyChallengeStreak = (records: readonly DailyChallengeRecord[]): number => {
+  let streak = 0
+  for (let at = records.length - 1; at >= 0; at--) {
+    const record = records[at]
+    if (record?.isNotTaken === true) continue
+    if (record?.correct !== true) break
+    streak++
+  }
+
+  return streak
+}
+
+/**
+ * The `/bet-recap` value for the daily challenge: the streak once there is
+ * one worth naming, else today's own result — "not taken" for a challenge
+ * that was offered and never answered or declined, distinct from the plain
+ * em dash a day with no turns at all reads as.
+ */
+export const dailyChallengeValue = (records: readonly DailyChallengeRecord[], today: string): string => {
+  const streak = dailyChallengeStreak(records)
+  if (streak >= 2) return `${streak}-day streak`
+  const mine = challengeFor(records, today)
+  if (!mine) return '—'
+  if (mine.isSkipped) return 'skipped today'
+  if (mine.isNotTaken) return 'not taken'
+
+  return mine.correct === undefined ? '—' : mine.correct ? 'right today' : 'missed today'
+}
 
 /** One path `git status` reports, and whether it is gone from the working tree. */
 export type StatusEntry = { path: string; isDeleted: boolean }
@@ -267,6 +433,108 @@ export const currentRank = (records: readonly TurnRecord[]): Rank => {
   const { brier, scored } = rollingBrier(records)
 
   return rankOf(brier, scored)
+}
+
+/**
+ * Consecutive landed calls, oldest to newest, the longest run anywhere in
+ * history — unlike `currentStreak`, which only reads the run ending right now.
+ */
+const longestLandedStreak = (records: readonly TurnRecord[]): number => {
+  let longest = 0
+  let current = 0
+  for (const one of scorable(records)) {
+    if (one.landed === true) {
+      current++
+      longest = Math.max(longest, current)
+    } else {
+      current = 0
+    }
+  }
+
+  return longest
+}
+
+/** Whether a run of `window` consecutive scored calls, anywhere in history, ever beat `limit` on its own Brier score. */
+const everBeatBrierOverWindow = (records: readonly TurnRecord[], window: number, limit: number): boolean => {
+  const scored = scorable(records)
+  for (let at = window; at <= scored.length; at++) {
+    const run = scored.slice(at - window, at)
+    const brier = mean(run.map(one => ((one.saidConfidence as number) - (one.landed ? 1 : 0)) ** 2))
+    if (brier < limit) return true
+  }
+
+  return false
+}
+
+/**
+ * Whether the rolling rank, replayed across history the way it was read at
+ * the time, ever touched Oracle — unlike `currentRank`, which only reads
+ * where it stands now, after a rank has had the chance to climb and fall back.
+ */
+const everReachedOracle = (records: readonly TurnRecord[]): boolean => {
+  const scored = scorable(records)
+  for (let at = MIN_RANKED; at <= scored.length; at++) {
+    const window = scored.slice(Math.max(0, at - RANK_WINDOW), at)
+    const brier = mean(window.map(one => ((one.saidConfidence as number) - (one.landed ? 1 : 0)) ** 2))
+    if (rankOf(brier, window.length) === 'Oracle') return true
+  }
+
+  return false
+}
+
+/** Distinct local calendar days with a scored bet. */
+const distinctScoredDays = (records: readonly TurnRecord[]): number =>
+  new Set(scorable(records).map(one => localDateKey(one.at))).size
+
+export type BadgeId = 'firstSteps' | 'hotStreak' | 'sharpshooter' | 'oraclePath' | 'bonusHunter' | 'regular'
+
+export type Badge = {
+  id: BadgeId
+  name: string
+  earned: boolean
+  /** How far along, for a badge not yet earned; absent once it is, or when there is no partial count worth showing. */
+  progress?: { have: number; of: number }
+}
+
+/** Consecutive landed calls, anywhere in history, that earns Hot Streak. */
+export const HOT_STREAK_TARGET = 5
+/** Consecutive scored calls Sharpshooter's own rolling Brier is judged over. */
+export const SHARPSHOOTER_WINDOW = 10
+/** Correct bonus answers, lifetime, that earns Bonus Hunter. */
+export const BONUS_HUNTER_TARGET = 5
+/** Distinct days with a scored bet that earns Regular. */
+export const REGULAR_TARGET = 5
+
+const badgeOf = (id: BadgeId, name: string, earned: boolean, progress?: { have: number; of: number }): Badge =>
+  earned || progress === undefined ? { id, name, earned } : { id, name, earned, progress }
+
+/**
+ * The badge wall, computed fresh from the history the plugin already keeps —
+ * no badge needs a fact this does not already record. Every badge is always
+ * in the list, earned or not, so the wall never changes shape.
+ */
+export const badges = (records: readonly TurnRecord[]): Badge[] => {
+  const scoredCount = scorable(records).length
+  const bonusRight = records.filter(
+    one => !one.isAborted && one.saidBonus !== undefined && one.saidBonus === one.bonusActual,
+  ).length
+  const streak = longestLandedStreak(records)
+  const days = distinctScoredDays(records)
+
+  return [
+    badgeOf('firstSteps', 'First Steps', scoredCount >= 1),
+    badgeOf('hotStreak', 'Hot Streak', streak >= HOT_STREAK_TARGET, { have: streak, of: HOT_STREAK_TARGET }),
+    badgeOf('sharpshooter', 'Sharpshooter', everBeatBrierOverWindow(records, SHARPSHOOTER_WINDOW, SILVER_BRIER), {
+      have: Math.min(scoredCount, SHARPSHOOTER_WINDOW),
+      of: SHARPSHOOTER_WINDOW,
+    }),
+    badgeOf('oraclePath', 'Oracle Path', everReachedOracle(records)),
+    badgeOf('bonusHunter', 'Bonus Hunter', bonusRight >= BONUS_HUNTER_TARGET, {
+      have: Math.min(bonusRight, BONUS_HUNTER_TARGET),
+      of: BONUS_HUNTER_TARGET,
+    }),
+    badgeOf('regular', 'Regular', days >= REGULAR_TARGET, { have: Math.min(days, REGULAR_TARGET), of: REGULAR_TARGET }),
+  ]
 }
 
 export type Report = {
@@ -675,16 +943,26 @@ export type Recap = {
   rank: Rank
   streak: number
   bonus?: { right: number; of: number }
+  /** The badge wall, earned and locked alike — always the full set. */
+  badges: Badge[]
+  /** The daily challenge's own line: a streak once there is one, else today's result. */
+  dailyChallenge: string
 }
 
 /**
  * The session's recap, computed once so the card itself is pure layout.
  *
- * `rank` reads `all` the history, not `session` alone: a rank is who you are
- * right now, not something that resets at midnight. Everything else is
- * scoped to `session`, the records since this session began.
+ * `rank` and `badges` read `all` the history, not `session` alone: a rank
+ * and a badge wall are who you are right now, not something that resets at
+ * midnight. Everything else is scoped to `session`, the records since this
+ * session began.
  */
-export const recapOf = (session: readonly TurnRecord[], all: readonly TurnRecord[]): Recap => {
+export const recapOf = (
+  session: readonly TurnRecord[],
+  all: readonly TurnRecord[],
+  dailyChallenges: readonly DailyChallengeRecord[],
+  today: string,
+): Recap => {
   const found = report(session)
   const { best, worst } = extremeCalls(session)
 
@@ -697,6 +975,8 @@ export const recapOf = (session: readonly TurnRecord[], all: readonly TurnRecord
     rank: currentRank(all),
     streak: currentStreak(session),
     bonus: found.bonus,
+    badges: badges(all),
+    dailyChallenge: dailyChallengeValue(dailyChallenges, today),
   }
 }
 
@@ -709,8 +989,8 @@ const missLine = (miss: Miss): string => {
   return `${prefix}${shortAsk(miss.ask ?? 'a turn with no prompt', Math.max(0, RECAP_ASK_ROOM - prefix.length))}`
 }
 
-/** A recap row's label column, so every value lines up under the next. */
-const RECAP_LABEL = 14
+/** A recap row's label column, so every value lines up under the next — wide enough for "Daily challenge", its longest label. */
+const RECAP_LABEL = 16
 
 const recapRow = (label: string, value: string): string => `${label.padEnd(RECAP_LABEL)}${value}`
 
@@ -721,6 +1001,13 @@ const recapRow = (label: string, value: string): string => `${label.padEnd(RECAP
  * (no scored turn, no bonus answered) — a card keeps its shape whether the
  * session behind it is thin or full.
  */
+/** A badge's value column: a check once earned, else its progress hint or an em dash. */
+const badgeValue = (badge: Badge): string => {
+  if (badge.earned) return '✓'
+
+  return badge.progress ? `${badge.progress.have}/${badge.progress.of}` : '—'
+}
+
 export const recapCard = (recap: Recap): string => {
   const title = 'Session recap'
   const rows = [
@@ -732,8 +1019,10 @@ export const recapCard = (recap: Recap): string => {
     recapRow('Rank', recap.rank),
     recapRow('Streak', String(recap.streak)),
     recapRow('Bonus', recap.bonus ? `${recap.bonus.right}/${recap.bonus.of} correct` : '—'),
+    recapRow('Daily challenge', recap.dailyChallenge),
   ]
-  const width = Math.max(title.length, ...rows.map(row => row.length))
+  const badgeRows = recap.badges.map(badge => recapRow(badge.name, badgeValue(badge)))
+  const width = Math.max(title.length, ...rows.map(row => row.length), ...badgeRows.map(row => row.length))
   const border = (corner: readonly [string, string]) => `${corner[0]}${'─'.repeat(width + 2)}${corner[1]}`
   const line = (text: string) => `│ ${text.padEnd(width)} │`
 
@@ -742,6 +1031,9 @@ export const recapCard = (recap: Recap): string => {
     line(title),
     line('─'.repeat(width)),
     ...rows.map(line),
+    line('─'.repeat(width)),
+    line('Badges'),
+    ...badgeRows.map(line),
     border(['└', '┘']),
   ].join('\n')
 }

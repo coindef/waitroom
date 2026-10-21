@@ -79,6 +79,32 @@ export type TurnRecord = {
   bonusActual?: BonusBucket
 }
 
+/** A yes/no guess, and what actually happened — the daily challenge's own shape, simpler than the main bet's because the outcome is read off the turn's own stats rather than a human verdict. */
+export type DailyGuess = 'yes' | 'no'
+
+/**
+ * One calendar day's daily challenge, answered or skipped alike — at most
+ * one per day, so a day already handled is never offered again.
+ */
+export type DailyChallengeRecord = {
+  date: string
+  dim: BonusDim
+  /** The person's guess; absent when skipped. */
+  guess?: DailyGuess
+  /** What actually happened; set together with `correct` once the turn it was asked about lands. */
+  actual?: DailyGuess
+  /** Whether the guess matched; absent when skipped. */
+  correct?: boolean
+  /** Set when the person waved the day's challenge away. */
+  isSkipped?: true
+  /**
+   * Set when the challenge was offered but the turn ended before it was
+   * answered or declined — not scored, and no fact about what actually
+   * happened is kept, only that today is handled so it is not asked again.
+   */
+  isNotTaken?: true
+}
+
 /** The most recent verdict given, kept so one press can take it back. */
 export type LastVerdict = {
   turnId: string
@@ -124,6 +150,17 @@ export type OpenBet = {
    * the rest of the turn rather than holding its buttons up unanswered.
    */
   isDeclined?: true
+  /** Today's daily-challenge dimension, if today has not already been handled; absent otherwise. */
+  dailyChallengeDim?: BonusDim
+  /** The person's guess at `dailyChallengeDim`; absent until they answer. */
+  saidDailyChallenge?: DailyGuess
+  /**
+   * Set when the person waved today's challenge away.
+   *
+   * Its own skip, separate from `isDeclined`: passing on it costs nothing
+   * and says nothing about the bets already placed this turn.
+   */
+  isDailyChallengeDeclined?: true
 }
 
 declare module 'claude-code' {
@@ -132,6 +169,11 @@ declare module 'claude-code' {
       open: OpenBet
       busy: boolean
       lastVerdict: LastVerdict | null
+      /**
+       * The most recent "Badge earned" note, shown once beside the band's
+       * own scoring output; null until one is earned.
+       */
+      badgeNote: string | null
       /**
        * Bumped whenever the store changes.
        *

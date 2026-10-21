@@ -15,6 +15,7 @@ export type SessionStatusLike = { type: string }
 export const isBusy = (status: SessionStatusLike): boolean => status.type === 'busy'
 
 export type ToolPartLike = {
+  id: string
   tool: string
   state: { status: string; input?: Record<string, unknown> }
 }
@@ -40,6 +41,19 @@ export const filePathOf = (part: ToolPartLike): string | undefined => {
 
   return typeof path === 'string' ? path : undefined
 }
+
+/**
+ * Whether a tool part just finished for the first time — the moment it
+ * counts toward the bonus question's tool-call tally, the OpenCode
+ * equivalent of the Claude Code mod's unfiltered `tool.call` hook (see
+ * `hooks/register.tsx#noteToolCall`), which counts every tool call once,
+ * whichever tool and whether or not it was denied.
+ *
+ * Deduped against `alreadyCounted` because a part can fire more than one
+ * `message.part.updated` event at `'completed'` status.
+ */
+export const isNewCompletion = (part: ToolPartLike, alreadyCounted: ReadonlySet<string>): boolean =>
+  part.state.status === 'completed' && !alreadyCounted.has(part.id)
 
 export type TextPartLike = { type: string; text?: string }
 
