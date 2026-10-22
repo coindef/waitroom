@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.1.0 — wait-ship and wait-breathe
+
+Two new mods, each starting its own version from here.
+
+### wait-ship
+
+First release: drafts the words around a turn's changes, the moment it ends.
+
+- **A commit message, a PR description, and — where `CHANGELOG.md` exists — a
+  changelog entry**, drafted from the diff alone: no model call, the same
+  deterministic pass every time on the same input.
+- **Matches the repository's own voice.** The last 20 commit subjects decide
+  whether the drafted subject is a conventional commit or freeform, and if
+  freeform, which capitalization and tense it follows; a changelog entry
+  matches the file's own bold-lead-in or plain bullet style.
+- **Each area of the diff reads its own kind of change** — a new file, an
+  edit, a deletion, tests-only, docs-only — so the PR summary and changelog
+  bullets say what actually happened in that area rather than the one kind
+  the whole diff happens to read as.
+- **Lives in the row above the prompt**, the same one `bet-on-your-agent`
+  uses: accept every draft, just one, or drafts framed for editing, or skip.
+  Accepted drafts are written under `shipDir` (`.waitroom/ship` by default)
+  and the row prints the exact command to run — `git commit -F`, `gh pr
+  create --body-file`, or where to paste the changelog entry. Nothing is ever
+  run on your behalf.
+- **No changes, no row** — same as `wait-review` with nothing to show.
+
+### wait-breathe
+
+First release: a gentle, deterministic nudge to take care of yourself during
+a long turn. Off by default.
+
+- **One quiet line** in the row above the prompt once a single turn runs past
+  `longTurnSeconds` (90 by default): a posture check, a 20-20-20 eye break,
+  4-4-4 breathing, or a stretch, rotating so it is never the same one twice
+  running. Naming the action only — no health claim, no "you should."
+- **At most one line per turn, and at most one every ten minutes**, however
+  many turns run long in between.
+- **Zero required keys.** `Took it` only exists so the count means something;
+  nothing here ever blocks a turn or needs an answer.
+- **Yields to a real survey** already asking something else, the same
+  convention every mod in this marketplace follows.
+- **A session-end summary line** — `breathe: 3 prompts, 2 taken this
+  session` — said only once at least one nudge actually showed.
+
 ## 0.5.0 — playability, phase 2
 
 ### bet-on-your-agent

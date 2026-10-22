@@ -1,9 +1,11 @@
 # waitroom
 
-Two Claude Code plugins for the dead time while a coding agent works. The wait
-is the one moment you are already holding the problem in your head and have
-nothing to do with it; these spend it on the diff the agent just wrote, and on
-how well you called the turn.
+Four Claude Code plugins for the dead time while a coding agent works. The
+wait is the one moment you are already holding the problem in your head and
+have nothing to do with it; these spend it on the diff the agent just wrote,
+on how well you called the turn, on the commit message and PR description
+that will ship it, and — quietly, off by default — on a long turn's toll on
+you.
 
 ![A Claude Code session: a one-keystroke bet on the running turn above the prompt, the diff reviewed a hunk at a time in a pane on the right, one hunk flagged with a reason, and Claude fixing exactly that from "Fix what I flagged"](docs/demo.gif)
 
@@ -25,18 +27,24 @@ Send these at the Claude Code prompt, each as its own message:
 ```
 /plugin install bet-on-your-agent@waitroom
 ```
+```
+/plugin install wait-ship@waitroom
+```
+```
+/plugin install wait-breathe@waitroom
+```
 
 Each install shows the plugin's options on the way in. Every option has a
 working default, so save them as they are; it answers `Installed and configured
 wait-review. Plugin is now active.` That is the whole install — active in that
 session straight away, and in every session after it. No key, no service, and
-nothing written to your repository. Skip the last line if you only want
-wait-review.
+nothing written to your repository. Skip any of the last four lines for a mod
+you don't want.
 
 Every line is safe to send again: adding a marketplace that is already there,
 or installing a plugin that already is, changes nothing. So when in doubt, send
-all three — then `/plugin` should read `2 mods active · wait-review,
-bet-on-your-agent`.
+all five — then `/plugin` should read `4 mods active · wait-review,
+bet-on-your-agent, wait-ship, wait-breathe`.
 
 It needs **Claude Code 2.1.291 or later** — `claude --version` says which you
 have, `claude update` moves you on. An older build installs it without
@@ -61,6 +69,8 @@ disk straight away but only loaded by the next session:
 /plugin marketplace update waitroom
 /plugin update wait-review@waitroom
 /plugin update bet-on-your-agent@waitroom
+/plugin update wait-ship@waitroom
+/plugin update wait-breathe@waitroom
 ```
 
 Each reports `updated from` the old version `to` the new one, or `already at
@@ -172,6 +182,8 @@ no click. `/bet` shows what it has learned about you.
 | --- | --- |
 | [**wait-review**](./wait-review) | Offers the diff the agent already wrote, one hunk at a time, and sends what you flag — with your reason — back with your next message. |
 | [**bet-on-your-agent**](./bet-on-your-agent) | Forecast how the turn will go from the row above the prompt, then get a Brier score and a calibration table. |
+| [**wait-ship**](./wait-ship) | Drafts the commit message, PR description and changelog entry for the turn's changes, so you can review the words the way wait-review lets you review the code. |
+| [**wait-breathe**](./wait-breathe) | Gentle, deterministic wellbeing nudges during a long turn — off by default. |
 
 ## The idea behind both
 

@@ -1,0 +1,33 @@
+{
+  "name": "wait-ship",
+  "version": "0.1.0",
+  "description": "Drafts the commit message, PR description and changelog entry for the turn's changes, so you can review the words the way wait-review lets you review the code.",
+  "author": {
+    "name": "coindef"
+  },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/wait-ship",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
+  "icon": "./.claude-plugin/icon.png",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "title": "Draft a shipping kit at the end of each turn",
+      "description": "When a turn changes files, offer a drafted commit message, PR body and changelog entry."
+    },
+    "shipDir": {
+      "type": "string",
+      "default": ".waitroom/ship",
+      "title": "Where drafts are written",
+      "description": "Repository-relative folder accepted drafts are written into."
+    },
+    "includeChangelog": {
+      "type": "boolean",
+      "default": true,
+      "title": "Draft a changelog entry",
+      "description": "When CHANGELOG.md exists in the repository root, also draft a standalone entry for it."
+    }
+  }
+}

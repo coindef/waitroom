@@ -1,0 +1,27 @@
+{
+  "name": "wait-breathe",
+  "version": "0.1.0",
+  "description": "Gentle, deterministic wellbeing nudges during a long turn — off by default.",
+  "author": {
+    "name": "coindef"
+  },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/wait-breathe",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
+  "icon": "./.claude-plugin/icon.png",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "default": false,
+      "title": "Enable the breathing nudges",
+      "description": "Off by default. A long turn is quiet unless you turn this on."
+    },
+    "longTurnSeconds": {
+      "type": "number",
+      "default": 90,
+      "title": "Long-turn threshold, in seconds",
+      "description": "How long a turn runs before one quiet nudge appears in the band."
+    }
+  }
+}

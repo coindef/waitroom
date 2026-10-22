@@ -14,6 +14,16 @@
       "name": "bet-on-your-agent",
       "source": "./bet-on-your-agent",
       "description": "Predict how a turn will go before it lands, and get scored on your calibration."
+    },
+    {
+      "name": "wait-ship",
+      "source": "./wait-ship",
+      "description": "Drafts the commit message, PR description and changelog entry for the turn's changes."
+    },
+    {
+      "name": "wait-breathe",
+      "source": "./wait-breathe",
+      "description": "Gentle, deterministic wellbeing nudges during a long turn — off by default."
     }
   ]
 }
