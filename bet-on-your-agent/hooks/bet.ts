@@ -560,6 +560,8 @@ export type Report = {
   gap?: number
   /** The rank the rolling Brier score stands at right now. */
   rank: Rank
+  /** The badge wall, earned and locked alike — always the full set, same as the recap's. */
+  badges: Badge[]
 }
 
 export const report = (records: readonly TurnRecord[]): Report => {
@@ -577,6 +579,7 @@ export const report = (records: readonly TurnRecord[]): Report => {
     medianMs: median(live.map(one => one.durationMs)),
     misses: worstCalls(records),
     rank: currentRank(records),
+    badges: badges(records),
   }
 
   if (filesBet.length > 0) {
@@ -878,6 +881,16 @@ export const calibrationLine = (row: CalibrationRow): string => {
 }
 
 /**
+ * The badge wall as the record prints it: a heading and one line per badge,
+ * earned or locked, in `asText`'s own plain-text style — the pane renders
+ * `found.badges` itself rather than this, since it has color to work with.
+ */
+export const badgeWallLines = (list: readonly Badge[]): string[] => [
+  'Badges',
+  ...list.map(badge => `  ${badgeValue(badge)} ${badge.name}`),
+]
+
+/**
  * The report as the slash command prints it.
  *
  * `rankUp` is not derived from `found`: it is the climb, if any, the verdict
@@ -891,7 +904,11 @@ export const asText = (found: Report, rankUp?: RankChange): string => {
     const bonus = found.bonus ? ` Bonus: ${found.bonus.right}/${found.bonus.of} correct.` : ''
     const owed = found.owed > 0 ? ` ${found.owed} waiting on your verdict.` : ''
 
-    return `${found.recorded} turns recorded, none scored yet.${files}${bonus}${owed}`
+    return [
+      `${found.recorded} turns recorded, none scored yet.${files}${bonus}${owed}`,
+      '',
+      ...badgeWallLines(found.badges),
+    ].join('\n')
   }
 
   const skill =
@@ -930,6 +947,7 @@ export const asText = (found: Report, rankUp?: RankChange): string => {
   }
   if (found.medianMs !== undefined) lines.push(`Median turn ${asDuration(found.medianMs)}.`)
   if (found.owed > 0) lines.push(`${found.owed} bet${found.owed === 1 ? '' : 's'} waiting on your verdict.`)
+  lines.push('', ...badgeWallLines(found.badges))
 
   return lines.join('\n')
 }
@@ -1002,7 +1020,7 @@ const recapRow = (label: string, value: string): string => `${label.padEnd(RECAP
  * session behind it is thin or full.
  */
 /** A badge's value column: a check once earned, else its progress hint or an em dash. */
-const badgeValue = (badge: Badge): string => {
+export const badgeValue = (badge: Badge): string => {
   if (badge.earned) return '✓'
 
   return badge.progress ? `${badge.progress.have}/${badge.progress.of}` : '—'

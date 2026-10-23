@@ -1,6 +1,6 @@
 {
   "name": "bet-on-your-agent",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Forecast how a turn will go from the row above the prompt, and get scored on your calibration.",
   "author": {
     "name": "coindef"

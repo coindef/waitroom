@@ -66,3 +66,13 @@ export const wholePositive = (value: unknown, fallback: number): number => {
 
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
 }
+
+/**
+ * The one-line answer to "is this even on": current state, the threshold it
+ * acts on either way, and exactly where to flip it. `/breathe` is this
+ * plugin's only way to be found once the install screen has scrolled by.
+ */
+export const statusLine = (enabled: boolean, longTurnSeconds: number): string =>
+  enabled
+    ? `breathe: on · nudges after a turn runs ${longTurnSeconds}s · turn off in /plugin → wait-breathe → Enable the breathing nudges`
+    : `breathe: off · would nudge after a turn runs ${longTurnSeconds}s · turn on in /plugin → wait-breathe → Enable the breathing nudges`

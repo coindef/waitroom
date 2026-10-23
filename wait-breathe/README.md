@@ -21,11 +21,17 @@ is that you, not the agent, get a turn once a session runs long. That is a
 different kind of claim on your attention, and not everyone wants a plugin
 making it — so it stays silent until you turn it on.
 
+**To turn it on:** check *Enable the breathing nudges* on this mod's install
+screen, or open it any time after with `/plugin` → `wait-breathe`. `/breathe`
+tells you, at any point, whether it is on and exactly where that option lives.
+
 ## What it does
 
 Turn on `enabled` and nothing changes about a normal turn. Only once a single
 turn runs past `longTurnSeconds` (90 by default) does one line show up in the
 row above the prompt — the same row `bet-on-your-agent` uses:
+
+<img src="../docs/breathe-nudge.svg" width="400" alt="The row above the prompt: a breathe tag, '4-4-4 breathing: in for 4, hold for 4, out for 4', and the b: Took it key">
 
 ```
  breathe  4-4-4 breathing: in for 4, hold for 4, out for 4
@@ -57,6 +63,19 @@ breathe: 3 prompts, 2 taken this session
 Said only when at least one nudge actually showed. A quiet session — nothing
 ran long, or the plugin is off — ends with no line at all.
 
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `/breathe` | One line: whether the nudges are on, the threshold either way, and how to flip it |
+
+```
+breathe: off · would nudge after a turn runs 90s · turn on in /plugin → wait-breathe → Enable the breathing nudges
+```
+
+This is the one place to find this mod again once the install screen has
+scrolled past — there is no pane and no band entry to stumble into otherwise.
+
 ## Settings
 
 | Option | Default | What it means |
@@ -81,7 +100,7 @@ ran long, or the plugin is off — ends with no line at all.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 17 tests
+claude plugin test .         # 20 tests
 ```
 
 The rotation, the cooldown and the session counting live in `hooks/breathe.ts`

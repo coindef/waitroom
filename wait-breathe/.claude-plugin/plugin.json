@@ -1,7 +1,7 @@
 {
   "name": "wait-breathe",
-  "version": "0.1.0",
-  "description": "Gentle, deterministic wellbeing nudges during a long turn — off by default.",
+  "version": "0.2.0",
+  "description": "Shows one quiet nudge in the row above the prompt once a turn runs long — off by default until you turn it on.",
   "author": {
     "name": "coindef"
   },

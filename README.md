@@ -14,6 +14,11 @@ only while Claude works. Bet on the turn while it runs, read the diff as it
 lands, flag a hunk with a reason, and "Fix what I flagged" is all the next
 message needs. [Full-quality video](docs/demo.mp4).*
 
+<img src="docs/lockup.svg" width="400" alt="The four plugin icons side by side: wait-review's magnifying glass, bet-on-your-agent's target, wait-ship's inbox with an arrow out of it, and wait-breathe's breathing rings">
+
+One family, four rooms: a magnifying glass for the diff, a target for your
+calibration, an outbox for what ships, and a breathing ring for you.
+
 ## Install
 
 Send these at the Claude Code prompt, each as its own message:
@@ -40,6 +45,12 @@ wait-review. Plugin is now active.` That is the whole install — active in that
 session straight away, and in every session after it. No key, no service, and
 nothing written to your repository. Skip any of the last four lines for a mod
 you don't want.
+
+**wait-breathe is the one exception to "save the defaults."** Its default is
+off, so saving it as-is leaves it silent forever, not merely quiet — there is
+nothing wrong to fix, it is just not asking yet. Turn on *Enable the breathing
+nudges* on its own install screen if you want the nudges; `/breathe` any time
+after tells you whether it is on and how to flip it.
 
 Every line is safe to send again: adding a marketplace that is already there,
 or installing a plugin that already is, changes nothing. So when in doubt, send
@@ -166,7 +177,9 @@ so the side is wait-review's from then on, in later sessions too; `/diff` again
 brings the built-in panel back whenever you want it. If you run `/wait-review`
 and see nothing, its reply says when this is why.
 
-**bet-on-your-agent** puts a question above the prompt while a turn runs:
+**bet-on-your-agent** scores your calibration, not a wager — it keeps no
+currency and no winnings, just whether you called it — by putting a question
+above the prompt while a turn runs:
 
 ```
  bet  Will "add the retry logic to the client" land first try?
@@ -176,16 +189,44 @@ and see nothing, its reply says when this is why.
 Type a bare digit into the empty composer and it answers — no pane, no focus,
 no click. `/bet` shows what it has learned about you.
 
+**wait-ship** needs no setup either. When a turn ends having changed anything,
+the same row offers the kit it drafted — a commit message, a PR description,
+and, where `CHANGELOG.md` exists, a changelog entry:
+
+```
+ ship  Drafts ready: feat(wait-ship): add hooks/ship.ts +2 more · commit 412B · PR 1.1KB · changelog 180B
+a: Accept all  c: Commit msg  p: PR body  l: Changelog  e: Drafts for editing  s: Skip
+```
+
+Type the bare letter into the empty composer and it answers, the same
+no-focus way as bet-on-your-agent's digits. Accepted drafts land under
+`.waitroom/ship`, with the exact command to run printed beside them — nothing
+here ever runs on your behalf. **No changes, no row.**
+
+**wait-breathe** is the one mod that starts off — turn on *Enable the
+breathing nudges* on its install screen if you want it (see
+[Install](#install) above). Once it is on, a single turn running past
+`longTurnSeconds` (90s by default) gets one quiet line, never more than one
+every ten minutes:
+
+```
+ breathe  4-4-4 breathing: in for 4, hold for 4, out for 4
+```
+
+No health claim, no "you should" — just the action, rotating so it is never
+the same one twice running. `/breathe` tells you, any time, whether it is on
+and how to flip it.
+
 ## What they are
 
 | Mod | What it does |
 | --- | --- |
 | [**wait-review**](./wait-review) | Offers the diff the agent already wrote, one hunk at a time, and sends what you flag — with your reason — back with your next message. |
-| [**bet-on-your-agent**](./bet-on-your-agent) | Forecast how the turn will go from the row above the prompt, then get a Brier score and a calibration table. |
+| [**bet-on-your-agent**](./bet-on-your-agent) | Forecast how the turn will go from the row above the prompt, then see a Brier score and a calibration table that shows exactly where your confidence runs hot or cold. |
 | [**wait-ship**](./wait-ship) | Drafts the commit message, PR description and changelog entry for the turn's changes, so you can review the words the way wait-review lets you review the code. |
-| [**wait-breathe**](./wait-breathe) | Gentle, deterministic wellbeing nudges during a long turn — off by default. |
+| [**wait-breathe**](./wait-breathe) | A quiet reminder to take care of yourself during a long turn — a posture check, an eye break, a breath, a stretch — off by default until you turn it on. |
 
-## The idea behind both
+## The idea behind all four
 
 The cost of waiting on a coding agent is not boredom, it is context collapse. A
 90-second wait filled with something entertaining costs minutes of refocus on
@@ -193,7 +234,7 @@ the way back, and any game with a win condition quietly teaches you to want the
 agent to be slow. You also cannot win on entertainment: the person already has a
 phone.
 
-So neither of these competes with a phone. Both spend the wait on something that
+So none of these compete with a phone. Each spends the wait on something that
 is only available *during* the wait, needs no context switch to start, and can
 be abandoned mid-thought:
 
@@ -203,10 +244,21 @@ be abandoned mid-thought:
 - **bet-on-your-agent** spends it on a forecast, because knowing how far to
   trust the agent is the skill that matters most and is currently learned by
   vibes.
+- **wait-ship** spends it on the words around the diff, because a commit
+  message and a PR description are worth getting right too, and writing them
+  well after the fact competes with whatever comes next instead of riding the
+  one moment the change is already fresh in mind.
+- **wait-breathe**, alone of the four, spends it on you rather than the work —
+  the same wait that is free for the others to fill is the only unscheduled
+  moment in a long session. It is off by default because not everyone wants a
+  plugin making that particular claim on their attention.
 
-They compose rather than compete for room: **wait-review** takes the pane, and
-**bet-on-your-agent** takes the space just above the prompt. One asks what you
-make of what the agent wrote, the other what you expect from what it is writing.
+They compose rather than compete for room: **wait-review** takes the pane,
+and the other three share the row just above the prompt, each yielding to
+whichever of them is already asking something rather than stacking two sets
+of buttons on it at once. bet-on-your-agent asks what you expect from what
+Claude is writing, wait-ship hands you the words for what it just wrote, and
+wait-breathe — once you turn it on — asks something of you instead of Claude.
 
 ## If a plugin shows an error
 
@@ -280,10 +332,10 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 69 tests
+claude plugin test     ./wait-review          # 78 tests
 
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 46 tests
+claude plugin test     ./bet-on-your-agent    # 113 tests
 ```
 
 Neither of those runs a real type checker, so also run `tsc` from each mod's
@@ -319,6 +371,25 @@ module beside it and a `types/index.d.ts` state contract that
 
 `.claude-plugin/types/` inside a mod is written by the engine on each load and
 is not checked in.
+
+### userConfig conventions
+
+Two option names recur across mods; a new one should follow the same meaning
+rather than pick a fresh one:
+
+- **`autoOpen`** governs whether a mod's *pane* opens by itself at session
+  start — not whether the mod itself runs. Its default follows whether the
+  pane is that mod's main surface or a secondary record: `true` for
+  wait-review, whose pane is where it does its work; `false` for
+  bet-on-your-agent, whose main surface is the row above the prompt, so the
+  pane is only worth the screen space once you ask for it with `/bet`.
+- **`enabled`** is a master switch, present only on mods with a core behavior
+  worth turning off entirely — wait-ship and wait-breathe. wait-review and
+  bet-on-your-agent have no `enabled` key at all, because neither has a mode
+  where it does nothing; they are always on. Where `enabled` exists, default
+  it to whatever keeps the mod's main claim on the user modest: `true` for
+  wait-ship (drafting costs nothing until you act on a draft), `false` for
+  wait-breathe (its claim is on your attention, not your screen).
 
 ### OpenCode prototypes
 

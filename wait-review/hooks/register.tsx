@@ -468,9 +468,11 @@ export const register: Register = (on, options) => {
               {' wait-review '}
             </Text>
             {barCells > 0 && (
+              // Same weight as the hunk separator below (─, not ━): the two
+              // read as one family of rule, and color alone carries progress.
               <Text>
-                <Text color="success">{'━'.repeat(filled)}</Text>
-                <Text dimColor>{'━'.repeat(barCells - filled)}</Text>
+                <Text color="success">{'─'.repeat(filled)}</Text>
+                <Text dimColor>{'─'.repeat(barCells - filled)}</Text>
               </Text>
             )}
             {summary !== '' && (

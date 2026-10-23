@@ -1,6 +1,6 @@
 {
   "name": "wait-ship",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Drafts the commit message, PR description and changelog entry for the turn's changes, so you can review the words the way wait-review lets you review the code.",
   "author": {
     "name": "coindef"

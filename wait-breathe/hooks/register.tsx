@@ -9,6 +9,7 @@ import {
   type PromptEvent,
   sessionCountsOf,
   sessionSummaryLine,
+  statusLine,
   wholePositive,
 } from './breathe'
 
@@ -81,6 +82,10 @@ export const register: Register = (on, options) => {
   }
 
   on('session.start', async ($, e, next) => {
+    await $.command.register({
+      name: 'breathe',
+      description: 'Whether the breathing nudges are on, the threshold, and how to flip it',
+    })
     // Guarded: session.start fires again on every hot reload while $.state
     // survives it, so an unconditional write would move "this session" to
     // whatever moment the reload happened rather than when it truly began.
@@ -91,6 +96,8 @@ export const register: Register = (on, options) => {
 
     return next(e)
   }).catch(($, e, next) => next(e))
+
+  on('command.run', { command: 'breathe' }, async () => ({ text: statusLine(config.enabled, config.longTurnSeconds) }))
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)

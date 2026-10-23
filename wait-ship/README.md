@@ -32,10 +32,16 @@ you want them. The ship is still yours.
 When a turn ends having changed anything, the row above the prompt — the same
 one `bet-on-your-agent` uses — offers the kit it drafted:
 
+<img src="../docs/ship-offer.svg" width="480" alt="The row above the prompt: a green ship tag, 'Drafts ready: feat(wait-ship): add hooks/ship.ts +2 more' with commit, PR and changelog sizes, and the a/c/p/l/e/s keys to accept, write one, or skip">
+
 ```
  ship  Drafts ready: feat(wait-ship): add hooks/ship.ts +2 more · commit 412B · PR 1.1KB · changelog 180B
 a: Accept all  c: Commit msg  p: PR body  l: Changelog  e: Drafts for editing  s: Skip
 ```
+
+**Type the bare letter into an empty composer and it answers** — no focus
+needed, same as `bet-on-your-agent`'s digits: no pane to place, nothing to
+click.
 
 - **`a` accepts every drafted artifact.** `c`, `p` and `l` write just the one.
   `e` writes the same drafts as `a`, framed for editing rather than for
@@ -105,7 +111,7 @@ completely silent, same as a turn with nothing for `wait-review` to show.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 51 tests
+claude plugin test .         # 53 tests
 ```
 
 The diff parsing, style inference and every drafted artifact live in

@@ -13,7 +13,7 @@
     {
       "name": "bet-on-your-agent",
       "source": "./bet-on-your-agent",
-      "description": "Predict how a turn will go before it lands, and get scored on your calibration."
+      "description": "Forecast how a turn will go, and see how your calibration holds up."
     },
     {
       "name": "wait-ship",
@@ -23,7 +23,7 @@
     {
       "name": "wait-breathe",
       "source": "./wait-breathe",
-      "description": "Gentle, deterministic wellbeing nudges during a long turn — off by default."
+      "description": "Nudges you to take care of yourself during a long turn."
     }
   ]
 }

@@ -8,6 +8,7 @@ import {
   asPercent,
   asText,
   badges,
+  badgeValue,
   BANDS,
   bonusBucketOf,
   bonusDimFor,
@@ -745,6 +746,23 @@ export const register: Register = (on, options) => {
         Rank up: {last.rankUp.from} → {last.rankUp.to}
       </Text>
     )
+    // Six badges, earned or locked, always the full set beside the record —
+    // the wall never changes shape whether the pane is calibrating or empty.
+    const badgeWall = (
+      <Box flexDirection="column">
+        <Text dimColor>Badges</Text>
+        <Text wrap="truncate-end">
+          {found.badges.map((badge, i) => (
+            <Text key={badge.id}>
+              {i > 0 && <Text dimColor> · </Text>}
+              <Text color={badge.earned ? 'success' : undefined} dimColor={!badge.earned}>
+                {badgeValue(badge)} {badge.name}
+              </Text>
+            </Text>
+          ))}
+        </Text>
+      </Box>
+    )
 
     if (found.brier === undefined) {
       return (
@@ -770,6 +788,7 @@ export const register: Register = (on, options) => {
             )}
           </Box>
           {rankUp}
+          {badgeWall}
         </Box>
       )
     }
@@ -857,6 +876,8 @@ export const register: Register = (on, options) => {
           )}
           {found.medianMs !== undefined && <Text dimColor>Median turn {asDuration(found.medianMs)}.</Text>}
         </Box>
+
+        {badgeWall}
       </Box>
     )
   })

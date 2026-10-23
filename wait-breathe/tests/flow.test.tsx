@@ -38,6 +38,7 @@ const engineBottom = (on: On) => {
   const clock = mock.clock(on)
   mock.store(on)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', ($, e) => ({ text: e.answer }))
@@ -201,3 +202,29 @@ test('a session with no long turn at all ends with no line', { options: { enable
 
   expect(logged).toHaveLength(0)
 })
+
+test('/breathe answers off by default: the state, the threshold, and how to turn it on', async ($, on) => {
+  engineBottom(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  const reply = await $.command.run({ command: 'breathe' } as never)
+
+  expect(reply.text).toContain('breathe: off')
+  expect(reply.text).toContain('90s')
+  expect(reply.text).toContain('turn on')
+})
+
+test(
+  '/breathe reports on and the threshold configured, with how to turn it off',
+  SHORT_FUSE,
+  async ($, on) => {
+    engineBottom(on)
+    await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+    const reply = await $.command.run({ command: 'breathe' } as never)
+
+    expect(reply.text).toContain('breathe: on')
+    expect(reply.text).toContain('5s')
+    expect(reply.text).toContain('turn off')
+  },
+)

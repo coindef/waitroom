@@ -639,7 +639,9 @@ test('the bonus line in the text report shows once a bonus question is answered,
   expect(beforeScoring).toContain('none scored yet')
   expect(beforeScoring).toContain('Bonus: 1/1 correct')
 
-  expect(asText(report([turn()]))).not.toContain('Bonus')
+  // The Bonus Hunter badge still names itself in the wall below (locked or
+  // not); the stat line is what a turn with no bonus answer must not add.
+  expect(asText(report([turn()]))).not.toContain('Bonus:')
 })
 
 test('the recap scopes its totals to the session, but the rank to the whole history', async () => {
@@ -739,6 +741,25 @@ test('First Steps earns on the first scored bet, not merely a recorded one', asy
   expect(
     badges([turn({ saidConfidence: 0.8, landed: true })]).find(one => one.id === 'firstSteps')?.earned,
   ).toBe(true)
+})
+
+test('report carries the same badge wall the recap card does, so /bet is never the surface left behind', async () => {
+  const empty = report([])
+  expect(empty.badges).toEqual(badges([]))
+
+  const scored = report([turn({ saidConfidence: 0.8, landed: true })])
+  expect(scored.badges.find(one => one.id === 'firstSteps')?.earned).toBe(true)
+})
+
+test('asText prints the badge wall beside the record, earned or locked, whether or not anything is scored yet', async () => {
+  const unscored = asText(report([turn({ saidConfidence: 0.8 })]))
+  expect(unscored).toContain('none scored yet')
+  expect(unscored).toContain('Badges')
+  expect(unscored).toContain('— First Steps')
+
+  const scored = asText(report([turn({ saidConfidence: 0.8, landed: true })]))
+  expect(scored).toContain('Badges')
+  expect(scored).toContain('✓ First Steps')
 })
 
 test('Hot Streak earns on five consecutive landed calls anywhere in history, not only the most recent', async () => {

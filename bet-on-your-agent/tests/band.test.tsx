@@ -420,6 +420,10 @@ test('the record pane draws on every surface', async $ => {
     const ui = await $.ui.mount({ plugin: 'bet-on-your-agent', surface, ...PANE })
 
     expect(await ui.find({ text: /No turns yet/ })).toBeDefined()
+    // The badge wall is always shown, even with nothing recorded: all six
+    // badges, all locked.
+    expect(await ui.find({ text: /Badges/ })).toBeDefined()
+    expect(await ui.find({ text: /First Steps/ })).toBeDefined()
     expect(await ui.drawn()).toMatchObject({ type: 'Box' })
 
     await ui.unmount()
@@ -583,7 +587,9 @@ test('skipping the bonus question costs nothing and is never scored', async ($, 
   })
 
   const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
-  expect(await pane.find({ text: /Bonus/ })).toBeUndefined()
+  // The Bonus Hunter badge still shows in the wall below (locked or not); the
+  // stat line is what a skipped bonus question must not add.
+  expect(await pane.find({ text: /Bonus:/ })).toBeUndefined()
   await pane.unmount()
 })
 
@@ -675,6 +681,38 @@ test('/bet-recap prints a shareable, plain-text card for this session', async ($
   expect(reply.text).toContain('Daily challenge')
   // Copy-paste friendly: no ANSI escapes inside the box.
   expect(reply.text).not.toMatch(/\u001b/)
+})
+
+test('/bet and its pane both show the badge wall beside the record, not just /bet-recap', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'add a guard clause', turnId: 'turn-badge-wall' })
+
+  const betting = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(true) })
+  await betting.press({ key: 'p80' })
+  await betting.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-badge-wall',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const idle = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(false) })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  const reply = await $.command.run({ command: 'bet' } as never)
+  expect(reply.text).toContain('Badges')
+  expect(reply.text).toContain('✓ First Steps')
+  expect(reply.text).toContain('— Oracle Path')
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /Badges/ })).toBeDefined()
+  expect(await pane.find({ text: /First Steps/ })).toBeDefined()
+  await pane.unmount()
 })
 
 test('a newly earned badge prints one quiet line beside the scoring output', async ($, on) => {

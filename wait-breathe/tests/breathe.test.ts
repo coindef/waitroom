@@ -8,6 +8,7 @@ import {
   MESSAGES,
   sessionCountsOf,
   sessionSummaryLine,
+  statusLine,
   wholePositive,
 } from '../hooks/breathe'
 
@@ -69,4 +70,18 @@ test('a non-positive or non-numeric config value falls back, a positive one is f
   expect(wholePositive(-5, 999)).toBe(999)
   expect(wholePositive('not a number', 999)).toBe(999)
   expect(wholePositive(12.9, 999)).toBe(12)
+})
+
+test('the status line names the threshold either way, but only tells you how to turn on when off, and off when on', () => {
+  const on = statusLine(true, 90)
+  expect(on).toContain('breathe: on')
+  expect(on).toContain('90s')
+  expect(on).toContain('turn off')
+  expect(on).not.toContain('turn on')
+
+  const off = statusLine(false, 90)
+  expect(off).toContain('breathe: off')
+  expect(off).toContain('90s')
+  expect(off).toContain('turn on')
+  expect(off).not.toContain('turn off')
 })

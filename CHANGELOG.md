@@ -1,5 +1,53 @@
 # Changelog
 
+## bet-on-your-agent 0.6.0
+
+- **The badge wall moved into `/bet`'s own report**, not just `/bet-recap`.
+  Same six badges, shown or locked, now beside the record every time you ask.
+
+## wait-breathe 0.2.0
+
+- **`/breathe`**, a status command: whether the nudges are on, the threshold
+  either way, and exactly where to flip it in `/plugin`. The one place to
+  find this mod again once its install screen has scrolled past — there was
+  no pane and no band entry to stumble into otherwise.
+
+## wait-ship 0.1.1
+
+- **The band tag moved off the `suggestion` token it shared with
+  `wait-review`'s bar onto its own `success` green**, matching the color
+  `docs/paging.svg` already used for it.
+- The README's first-minute walkthrough now shows the ship-offer row inline
+  (`docs/ship-offer.svg`) and says the bare-letter answer needs no focus, the
+  same way `bet-on-your-agent`'s digits don't.
+- Test count in the README corrected to 53.
+
+## wait-review 0.4.1
+
+- **The progress bar's rule changed from `━` to `─`**, matching the weight of
+  the hunk separator below it, so the two read as one family of rule with
+  color carrying the progress instead of a second line weight.
+- Test count in the README corrected to 78.
+
+## Icons and docs, across all four mods
+
+- **Every `.claude-plugin/icon.svg` unified to the same 24px stroke-width
+  baseline.** `bet-on-your-agent`'s target is now two stroked rings and a
+  filled center dot, in place of four solid alternating discs that read as a
+  single blob at small sizes; `wait-breathe`'s three rings now share
+  stroke-width 24 with an opacity floor of 0.6/0.8/1.0, in place of
+  14/16/20px strokes at 0.35/0.6/1, which closed up into one ring under 32px.
+- **`docs/lockup.svg`**, all four icons side by side, now sits near the top
+  of the root README; **`docs/ship-offer.svg`** and **`docs/breathe-nudge.svg`**
+  show each mod's row inline the same way `docs/paging.svg` already did for
+  the others.
+- The root README's first-minute walkthrough now covers `wait-ship` and
+  `wait-breathe` the same way it already covered `wait-review` and
+  `bet-on-your-agent`, gained a `userConfig` conventions section
+  (`autoOpen` vs `enabled`), and unified scattered copy across the "What they
+  are" table and "The idea behind" section to read as four mods rather than
+  two-plus-two.
+
 ## 0.1.0 — wait-ship and wait-breathe
 
 Two new mods, each starting its own version from here.

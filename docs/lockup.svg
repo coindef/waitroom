@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="506" height="147" viewBox="0 0 506 147" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+  <defs>
+    <g id="wait-review-icon">
+      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+      <g stroke="#b1b9f9" stroke-width="24" stroke-linecap="round" fill="none">
+        <circle cx="216" cy="216" r="104"/>
+        <line x1="294" y1="294" x2="400" y2="400"/>
+      </g>
+      <g fill="#b1b9f9">
+        <rect x="160" y="190" width="96" height="18" rx="9"/>
+        <rect x="160" y="222" width="68" height="18" rx="9"/>
+      </g>
+    </g>
+    <g id="bet-on-your-agent-icon">
+      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+      <circle cx="256" cy="256" r="176" fill="none" stroke="#d77757" stroke-width="24"/>
+      <circle cx="256" cy="256" r="116" fill="none" stroke="#d77757" stroke-width="24"/>
+      <circle cx="256" cy="256" r="64" fill="#d77757"/>
+    </g>
+    <g id="wait-ship-icon">
+      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+      <path d="M 150 270 L 150 380 L 362 380 L 362 270" stroke="#4eba65" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <path d="M 256 110 L 330 210 L 286 210 L 286 260 L 226 260 L 226 210 L 182 210 Z" fill="#4eba65"/>
+    </g>
+    <g id="wait-breathe-icon">
+      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+      <circle cx="256" cy="256" r="192" fill="none" stroke="#7ee8d0" stroke-width="24" opacity="0.6"/>
+      <circle cx="256" cy="256" r="132" fill="none" stroke="#7ee8d0" stroke-width="24" opacity="0.8"/>
+      <circle cx="256" cy="256" r="72" fill="none" stroke="#7ee8d0" stroke-width="24" opacity="1"/>
+    </g>
+  </defs>
+
+  <svg x="6" y="6" width="110" height="110" viewBox="0 0 512 512"><use href="#wait-review-icon"/></svg>
+  <text x="61" y="141" fill="#d6d9de" text-anchor="middle">wait-review</text>
+
+  <svg x="134" y="6" width="110" height="110" viewBox="0 0 512 512"><use href="#bet-on-your-agent-icon"/></svg>
+  <text x="189" y="141" fill="#d6d9de" text-anchor="middle">bet-on-your-agent</text>
+
+  <svg x="262" y="6" width="110" height="110" viewBox="0 0 512 512"><use href="#wait-ship-icon"/></svg>
+  <text x="317" y="141" fill="#d6d9de" text-anchor="middle">wait-ship</text>
+
+  <svg x="390" y="6" width="110" height="110" viewBox="0 0 512 512"><use href="#wait-breathe-icon"/></svg>
+  <text x="445" y="141" fill="#d6d9de" text-anchor="middle">wait-breathe</text>
+</svg>

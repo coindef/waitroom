@@ -182,7 +182,8 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         <Text wrap="truncate-end">
-          <Text backgroundColor="suggestion" color="inverseText" weight="bold">
+          {/* "success" renders as this mod's own icon green (#4eba65), not wait-review's shared "suggestion". */}
+          <Text backgroundColor="success" color="inverseText" weight="bold">
             {PANE_TAG}
           </Text>{' '}
           Drafts ready: <Text weight="bold">{kit.commit.subject}</Text>
