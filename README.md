@@ -10,9 +10,9 @@ you.
 ![A Claude Code session: a one-keystroke bet on the running turn above the prompt, the diff reviewed a hunk at a time in a pane on the right, one hunk flagged with a reason, and Claude fixing exactly that from "Fix what I flagged"](docs/demo.gif)
 
 *A real session, not a mockup — Claude Code 2.1.304 with both plugins, sped up
-only while Claude works. Bet on the turn while it runs, read the diff as it
-lands, flag a hunk with a reason, and "Fix what I flagged" is all the next
-message needs. [Full-quality video](docs/demo.mp4).*
+only while Claude works; this is a 15-second cut of it. Bet on the turn while
+it runs, read the diff as it lands, flag a hunk with a reason, and "Fix what I
+flagged" is all the next message needs. [Full-length video](docs/demo.mp4).*
 
 <img src="docs/lockup.svg" width="400" alt="The four plugin icons side by side: wait-review's magnifying glass, bet-on-your-agent's target, wait-ship's inbox with an arrow out of it, and wait-breathe's breathing rings">
 
@@ -398,10 +398,17 @@ rather than pick a fresh one:
 prototypes of the same two mods for [OpenCode](https://opencode.ai)'s own
 plugin API. Each reuses its Claude Code counterpart's engine-free core
 (`hooks/diff.ts`, `hooks/bet.ts`) unmodified; each README explains what's
-ported, what's blocked on OpenCode's API rather than merely unported, and how
-it was verified (type-checked against the real OpenCode/OpenTUI packages,
-not run inside a live session). Not installable, not versioned, not part of
-this marketplace.
+ported and what's blocked on OpenCode's API rather than merely unported.
+**bet-on-your-agent-opencode** has since been run as a real plugin inside a
+real, pty-driven OpenCode 1.19.3 TUI session — installed the same way a user
+would, through the TUI's own "Install plugin" dialog — which is how a real
+`api.kv` restart across two processes and a narrow-terminal layout bug (since
+fixed) were found. **wait-review-opencode** is still verified by type-checking
+against the real OpenCode/OpenTUI packages rather than a live session, since
+exercising it needs a configured model provider this environment doesn't
+have. Either way: adapter-only, not installable through this marketplace,
+not versioned, not part of a release — see each README's own "How this was
+verified" section for the full detail.
 
 ## License
 

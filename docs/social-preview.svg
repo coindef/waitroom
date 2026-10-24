@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
+  <defs>
+    <g id="wait-review-icon">
+      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+      <g stroke="#b1b9f9" stroke-width="24" stroke-linecap="round" fill="none">
+        <circle cx="216" cy="216" r="104"/>
+        <line x1="294" y1="294" x2="400" y2="400"/>
+      </g>
+      <g fill="#b1b9f9">
+        <rect x="160" y="190" width="96" height="18" rx="9"/>
+        <rect x="160" y="222" width="68" height="18" rx="9"/>
+      </g>
+    </g>
+    <g id="bet-on-your-agent-icon">
+      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+      <circle cx="256" cy="256" r="176" fill="none" stroke="#d77757" stroke-width="24"/>
+      <circle cx="256" cy="256" r="116" fill="none" stroke="#d77757" stroke-width="24"/>
+      <circle cx="256" cy="256" r="64" fill="#d77757"/>
+    </g>
+    <g id="wait-ship-icon">
+      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+      <path d="M 150 270 L 150 380 L 362 380 L 362 270" stroke="#4eba65" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <path d="M 256 110 L 330 210 L 286 210 L 286 260 L 226 260 L 226 210 L 182 210 Z" fill="#4eba65"/>
+    </g>
+    <g id="wait-breathe-icon">
+      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+      <circle cx="256" cy="256" r="192" fill="none" stroke="#7ee8d0" stroke-width="24" opacity="0.6"/>
+      <circle cx="256" cy="256" r="132" fill="none" stroke="#7ee8d0" stroke-width="24" opacity="0.8"/>
+      <circle cx="256" cy="256" r="72" fill="none" stroke="#7ee8d0" stroke-width="24" opacity="1"/>
+    </g>
+  </defs>
+
+  <rect width="1280" height="640" fill="#0f1115"/>
+
+  <!-- four-icon lockup, centered -->
+  <svg x="288" y="128" width="152" height="152" viewBox="0 0 512 512"><use href="#wait-review-icon"/></svg>
+  <svg x="456" y="128" width="152" height="152" viewBox="0 0 512 512"><use href="#bet-on-your-agent-icon"/></svg>
+  <svg x="624" y="128" width="152" height="152" viewBox="0 0 512 512"><use href="#wait-ship-icon"/></svg>
+  <svg x="792" y="128" width="152" height="152" viewBox="0 0 512 512"><use href="#wait-breathe-icon"/></svg>
+
+  <text x="640" y="358" font-size="72" font-weight="600" fill="#f3f4f6" text-anchor="middle">waitroom</text>
+  <text x="640" y="402" font-size="26" fill="#9aa0a8" text-anchor="middle">Mods that make the wait on a coding agent worth something.</text>
+
+  <text x="640" y="548" font-size="20" fill="#6b7280" text-anchor="middle">wait-review · bet-on-your-agent · wait-ship · wait-breathe</text>
+  <text x="640" y="582" font-size="20" fill="#7ee8d0" text-anchor="middle">github.com/coindef/waitroom</text>
+</svg>
