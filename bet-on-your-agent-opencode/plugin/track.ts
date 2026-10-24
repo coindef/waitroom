@@ -9,6 +9,21 @@
  * force a dependency on the SDK package just to run these tests.
  */
 
+/**
+ * `api.kv` is one flat key-value store shared by every installed OpenCode
+ * TUI plugin, not a per-plugin namespace — confirmed by tracing the shipped
+ * `opencode` binary itself (not just `@opencode-ai/plugin`'s types): the
+ * per-plugin api object built for each loaded plugin (`BU0` in the compiled
+ * TUI bundle) wraps `slots.register` with an id-prefixed key (`${pluginId}:${n}`)
+ * but forwards `kv` straight through unwrapped (`kv: J.kv`) from the single
+ * app-wide api object built once in `dw`. A bare key like `"turns"` could
+ * therefore collide with another plugin's own key of the same name; this
+ * constant exists so the key carries this plugin's id instead of a generic
+ * word. See the adapter's README for how `api.kv`'s disk persistence itself
+ * was confirmed the same way.
+ */
+export const TURNS_KV_KEY = 'bet-on-your-agent:turns'
+
 export type SessionStatusLike = { type: string }
 
 /** Whether a turn is running, OpenCode's equivalent of Claude Code's `turn.start`/`turn.complete`. */

@@ -1,9 +1,9 @@
 # bet-on-your-agent (OpenCode prototype)
 
-An unpublished, uncommitted prototype of
-[`bet-on-your-agent`](../bet-on-your-agent) for
-[OpenCode](https://opencode.ai). It is not a plugin you can install — see
-"Status" below.
+An unpublished prototype of [`bet-on-your-agent`](../bet-on-your-agent) for
+[OpenCode](https://opencode.ai). It is not registered in any marketplace or
+npm registry, but it can be, and has been, loaded into a real local OpenCode
+TUI session for verification — see "Status" below.
 
 ## Can a plugin capture a keypress mid-turn?
 
@@ -57,17 +57,35 @@ plugin.
 ergonomic-looking shape: `export default Plugin.define({id, setup(context) {
 context.ui.toast.show(...); context.keymap.layer(...); context.ui.slot(...)
 } })`. That shape does **not** exist anywhere in the installed
-`@opencode-ai/plugin@1.19.3` — confirmed by grepping its entire `dist/`
-for `keymap`, `toast`, `dialog`, and `slot`: the only matches are the raw
-`./tui` entry point this prototype uses. The package's own `v2/promise` and
-`v2/effect` exports (a different "v2") cover agent/catalog/command/
-integration/reference/skill registration, not UI at all. Since 1.19.3 is also
-the latest version on npm (checked via `npm view @opencode-ai/plugin
-versions`), this is a real gap between the docs site and the shipped
-package, not a version this prototype failed to catch up to. Flagging this
-for human review rather than guessing which side is "right": build against
-the installed types (what this prototype does), or wait for the published
-package to catch up to the docs.
+`@opencode-ai/plugin@1.19.3`, confirmed two ways, not just by grepping for
+identifier names:
+
+1. There is no runtime `Plugin` value anywhere in the package to call
+   `.define` on. `dist/index.js` (the bare `@opencode-ai/plugin` entry) is
+   just `export * from "./tool.js"` — `Plugin` only exists as a type alias
+   there (`export type Plugin = (input, options) => Promise<Hooks>`), for a
+   `server` plugin module, not a callable namespace.
+2. `dist/v2/promise/index.js` (and the mirror `v2/effect` build) *does* export
+   a bare `define(plugin)` function with roughly the docs' shape —
+   `{id, setup(context)}` — but `define` is a plain named export, never
+   `Plugin.define`, and its `PluginContext` (`dist/v2/promise/context.d.ts`)
+   has fields for `agent`, `aisdk`, `catalog`, `command`, `integration`,
+   `plugin`, `reference`, `skill` — registration surfaces, not one `ui`,
+   `keymap`, `toast`, or `slot` among them. So even reconciling the `.define`
+   naming, the `context.ui.toast.show(...)` /
+   `context.keymap.layer(...)` / `context.ui.slot(...)` calls the docs show
+   have nothing to call them on in this version.
+
+Since 1.19.3 is also the latest version on npm (checked via `npm view
+@opencode-ai/plugin versions`), this is a real gap between the docs site and
+the shipped package, not a version this prototype failed to catch up to.
+Flagging this for human review rather than guessing which side is "right":
+build against the installed types and the raw `./tui` entry point (what this
+prototype does), or wait for the published package to catch up to the docs.
+**Do not "fix" `plugin/tui.tsx` toward the docs' `Plugin.define` shape** —
+it would fail to import in this package version; the `TuiPlugin`/
+`TuiPluginModule` default export this prototype uses is the only UI-capable
+surface that actually exists.
 
 ## What this needs that `bet-on-your-agent` does not
 
@@ -115,8 +133,9 @@ package to catch up to the docs.
 - The post-turn verdict (landed / needed fixing / skip), same mechanism.
 - Scoring: `bet-on-your-agent/hooks/bet.ts` imported unmodified — `report`,
   `calibration`, `worstCalls`, `asText`, `rankOf`, `currentRank`, all of it.
-- History persistence through `api.kv`, keyed the same way
-  `bet-on-your-agent`'s `$.store` is (see "inferred, not confirmed" below).
+- History persistence through `api.kv`, keyed by `track.ts`'s `TURNS_KV_KEY`
+  rather than a bare word (see "Confirmed by tracing the shipped binary"
+  below for why).
 
 Not ported this round, by design: `/bet-recap` and the badge wall. Both are
 Claude Code-only features for now; a later pass can bring them here.
@@ -125,34 +144,105 @@ Claude Code-only features for now; a later pass can bring them here.
 
 - **A verified, non-deprecated slash command for `/bet`.** `api.command` is
   typed and present in `@opencode-ai/plugin/tui`, and this prototype uses it,
-  but the type itself says `@deprecated — kept so v1 plugins can initialize.
-  Remove in v2`. No non-deprecated surface with the same shape (register a
-  named, slash-invokable action) was found in the installed package. This is
-  best-effort against a surface the types themselves say may be removed, not
-  a confirmed-stable feature.
+  but the type itself says: "Legacy `api.command` API kept so v1 plugins can
+  initialize. Remove in v2. @deprecated Use `api.keymap.registerLayer`,
+  `api.keymap.dispatchCommand`, and
+  `api.keymap.dispatchCommand("command.palette.show")` instead." That
+  replacement covers binding and invoking commands, not naming a *new* one
+  slash-invokable: `@opentui/keymap`'s own `Command` type is just `{name,
+  run, [key: string]: unknown}`, with no `slash`/`slashName` semantics
+  recognized anywhere in its own matching logic. The shipped `opencode`
+  binary's built-in commands (`/sessions`, `/new`, …) do carry
+  `slashName`/`slashAliases` fields — confirmed by grepping the compiled
+  binary's own source — but that is an internal convention its own command
+  palette reads, not exported or typed anywhere a plugin could rely on it.
+  So this stays on `api.command`: best-effort against a surface the types
+  say may disappear, rather than against an unexported convention just as
+  likely to move without notice.
 - **Counting files an `apply_patch` call touched.** Its tool input carries
   patch text covering possibly several files, not a single `filePath`; this
   prototype does not parse the patch to extract them (see `track.ts`).
 
-## Inferred, not empirically confirmed — flagged for human review
+## Confirmed by tracing the shipped binary, then by running it for real
 
-- **Whether `api.kv` persists across OpenCode process restarts**, the way
-  `$.store` does for the Claude Code mod (its README: "History is kept in
-  the plugin's own store... survives across sessions"). `TuiKV`'s `ready`
-  flag implies an async, presumably disk-backed hydration, which is why `kv`
-  rather than an in-memory map was chosen for turn history here — but this
-  was never run against an actual restart.
-- **`session_prompt_right` is a guess at "the row above the prompt."** It is
-  the slot keyed by `session_id` sitting next to `session_prompt` in
-  `TuiHostSlotMap`, which is a reasonable read of the type, not a layout
-  visually confirmed in a running terminal.
+Both items below started as open questions settled only by `strings`-ing the
+shipped `opencode` binary and reading its own — minified but otherwise
+intact — source. Both have since also been confirmed against a real,
+running OpenCode TUI (see "How this was verified" below for the method); the
+binary-tracing conclusions held, and the second item surfaced a real bug
+that is now fixed.
+
+- **`api.kv` does persist across OpenCode process restarts.** Its KV
+  provider's `init()` reads, and its `set()` writes (both under a file
+  lock), `path.join(<tui state dir>, "kv.json")` — a real file on disk, not
+  an in-memory map — which is why the type's `ready` flag exists (it flips
+  once the on-disk read resolves). This is read the way `$.store` is for the
+  Claude Code mod: it survives a restart. Confirmed with an actual
+  two-process restart, not just the binary trace: one OpenCode process set a
+  sentinel value under `TURNS_KV_KEY` and exited; a second, fresh process
+  read the identical value back, and `kv.json` on disk held
+  `{"bet-on-your-agent:turns": <the sentinel>}` the whole time.
+
+  It is, however, **one flat store shared by every installed TUI plugin**,
+  not namespaced per plugin. The per-plugin api object the host builds for
+  each loaded plugin wraps `slots.register` with an id-prefixed key, but
+  forwards `kv` straight through unwrapped from the single app-wide api
+  object built once at startup — confirmed by reading that wiring function
+  in the compiled bundle directly. A bare key like `"turns"` could therefore
+  collide with some other plugin's own key of the same name. Fixed here:
+  `track.ts`'s `TURNS_KV_KEY` namespaces the key to this plugin's id instead
+  of a generic word, and is covered by its own test.
+- **`session_prompt_right` does land where "the row above the prompt"
+  intends, and shares its row with the host's own status text.** This is
+  not merely "the slot keyed by `session_id` sitting next to
+  `session_prompt` in `TuiHostSlotMap`'s declaration order" — the host's own
+  Prompt component threads this slot's content through a dedicated `right:
+  JSX.Element` prop and renders it as a `flexDirection: row` box inside the
+  prompt's own chrome, alongside the prompt's other decorations — including
+  the host's own "Build · \<model\> OpenCode" status indicator, which lives
+  in that same row. A live 60/70/80-column terminal showed that, without a
+  width cap, the two boxes fight over the row's width and *both* wrap — not
+  just this slot's text but the host's own status text too, split one
+  character per line and interleaved with this slot's content, unreadable at
+  every width tested. The fix, applied to every branch of this slot:
+  `wrapMode="none"` on every `<text>` here, plus `maxWidth="50%"` on every
+  outer `<box>` (and the one branch that is a bare `<text>`). That reserves
+  at most half the row for this slot and leaves the other half to the host,
+  so the host's status text now always renders intact and this slot's own
+  content truncates cleanly at its 50% boundary instead of interleaving.
+  There is no narrower API to size this against the real column count
+  instead of a fixed fraction: the `ctx` a slot callback receives
+  (`TuiSlotContext`) exposes only `theme`, nothing about width.
 
 ## How this was verified
 
-- **Type-checked, not run**, for the same reason as the wait-review
-  prototype: no configured model provider here to drive a real OpenCode
-  turn, and no official test harness for a `tui` plugin. `plugin/tui.tsx`
-  type-checks clean with `tsc --noEmit` against the real, freshly-installed
+- **A real two-process `api.kv` restart**, not a unit test or a source
+  reading: a small throwaway TUI plugin package (sharing `track.ts`'s own
+  `TURNS_KV_KEY` constant by importing it directly) called `api.kv.set` on
+  load, then exited; a second, fresh OpenCode process with a second
+  throwaway plugin called `api.kv.get` on load and read the same value back.
+  Both ran as real plugins inside a real, pty-driven OpenCode 1.19.3 TUI
+  session (`opencode-darwin-arm64`, installed locally for this check, not
+  the npm types package), loaded through the same `api.kv`/`TURNS_KV_KEY`
+  path `plugin/tui.tsx` itself uses, not a reimplementation of it.
+- **A real, live OpenCode TUI session with this adapter installed and
+  active**, using the real, unmodified `bet-on-your-agent-opencode` package
+  (installed via the TUI's own "Install plugin" dialog, which reads this
+  package's `package.json` `exports` map the same way a real user's install
+  would). Since this environment has no configured model provider, the
+  `session_prompt_right` slot's "owed verdict" branch was exercised by
+  seeding one unresolved `TurnRecord` under `TURNS_KV_KEY` (the same key,
+  shape, and `api.kv` path `plugin/tui.tsx#loadTurns`/`saveTurns` use) and
+  then viewing an existing session — `owedVerdict` finds the seeded record
+  and renders the slot without needing a live turn or any network call. The
+  terminal was driven at 60, 70, and 80 columns this way; see the
+  `maxWidth`/`wrapMode` fix above for what that showed and how it was
+  addressed. The other branches of this slot (the confidence/files/bonus
+  bands, which only open while a turn is actually running) share the exact
+  same `wrapMode`/`maxWidth` fix but were not directly observed this way,
+  since reaching them would require a real chat turn against a real model.
+- **Type-checked**, in addition to the above: `plugin/tui.tsx` type-checks
+  clean with `tsc --noEmit` against the real, freshly-installed
   `@opencode-ai/plugin`, `@opentui/core`, `@opentui/keymap`, and
   `@opentui/solid`.
 - **`plugin/track.ts` is actually run and tested** — zero OpenCode types, by
@@ -162,20 +252,30 @@ Claude Code-only features for now; a later pass can bring them here.
   node --experimental-strip-types --test bet-on-your-agent-opencode/tests/track.test.ts
   ```
 
-  11 tests, all passing: busy detection, which tools count as file-touching
+  12 tests, all passing: busy detection, which tools count as file-touching
   and which don't (including the deliberate `apply_patch` exclusion),
-  flattening a user message's text parts, and which tool-part updates count
+  flattening a user message's text parts, which tool-part updates count
   toward the bonus question's tool-call tally (the first `'completed'` sight
-  of a part, deduped against a re-fired one).
+  of a part, deduped against a re-fired one), and the `TURNS_KV_KEY`
+  namespacing fix above.
 - The bonus-bet dimensions, buckets, and rank thresholds `tui.tsx` wires in
   are `bet-on-your-agent/hooks/bet.ts`'s own exports, already covered by that
   package's own test suite — nothing here reimplements them.
+- The documentation-discrepancy section above (the `Plugin.define` shape)
+  was settled by extracting readable, minified-but-intact JS source strings
+  out of the installed `opencode-darwin-arm64` binary (`strings` on the
+  Bun-compiled executable) and reading the relevant implementation directly.
 
 ## Status
 
-This is a prototype, not an installable plugin: no version, not published,
-not registered anywhere. To type-check it yourself, install
-`@opencode-ai/plugin`, `@opentui/core`, `@opentui/keymap`, and
-`@opentui/solid` next to a copy of this folder plus
-`../bet-on-your-agent/hooks` and `../bet-on-your-agent/types` (it imports both
-by relative path), then run `tsc --noEmit`.
+An unpublished prototype: no version bump, not published to npm, not
+registered in any marketplace. It can be loaded into a real OpenCode
+session locally, though, the same way any local package can: open the
+Plugins dialog (command palette → "Plugins" → "Install plugin"), enter this
+folder's absolute path, and OpenCode reads its `package.json` `exports` map
+to find the `./tui` entry point. That is how it was loaded for the real
+2026-10-24 verification pass described above. To just type-check it
+yourself without running it, install `@opencode-ai/plugin`, `@opentui/core`,
+`@opentui/keymap`, and `@opentui/solid` next to a copy of this folder plus
+`../bet-on-your-agent/hooks` and `../bet-on-your-agent/types` (it imports
+both by relative path), then run `tsc --noEmit`.

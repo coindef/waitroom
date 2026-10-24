@@ -2,11 +2,14 @@
  * bet-on-your-agent for OpenCode: the Claude Code mod's row above the prompt,
  * ported as far as the verified OpenCode plugin API allows.
  *
- * This file only type-checks against the real `@opencode-ai/plugin`,
+ * This file type-checks against the real `@opencode-ai/plugin`,
  * `@opentui/core`, `@opentui/keymap` and `@opentui/solid` type declarations
- * (see the adapter's README for how); it has not been run inside a live
- * OpenCode TUI session — this environment has no configured model provider
- * to drive a real turn. `./track.ts` is the part that is actually tested.
+ * (see the adapter's README for how) and has now been loaded in a real,
+ * live OpenCode TUI session — this environment has no configured model
+ * provider to drive a real turn, so that session was driven via a seeded
+ * `api.kv` record and the Plugins dialog's install/activate flow rather than
+ * an actual chat turn (see the README's "How this was verified"). `./track.ts`
+ * is the part that is unit-tested.
  *
  * The central question this adapter answers: OpenCode has no analogue of
  * `client.tui.showToast` that reads anything back — every `client.tui.*` RPC
@@ -20,20 +23,50 @@
  * Deliberately not ported — blocked on the API, not merely skipped:
  *
  * - **A verified, non-deprecated slash command.** `/bet` is wired up through
- *   `api.command`, but that whole surface is typed `@deprecated` — "kept so
- *   v1 plugins can initialize. Remove in v2" — in `@opencode-ai/plugin/tui`.
- *   There is no non-deprecated replacement with the same shape in the
- *   installed package, so this is best-effort against a surface the types
- *   themselves say may disappear, not a confirmed stable API.
+ *   `api.command`, but that whole surface is typed `@deprecated` in
+ *   `@opencode-ai/plugin/tui`: "Legacy `api.command` API kept so v1 plugins
+ *   can initialize. Remove in v2. Use `api.keymap.registerLayer`,
+ *   `api.keymap.dispatchCommand`, and
+ *   `api.keymap.dispatchCommand("command.palette.show")` instead." That
+ *   replacement covers binding and invoking commands, but not naming a new
+ *   one slash-invokable: `@opentui/keymap`'s own `Command` type is just
+ *   `{name, run, [key: string]: unknown}`, with no `slash`/`slashName`
+ *   semantics recognized anywhere in its matching logic. The shipped
+ *   `opencode` binary's *own* built-in commands (e.g. `/sessions`, `/new`)
+ *   do carry `slashName`/`slashAliases` fields, confirmed by grepping its
+ *   compiled source — but those are an internal convention read by the
+ *   app's own command palette, not part of any exported, typed contract a
+ *   plugin can rely on. So this stays on `api.command`, best-effort against
+ *   a surface the types say may disappear, rather than depending on an
+ *   unexported convention that is just as likely to move without notice.
  * - **Counting files an `apply_patch` call touched.** See `track.ts`.
  *
- * Inferred, not empirically confirmed (flagged for human review rather than
- * silently assumed): whether `api.kv` persists across OpenCode process
- * restarts, the way `$.store` does for the Claude Code mod — its `ready`
- * flag implies disk-backed hydration, but this was never run against a real
- * restart. And `session_prompt_right` is a guess at which slot reads as "the
- * row above the prompt": it is the slot keyed by `session_id` next to
- * `session_prompt` in `TuiHostSlotMap`, not a layout visually confirmed here.
+ * Grounded by tracing the shipped `opencode` binary and then confirmed by
+ * actually running it (see "How this was verified" below for the method):
+ *
+ * - **`api.kv` does persist across OpenCode process restarts.** The
+ *   compiled binary's own KV provider reads and writes
+ *   `path.join(<tui state dir>, "kv.json")` under a file lock on every
+ *   `get`/`set`, hydrating from that file on startup (hence the `ready`
+ *   flag). But it is one flat store shared by every installed TUI plugin,
+ *   not namespaced per plugin the way `slots` is — see `track.ts`'s
+ *   `TURNS_KV_KEY` for the fix applied here. Confirmed with a real two-process
+ *   restart: one process set a sentinel under `TURNS_KV_KEY` and exited, a
+ *   second fresh process read the same value back off disk.
+ * - **`session_prompt_right` does land where intended, and shares its row
+ *   with the host's own status text.** A live 60/70/80-column terminal
+ *   showed that without a `maxWidth` cap, this slot's `<box>` and the host's
+ *   own "Build · <model> OpenCode" status indicator fight over the same row:
+ *   both wrap, and the host's own text — not just this slot's — comes out
+ *   split one character per line and interleaved with this slot's content.
+ *   `wrapMode="none"` on every `<text>` here plus `maxWidth="50%"` on every
+ *   outer `<box>` (and the one bare `<text>` branch) fixes it: the host's
+ *   status text now always renders intact, and this slot's own content
+ *   truncates cleanly at the 50%-of-row boundary instead of interleaving.
+ *   That boundary is a fixed fraction, not a real terminal-width query —
+ *   `TuiSlotContext` (the `ctx` a slot callback receives) exposes only
+ *   `theme`, no width, so there is no narrower API available to size this
+ *   against the real column count.
  */
 
 import type { TuiPlugin, TuiPluginModule } from '@opencode-ai/plugin/tui'
@@ -61,9 +94,7 @@ import {
   skipVerdict,
 } from '../../bet-on-your-agent/hooks/bet.ts'
 import type { BonusBucket, BonusDim, FileBucket, RankChange, TurnRecord } from '../../bet-on-your-agent/types/index.ts'
-import { askFrom, filePathOf, isBusy, isNewCompletion } from './track.ts'
-
-const STORE_KEY = 'turns'
+import { askFrom, filePathOf, isBusy, isNewCompletion, TURNS_KV_KEY } from './track.ts'
 
 type OpenBet = {
   turnId: string
@@ -95,8 +126,8 @@ export const tui: TuiPlugin = async api => {
 
   const openFor = (sessionID: string): OpenBet => open.get(sessionID) ?? noBet()
 
-  const loadTurns = (): TurnRecord[] => api.kv.get<TurnRecord[]>(STORE_KEY, [])
-  const saveTurns = (records: readonly TurnRecord[]) => api.kv.set(STORE_KEY, records)
+  const loadTurns = (): TurnRecord[] => api.kv.get<TurnRecord[]>(TURNS_KV_KEY, [])
+  const saveTurns = (records: readonly TurnRecord[]) => api.kv.set(TURNS_KV_KEY, records)
 
   const askForTurn = async (sessionID: string): Promise<string> => {
     const messages = api.state.session.messages(sessionID)
@@ -327,24 +358,28 @@ export const tui: TuiPlugin = async api => {
 
           if (bet.saidConfidence === undefined) {
             return (
-              <box flexDirection="row" gap={1}>
-                <text>Will{about} land first try?</text>
+              <box flexDirection="row" gap={1} maxWidth="50%">
+                <text wrapMode="none">
+                  Will{about} land first try?
+                </text>
                 {BANDS.map((band, at) => (
-                  <text>
+                  <text wrapMode="none">
                     {at + 1}: {asPercent(band)}
                   </text>
                 ))}
-                <text>0: skip</text>
+                <text wrapMode="none">0: skip</text>
               </box>
             )
           }
 
           if (bet.saidFiles === undefined) {
             return (
-              <box flexDirection="row" gap={1}>
-                <text>{asPercent(bet.saidConfidence)} · how many files?</text>
+              <box flexDirection="row" gap={1} maxWidth="50%">
+                <text wrapMode="none">
+                  {asPercent(bet.saidConfidence)} · how many files?
+                </text>
                 {FILE_BUCKETS.map((bucket, at) => (
-                  <text>
+                  <text wrapMode="none">
                     {at + 1}: {bucket}
                   </text>
                 ))}
@@ -361,20 +396,22 @@ export const tui: TuiPlugin = async api => {
             const buckets = BONUS_BUCKETS[dim]
 
             return (
-              <box flexDirection="row" gap={1}>
-                <text>Bonus: {BONUS_QUESTIONS[dim]}</text>
+              <box flexDirection="row" gap={1} maxWidth="50%">
+                <text wrapMode="none">
+                  Bonus: {BONUS_QUESTIONS[dim]}
+                </text>
                 {buckets.map((bucket, at) => (
-                  <text>
+                  <text wrapMode="none">
                     {at + 1}: {bonusLabel(dim, bucket)}
                   </text>
                 ))}
-                <text>0: skip</text>
+                <text wrapMode="none">0: skip</text>
               </box>
             )
           }
 
           return (
-            <text>
+            <text wrapMode="none" maxWidth="50%">
               bet {asPercent(bet.saidConfidence)} · {filesPhrase(bet.saidFiles)} · {bet.files.length} written so far
             </text>
           )
@@ -388,10 +425,10 @@ export const tui: TuiPlugin = async api => {
           const label = last.result === 'landed' ? 'Landed' : last.result === 'fixed' ? 'Needed fixing' : 'Skipped'
 
           return (
-            <box flexDirection="row" gap={1}>
-              <text>Recorded: {label}</text>
+            <box flexDirection="row" gap={1} maxWidth="50%">
+              <text wrapMode="none">Recorded: {label}</text>
               {last.rankUp && (
-                <text>
+                <text wrapMode="none">
                   Rank up: {last.rankUp.from} → {last.rankUp.to}
                 </text>
               )}
@@ -402,13 +439,13 @@ export const tui: TuiPlugin = async api => {
         const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, room)
 
         return (
-          <box flexDirection="row" gap={1}>
-            <text>
+          <box flexDirection="row" gap={1} maxWidth="50%">
+            <text wrapMode="none">
               {quoted === '' ? 'That turn' : `"${quoted}"`} — you said {asPercent(owed.saidConfidence ?? 0)}.
             </text>
-            <text>1: landed</text>
-            <text>2: needed fixing</text>
-            <text>3: skip</text>
+            <text wrapMode="none">1: landed</text>
+            <text wrapMode="none">2: needed fixing</text>
+            <text wrapMode="none">3: skip</text>
           </box>
         )
       },

@@ -8,7 +8,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { askFrom, filePathOf, isBusy, isNewCompletion } from '../plugin/track.ts'
+import { askFrom, filePathOf, isBusy, isNewCompletion, TURNS_KV_KEY } from '../plugin/track.ts'
+
+test('the turns kv key is namespaced to this plugin, not a bare generic word that another plugin could also pick', () => {
+  assert.equal(TURNS_KV_KEY, 'bet-on-your-agent:turns')
+})
 
 test('a session is busy only when its status says so', () => {
   assert.equal(isBusy({ type: 'busy' }), true)

@@ -11,6 +11,16 @@ See the root question answered in
 The short version: yes, but only from a `tui` plugin, never from a `server`
 one, and never through `client.tui.showToast`.
 
+The same README also documents a
+[docs-vs-shipped-package discrepancy](../bet-on-your-agent-opencode/README.md#a-documentation-discrepancy-flagged-rather-than-silently-resolved)
+around `opencode.ai`'s docs showing a `Plugin.define({id, setup(context)})`
+shape that does not exist in the installed `@opencode-ai/plugin@1.19.3` —
+confirmed by reading the package's actual runtime exports, not just grepping
+identifier names. `plugin/tui.tsx` here uses the same real `TuiPlugin`/
+`TuiPluginModule` default-export shape as that other prototype; **do not
+"fix" it toward the docs' `Plugin.define` shape**, which would fail to
+import in this package version.
+
 ## What this needs that `wait-review` does not
 
 Claude Code hands a mod `$.process.run` for git and a `session.start` /
