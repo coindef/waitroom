@@ -458,3 +458,96 @@ export const applyCommandFor = (kind: ArtifactKind, path: string): string => {
 
   return `paste ${path} into CHANGELOG.md`
 }
+
+/**
+ * One transcript line per draft written: where it is and the command to use
+ * it. The receipt goes to the transcript rather than the row above the prompt,
+ * so it stays readable at any width and scrolls back with the session, and
+ * the row is free at once for whatever waited behind the offer.
+ */
+export const receiptLines = (wrote: readonly { kind: ArtifactKind; path: string }[]): string[] =>
+  wrote.map(one => `Draft written: ${one.path} — ${applyCommandFor(one.kind, one.path)}`)
+
+// ---------------------------------------------------------------------------
+// The drafts folder and the tree between turns
+// ---------------------------------------------------------------------------
+
+/** A repository-relative folder as git names its files: no `./`, no trailing slash. */
+const folderOf = (dir: string): string => dir.split('/').filter(part => part !== '' && part !== '.').join('/')
+
+/** Whether a repository-relative `path` sits inside folder `dir`. */
+export const isUnder = (path: string, dir: string): boolean => {
+  const folder = folderOf(dir)
+
+  return folder !== '' && (path === folder || path.startsWith(`${folder}/`))
+}
+
+/**
+ * Whether `shipDir` is a folder of its own inside the repository, so a
+ * `.gitignore` there can hide the drafts and nothing else: not the root, not
+ * an absolute path, never a step up out of the repository.
+ */
+export const isOwnFolder = (shipDir: string): boolean => {
+  const folder = folderOf(shipDir)
+
+  return !shipDir.startsWith('/') && folder !== '' && !folder.split('/').includes('..')
+}
+
+/**
+ * The drafts folder's own `.gitignore`: everything in it. The drafts are
+ * this mod's output, not the turn's changes, so they stay out of `git status`,
+ * out of wait-review's queue, and out of the next kit's diff.
+ */
+export const DRAFTS_GITIGNORE = '*\n'
+
+/**
+ * A short fingerprint of the working tree's changes as one scan read them:
+ * the same text, the same fingerprint. A turn whose end reads the fingerprint
+ * the last scan left changed nothing, and gets no kit (FNV-1a, 32 bits, with
+ * the length beside it).
+ */
+export const fingerprintOf = (text: string): string => {
+  let hash = 0x811c9dc5
+  for (let at = 0; at < text.length; at++) {
+    hash ^= text.charCodeAt(at)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+
+  return `${text.length}:${hash.toString(16)}`
+}
+
+// ---------------------------------------------------------------------------
+// The row above the prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * The waitroom mods that draw into the row above the prompt, the one with
+ * precedence first: wait-breathe, then wait-ship, then bet-on-your-agent.
+ *
+ * The row shows one of them at a time. Hooks of different plugins nest in an
+ * order the person's installs decide, not this code, so each of the three
+ * draws only after asking what is already beneath it (`next(e)`), and hands
+ * the row to a mod ahead of it here: whatever the load order, the mod with
+ * precedence is the one row on screen, and the others wait for it.
+ */
+export const BAND_PRECEDENCE = ['wait-breathe', 'wait-ship', 'bet-on-your-agent'] as const
+
+export type BandMod = (typeof BAND_PRECEDENCE)[number]
+
+/**
+ * The plugin whose hook drew a band tree: the engine stamps each hook's
+ * returned root with it (`part`), and a hook that passes a tree on leaves
+ * the stamp as it was.
+ */
+export const drawnBy = (tree: unknown): string | undefined => {
+  const part = typeof tree === 'object' && tree !== null ? (tree as { part?: { plugin?: unknown } }).part : undefined
+
+  return typeof part?.plugin === 'string' ? part.plugin : undefined
+}
+
+/** Whether the row a mod drew beneath `mine` keeps the band: only one ahead of it does. */
+export const yieldsBand = (mine: BandMod, beneath: string | undefined): boolean => {
+  const at = BAND_PRECEDENCE.indexOf(beneath as BandMod)
+
+  return at !== -1 && at < BAND_PRECEDENCE.indexOf(mine)
+}

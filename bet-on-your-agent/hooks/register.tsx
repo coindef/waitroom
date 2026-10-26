@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderElement } from 'claude-code'
 
 import type { BonusBucket, DailyChallengeRecord, DailyGuess, FileBucket, LastVerdict, OpenBet, TurnRecord } from '../types'
 import {
@@ -10,6 +10,7 @@ import {
   badges,
   badgeValue,
   BANDS,
+  betYields,
   bonusBucketOf,
   bonusDimFor,
   bonusLabel,
@@ -26,6 +27,9 @@ import {
   currentRank,
   dailyChallengeDimFor,
   dailyOutcome,
+  drawnBy,
+  extrasFromFor,
+  extrasIn,
   FILE_BUCKETS,
   FILE_LABELS,
   filesPhrase,
@@ -53,6 +57,8 @@ import {
 const PANE = 'bet-on-your-agent'
 const STORE_KEY = 'turns'
 const DAILY_CHALLENGE_STORE_KEY = 'dailyChallenges'
+/** The local day, `YYYY-MM-DD`, from which the extras surface on their own. */
+const EXTRAS_FROM_STORE_KEY = 'extrasFrom'
 
 const NO_BET: OpenBet = { turnId: '', ask: '', files: [], toolCalls: 0 }
 
@@ -105,12 +111,55 @@ const saveDailyChallenges = async ($: EngineInterface, records: readonly DailyCh
   await update($, revision, at => at + 1)
 }
 
+/** The day the extras surface on their own, or undefined while it was never fixed. */
+const loadExtrasFrom = async ($: EngineInterface): Promise<string | undefined> => {
+  const raw = await $.store.get(EXTRAS_FROM_STORE_KEY).catch(() => undefined)
+
+  return typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined
+}
+
+/**
+ * Fixes, once, the day the bonus question, the daily challenge and the badge
+ * wall start surfacing on their own: a week out for someone new, today for
+ * anyone with a record already, read off this machine's own clock.
+ *
+ * Left unfixed when the history cannot be read, so a failed read never holds
+ * back what an existing record already had.
+ */
+const fixExtrasFrom = async ($: EngineInterface) => {
+  if ((await loadExtrasFrom($)) !== undefined) return
+  const history = await $.store.get(STORE_KEY).then(
+    value => ({ value }),
+    () => undefined,
+  )
+  if (history === undefined) return
+  const hasHistory = Array.isArray(history.value) && history.value.length > 0
+  await $.store.set(EXTRAS_FROM_STORE_KEY, extrasFromFor(hasHistory, localDateKey(await $.clock.now())))
+}
+
+/**
+ * Days left in a new person's first week; 0 once the extras surface on their
+ * own, and 0 whenever the day or the clock cannot be read — the record and
+ * the pane never fail, nor hold anything back, over this.
+ */
+const extrasWait = async ($: EngineInterface): Promise<number> => {
+  const from = await loadExtrasFrom($)
+  if (from === undefined) return 0
+  const now = await $.clock.now().catch(() => undefined)
+
+  return now === undefined ? 0 : extrasIn(from, localDateKey(now))
+}
+
 /**
  * Compares the badge wall before and after a write, and names whatever is
  * newly earned in one quiet note — the badges computed here need no fact
  * beyond what `before`/`after` already carry.
+ *
+ * Not through a new person's first week: the wall waits in `/bet-recap`
+ * then, and a badge earned meanwhile is there to be found.
  */
 const noteBadges = async ($: EngineInterface, before: readonly TurnRecord[], after: readonly TurnRecord[]) => {
+  if ((await extrasWait($)) > 0) return
   const earnedBefore = new Set(badges(before).filter(one => one.earned).map(one => one.id))
   const newlyEarned = badges(after).filter(one => one.earned && !earnedBefore.has(one.id))
   if (newlyEarned.length === 0) return
@@ -315,6 +364,7 @@ export const register: Register = (on, options) => {
       const now = await $.clock.now()
       await update($, sessionStartedAt, () => now)
     }
+    await fixExtrasFrom($)
     await lapseStaleVerdicts($)
     await showStatus($)
 
@@ -325,17 +375,21 @@ export const register: Register = (on, options) => {
     void $.ui.open({ id: PANE, title: 'Bet on your agent' }).catch(() => undefined)
     const last = await read($, lastVerdict)
 
-    return { text: asText(report(await loadTurns($)), last?.rankUp) }
+    return { text: asText(report(await loadTurns($)), last?.rankUp, (await extrasWait($)) === 0) }
   })
 
-  on('command.run', { command: 'bet-recap' }, async $ => {
+  // Every extra is here from the first day, the badge wall included: in a new
+  // person's first week this is where they are found rather than pushed.
+  on('command.run', { command: 'bet-recap' }, async ($, e) => {
     const all = await loadTurns($)
     const startedAt = await read($, sessionStartedAt)
     const session = startedAt === null ? all : all.filter(one => one.at >= startedAt)
     const dailyChallenges = await loadDailyChallenges($)
     const today = localDateKey(await $.clock.now())
+    const recap = recapOf(session, all, dailyChallenges, today, await extrasWait($))
 
-    return { text: recapCard(recapOf(session, all, dailyChallenges, today)) }
+    // Sized to the terminal the card is printed in, so it keeps its frame there.
+    return { text: recapCard(recap, e.presentation?.columns) }
   })
 
   // One hook per tool so `e` narrows to that tool's own input.
@@ -379,21 +433,25 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
-    const dim = bonusDimFor(await read($, bonusRotation))
-    await update($, bonusRotation, at => at + 1)
+    // Through a new person's first week a turn asks the core questions alone:
+    // will it land, and how many files.
+    const isFirstWeek = (await extrasWait($)) > 0
+    const dim = isFirstWeek ? undefined : bonusDimFor(await read($, bonusRotation))
+    if (dim !== undefined) await update($, bonusRotation, at => at + 1)
     // Today's challenge, if today does not already have one: answered,
     // declined or left untouched, a day is handled and not offered again on
     // a later turn.
     const today = localDateKey(await $.clock.now())
     const dailyLog = await loadDailyChallenges($)
-    const dailyDim = challengeFor(dailyLog, today) === undefined ? dailyChallengeDimFor(today) : undefined
+    const dailyDim =
+      !isFirstWeek && challengeFor(dailyLog, today) === undefined ? dailyChallengeDimFor(today) : undefined
     // The betting window opens here and closes when the turn lands.
     await update($, open, () => ({
       turnId: e.turnId,
       ask: e.text,
       files: [],
       toolCalls: 0,
-      bonusDim: dim,
+      ...(dim === undefined ? {} : { bonusDim: dim }),
       ...(dailyDim === undefined ? {} : { dailyChallengeDim: dailyDim }),
     }))
     await update($, busy, () => true)
@@ -506,219 +564,233 @@ export const register: Register = (on, options) => {
     // A survey of the engine's own owns the band while it is up.
     if (e.props.hasSurvey) return next(e)
 
-    const bet = await read($, open)
-    await read($, revision)
-    const { Box, Text, Button } = $.ui.resolve(e)
-    const room = askRoomFor(e.props.bodyColumns)
-    // Names the row, so a question that appears above the prompt says whose it is.
-    const tag = (
-      <Text backgroundColor="claude" color="inverseText" weight="bold">
-        {' bet '}
-      </Text>
-    )
-
-    if (e.props.isWorking && bet.turnId !== '' && bet.isDeclined !== true) {
-      const said = bet.saidConfidence
-      const quoted = shortAsk(bet.ask, room)
-
-      // The question and its answers sit on separate lines: on one line, a
-      // pane docked beside the transcript narrowed the band until the question
-      // wrapped around its own buttons.
-      if (said === undefined) {
-        return (
-          <Box flexDirection="column">
-            <Text wrap="truncate-end">
-              {tag} Will{' '}
-              {quoted !== '' && <Text dimColor>"{quoted}" </Text>}
-              land first try?
-            </Text>
-            <Box gap={2}>
-              {BANDS.map((band, at) => (
-                <Button
-                  key={`p${Math.round(band * 100)}`}
-                  hotkey={String(at + 1)}
-                  plain
-                  onPress={() => placeConfidence($, band)}
-                >
-                  {asPercent(band)}
-                </Button>
-              ))}
-              <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
-                Skip
-              </Button>
-            </Box>
-          </Box>
-        )
-      }
-
-      if (bet.saidFiles === undefined) {
-        return (
-          <Box flexDirection="column">
-            <Text wrap="truncate-end">
-              {tag} <Text dimColor>you said {asPercent(said)} · </Text>how many files will it touch?
-            </Text>
-            <Box gap={2}>
-              {FILE_BUCKETS.map((bucket, at) => (
-                <Button
-                  key={`f${bucket}`}
-                  hotkey={String(at + 1)}
-                  plain
-                  onPress={() => placeFiles($, bucket)}
-                >
-                  {FILE_LABELS[bucket]}
-                </Button>
-              ))}
-              <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
-                Skip
-              </Button>
-            </Box>
-          </Box>
-        )
-      }
-
-      // One rotating bonus question, its own skip: passing on it costs
-      // nothing, and says nothing about the confidence or files bets already
-      // placed this turn.
-      if (bet.bonusDim !== undefined && bet.saidBonus === undefined && bet.isBonusDeclined !== true) {
-        const dim = bet.bonusDim
-        const buckets = BONUS_BUCKETS[dim]
-
-        return (
-          <Box flexDirection="column">
-            <Text wrap="truncate-end">
-              {tag} Bonus: {BONUS_QUESTIONS[dim]}
-            </Text>
-            <Box gap={2}>
-              {buckets.map((bucket, at) => (
-                <Button key={`b${bucket}`} hotkey={String(at + 1)} plain onPress={() => placeBonus($, bucket)}>
-                  {bonusLabel(dim, bucket)}
-                </Button>
-              ))}
-              <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBonus($)}>
-                Skip
-              </Button>
-            </Box>
-          </Box>
-        )
-      }
-
-      // The daily challenge, its own skip: one optional yes/no about this
-      // turn against the person's own median, offered at most once a day.
-      if (
-        bet.dailyChallengeDim !== undefined &&
-        bet.saidDailyChallenge === undefined &&
-        bet.isDailyChallengeDeclined !== true
-      ) {
-        const dim = bet.dailyChallengeDim
-        // The same history `challengeThreshold` scores this turn's challenge
-        // against at turn.complete: no new turn lands while this is showing,
-        // so reading it fresh here can never drift from what it is judged by.
-        const question = challengeQuestion(await loadTurns($), dim)
-
-        return (
-          <Box flexDirection="column">
-            <Text wrap="truncate-end">
-              {tag} Daily challenge: will this turn {question}
-            </Text>
-            <Box gap={2}>
-              <Button key="yes" hotkey="1" plain onPress={() => placeDailyChallenge($, 'yes')}>
-                Yes
-              </Button>
-              <Button key="no" hotkey="2" plain onPress={() => placeDailyChallenge($, 'no')}>
-                No
-              </Button>
-              <Button key="decline" hotkey="0" plain dimColor onPress={() => declineDailyChallenge($)}>
-                Skip
-              </Button>
-            </Box>
-          </Box>
-        )
-      }
-
-      const isOver =
-        FILE_BUCKETS.indexOf(bucketOf(bet.files.length)) > FILE_BUCKETS.indexOf(bet.saidFiles)
-
-      // A bet in play is background: quiet, with only the tag in color and the
-      // count turning warning-colored once it runs past what was called.
-      return (
-        <Text wrap="truncate-end">
-          <Text color="claude" weight="bold">
-            bet
-          </Text>
-          <Text dimColor>
-            {' '}
-            {asPercent(said)} · {filesPhrase(bet.saidFiles)} ·{' '}
-          </Text>
-          <Text dimColor={!isOver} color={isOver ? 'warning' : undefined}>
-            {bet.files.length} written so far
-          </Text>
+    /** This mod's own row, or undefined when it has nothing to ask or say. */
+    const draw = async (): Promise<RenderElement | undefined> => {
+      const bet = await read($, open)
+      await read($, revision)
+      const { Box, Text, Button } = $.ui.resolve(e)
+      const room = askRoomFor(e.props.bodyColumns)
+      // Names the row, so a question that appears above the prompt says whose it is.
+      const tag = (
+        <Text backgroundColor="claude" color="inverseText" weight="bold">
+          {' bet '}
         </Text>
       )
-    }
 
-    const owed = owedVerdict(await loadTurns($))
-    const badgeLine = await read($, badgeNote)
-    if (!owed) {
-      const last = await read($, lastVerdict)
-      if (!last && !badgeLine) return next(e)
+      if (e.props.isWorking && bet.turnId !== '' && bet.isDeclined !== true) {
+        const said = bet.saidConfidence
+        const quoted = shortAsk(bet.ask, room)
 
-      const label = last && (last.result === 'landed' ? 'Landed' : last.result === 'fixed' ? 'Needed fixing' : 'Skipped')
+        // The question and its answers sit on separate lines: on one line, a
+        // pane docked beside the transcript narrowed the band until the question
+        // wrapped around its own buttons.
+        if (said === undefined) {
+          return (
+            <Box flexDirection="column">
+              <Text wrap="truncate-end">
+                {tag} Will{' '}
+                {quoted !== '' && <Text dimColor>"{quoted}" </Text>}
+                land first try?
+              </Text>
+              <Box gap={2}>
+                {BANDS.map((band, at) => (
+                  <Button
+                    key={`p${Math.round(band * 100)}`}
+                    hotkey={String(at + 1)}
+                    plain
+                    onPress={() => placeConfidence($, band)}
+                  >
+                    {asPercent(band)}
+                  </Button>
+                ))}
+                <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
+                  Skip
+                </Button>
+              </Box>
+            </Box>
+          )
+        }
+
+        if (bet.saidFiles === undefined) {
+          return (
+            <Box flexDirection="column">
+              <Text wrap="truncate-end">
+                {tag} <Text dimColor>you said {asPercent(said)} · </Text>how many files will it touch?
+              </Text>
+              <Box gap={2}>
+                {FILE_BUCKETS.map((bucket, at) => (
+                  <Button
+                    key={`f${bucket}`}
+                    hotkey={String(at + 1)}
+                    plain
+                    onPress={() => placeFiles($, bucket)}
+                  >
+                    {FILE_LABELS[bucket]}
+                  </Button>
+                ))}
+                <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBet($)}>
+                  Skip
+                </Button>
+              </Box>
+            </Box>
+          )
+        }
+
+        // One rotating bonus question, its own skip: passing on it costs
+        // nothing, and says nothing about the confidence or files bets already
+        // placed this turn.
+        if (bet.bonusDim !== undefined && bet.saidBonus === undefined && bet.isBonusDeclined !== true) {
+          const dim = bet.bonusDim
+          const buckets = BONUS_BUCKETS[dim]
+
+          return (
+            <Box flexDirection="column">
+              <Text wrap="truncate-end">
+                {tag} Bonus: {BONUS_QUESTIONS[dim]}
+              </Text>
+              <Box gap={2}>
+                {buckets.map((bucket, at) => (
+                  <Button key={`b${bucket}`} hotkey={String(at + 1)} plain onPress={() => placeBonus($, bucket)}>
+                    {bonusLabel(dim, bucket)}
+                  </Button>
+                ))}
+                <Button key="decline" hotkey="0" plain dimColor onPress={() => declineBonus($)}>
+                  Skip
+                </Button>
+              </Box>
+            </Box>
+          )
+        }
+
+        // The daily challenge, its own skip: one optional yes/no about this
+        // turn against the person's own median, offered at most once a day.
+        if (
+          bet.dailyChallengeDim !== undefined &&
+          bet.saidDailyChallenge === undefined &&
+          bet.isDailyChallengeDeclined !== true
+        ) {
+          const dim = bet.dailyChallengeDim
+          // The same history `challengeThreshold` scores this turn's challenge
+          // against at turn.complete: no new turn lands while this is showing,
+          // so reading it fresh here can never drift from what it is judged by.
+          const question = challengeQuestion(await loadTurns($), dim)
+
+          // Wrapped, not cut: the question is fixed text with nothing to give
+          // way, and cut at the band's edge it lost what it was asking.
+          return (
+            <Box flexDirection="column">
+              <Text wrap="wrap">
+                {tag} Daily challenge: will this turn {question}
+              </Text>
+              <Box gap={2}>
+                <Button key="yes" hotkey="1" plain onPress={() => placeDailyChallenge($, 'yes')}>
+                  Yes
+                </Button>
+                <Button key="no" hotkey="2" plain onPress={() => placeDailyChallenge($, 'no')}>
+                  No
+                </Button>
+                <Button key="decline" hotkey="0" plain dimColor onPress={() => declineDailyChallenge($)}>
+                  Skip
+                </Button>
+              </Box>
+            </Box>
+          )
+        }
+
+        const isOver =
+          FILE_BUCKETS.indexOf(bucketOf(bet.files.length)) > FILE_BUCKETS.indexOf(bet.saidFiles)
+
+        // A bet in play is background: quiet, with only the tag in color and the
+        // count turning warning-colored once it runs past what was called.
+        return (
+          <Text wrap="truncate-end">
+            <Text color="claude" weight="bold">
+              bet
+            </Text>
+            <Text dimColor>
+              {' '}
+              {asPercent(said)} · {filesPhrase(bet.saidFiles)} ·{' '}
+            </Text>
+            <Text dimColor={!isOver} color={isOver ? 'warning' : undefined}>
+              {bet.files.length} written so far
+            </Text>
+          </Text>
+        )
+      }
+
+      const owed = owedVerdict(await loadTurns($))
+      const badgeLine = await read($, badgeNote)
+      if (!owed) {
+        const last = await read($, lastVerdict)
+        if (!last && !badgeLine) return undefined
+
+        const label = last && (last.result === 'landed' ? 'Landed' : last.result === 'fixed' ? 'Needed fixing' : 'Skipped')
+
+        return (
+          <Box flexDirection="column" gap={1}>
+            {last && (
+              <Box gap={1}>
+                <Text>
+                  <Text dimColor>Recorded: </Text>
+                  <Text
+                    color={last.result === 'landed' ? 'success' : last.result === 'fixed' ? 'warning' : undefined}
+                    dimColor={last.result === 'skipped'}
+                  >
+                    {label}
+                  </Text>
+                </Text>
+                <Button key="undo" hotkey="u" plain dimColor onPress={() => undoLastVerdict($)}>
+                  Undo
+                </Button>
+              </Box>
+            )}
+            {last?.rankUp && (
+              <Text color="success" weight="bold">
+                Rank up: {last.rankUp.from} → {last.rankUp.to}
+              </Text>
+            )}
+            {badgeLine && <Text dimColor>{badgeLine}</Text>}
+          </Box>
+        )
+      }
+
+      // The question leads and the quote trails, so a narrow band cuts the
+      // quote and never the question: "Did it…" was the first thing to go.
+      const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, askRoomFor(e.props.bodyColumns, VERDICT_CHROME))
 
       return (
-        <Box flexDirection="column" gap={1}>
-          {last && (
-            <Box gap={1}>
-              <Text>
-                <Text dimColor>Recorded: </Text>
-                <Text
-                  color={last.result === 'landed' ? 'success' : last.result === 'fixed' ? 'warning' : undefined}
-                  dimColor={last.result === 'skipped'}
-                >
-                  {label}
-                </Text>
-              </Text>
-              <Button key="undo" hotkey="u" plain dimColor onPress={() => undoLastVerdict($)}>
-                Undo
-              </Button>
-            </Box>
-          )}
-          {last?.rankUp && (
-            <Text color="success" weight="bold">
-              Rank up: {last.rankUp.from} → {last.rankUp.to}
+        <Box flexDirection="column">
+          <Text wrap="truncate-end">
+            {tag} <Text weight="bold">Did it land?</Text>{' '}
+            <Text dimColor>
+              you said {asPercent(owed.saidConfidence ?? 0)}
+              {quoted === '' ? '' : ` · "${quoted}"`}
             </Text>
-          )}
+          </Text>
+          <Box gap={2}>
+            <Button key="landed" hotkey="1" plain onPress={() => giveVerdict($, owed.turnId, true)}>
+              <Text color="success">Landed</Text>
+            </Button>
+            <Button key="fixed" hotkey="2" plain onPress={() => giveVerdict($, owed.turnId, false)}>
+              <Text color="warning">Needed fixing</Text>
+            </Button>
+            <Button key="skip" hotkey="0" plain dimColor onPress={() => waveVerdict($, owed.turnId)}>
+              Skip
+            </Button>
+          </Box>
           {badgeLine && <Text dimColor>{badgeLine}</Text>}
         </Box>
       )
     }
 
-    // The question leads and the quote trails, so a narrow band cuts the
-    // quote and never the question: "Did it…" was the first thing to go.
-    const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, askRoomFor(e.props.bodyColumns, VERDICT_CHROME))
+    const mine = await draw()
+    if (mine === undefined) return next(e)
+    // The row is shared and shows one mod at a time: a breathe nudge already
+    // beneath keeps it, and so does a ship offer between turns; the bet waits
+    // its turn there.
+    const beneath = await next(e).catch(() => undefined)
 
-    return (
-      <Box flexDirection="column">
-        <Text wrap="truncate-end">
-          {tag} <Text weight="bold">Did it land?</Text>{' '}
-          <Text dimColor>
-            you said {asPercent(owed.saidConfidence ?? 0)}
-            {quoted === '' ? '' : ` · "${quoted}"`}
-          </Text>
-        </Text>
-        <Box gap={2}>
-          <Button key="landed" hotkey="1" plain onPress={() => giveVerdict($, owed.turnId, true)}>
-            <Text color="success">Landed</Text>
-          </Button>
-          <Button key="fixed" hotkey="2" plain onPress={() => giveVerdict($, owed.turnId, false)}>
-            <Text color="warning">Needed fixing</Text>
-          </Button>
-          <Button key="skip" hotkey="0" plain dimColor onPress={() => waveVerdict($, owed.turnId)}>
-            Skip
-          </Button>
-        </Box>
-        {badgeLine && <Text dimColor>{badgeLine}</Text>}
-      </Box>
-    )
+    return beneath !== undefined && betYields(drawnBy(beneath), e.props.isWorking) ? beneath : mine
   })
 
   // The pane is the record: what the band collects, read back. /bet opens it.
@@ -748,7 +820,8 @@ export const register: Register = (on, options) => {
     )
     // Six badges, earned or locked, always the full set beside the record —
     // the wall never changes shape whether the pane is calibrating or empty.
-    const badgeWall = (
+    // Through a new person's first week it waits in /bet-recap instead.
+    const badgeWall = (await extrasWait($)) === 0 && (
       <Box flexDirection="column">
         <Text dimColor>Badges</Text>
         <Text wrap="truncate-end">

@@ -145,6 +145,57 @@ export const dailyChallengeDimFor = (dateKey: string): BonusDim =>
   DAILY_CHALLENGE_DIMS[seededIndex(dateKey, DAILY_CHALLENGE_DIMS.length)] ?? 'files'
 
 /**
+ * Days the core loop has the row to itself for someone new: the bet, its
+ * verdict, the calibration and the rank. The bonus question, the daily
+ * challenge and the badge wall wait in `/bet-recap` until these have passed,
+ * then surface on their own as they always have.
+ */
+export const FIRST_WEEK_DAYS = 7
+
+/** Noon on a local calendar day, so a daylight-saving shift never moves the date. */
+const noonOf = (dateKey: string): Date => {
+  const [year, month, day] = dateKey.split('-').map(Number) as [number, number, number]
+
+  return new Date(year, month - 1, day, 12)
+}
+
+/** The local calendar day `days` after `dateKey`, both `YYYY-MM-DD`. */
+export const addDays = (dateKey: string, days: number): string => {
+  const at = noonOf(dateKey)
+  at.setDate(at.getDate() + days)
+
+  return localDateKey(at.getTime())
+}
+
+/** Whole calendar days from `from` to `to`, negative when `to` comes first. */
+export const daysBetween = (from: string, to: string): number =>
+  Math.round((noonOf(to).getTime() - noonOf(from).getTime()) / (24 * 60 * 60 * 1000))
+
+/**
+ * The day the extras start surfacing on their own, fixed once, the first time
+ * this mod meets a person: a week out for someone new, and today for anyone
+ * who already has a record, so an existing history keeps everything it had.
+ */
+export const extrasFromFor = (hasHistory: boolean, today: string): string =>
+  hasHistory ? today : addDays(today, FIRST_WEEK_DAYS)
+
+/**
+ * Days left before the extras surface on their own: 0 once they do, and 0
+ * when that day was never fixed, so nothing is held back on a guess. A day
+ * further out than a first week can reach was fixed by a clock running ahead
+ * at the time, and holds nothing back either, rather than for months.
+ */
+export const extrasIn = (extrasFrom: string | undefined, today: string): number => {
+  if (extrasFrom === undefined) return 0
+  const days = daysBetween(today, extrasFrom)
+
+  return days > FIRST_WEEK_DAYS ? 0 : Math.max(0, days)
+}
+
+/** When a held-back extra arrives, in the recap's own words. */
+export const startsIn = (days: number): string => (days === 1 ? 'starts tomorrow' : `starts in ${days} days`)
+
+/**
  * The threshold the daily challenge is judged against before there is enough
  * history to use the person's own median instead — the same rough middle
  * each of the bonus question's own buckets straddles.
@@ -896,19 +947,19 @@ export const badgeWallLines = (list: readonly Badge[]): string[] => [
  * `rankUp` is not derived from `found`: it is the climb, if any, the verdict
  * that produced this report just caused, read off `LastVerdict` by the
  * caller. A pure function of the report alone could not say that.
+ *
+ * `showBadges` is false through a new person's first week, when the badge
+ * wall waits in `/bet-recap` rather than surfacing here.
  */
-export const asText = (found: Report, rankUp?: RankChange): string => {
+export const asText = (found: Report, rankUp?: RankChange, showBadges = true): string => {
   if (found.recorded === 0) return 'No turns recorded yet. Call the next one while it runs.'
+  const wall = showBadges ? ['', ...badgeWallLines(found.badges)] : []
   if (found.brier === undefined) {
     const files = found.files ? ` File count called right ${found.files.right}/${found.files.of}.` : ''
     const bonus = found.bonus ? ` Bonus: ${found.bonus.right}/${found.bonus.of} correct.` : ''
     const owed = found.owed > 0 ? ` ${found.owed} waiting on your verdict.` : ''
 
-    return [
-      `${found.recorded} turns recorded, none scored yet.${files}${bonus}${owed}`,
-      '',
-      ...badgeWallLines(found.badges),
-    ].join('\n')
+    return [`${found.recorded} turns recorded, none scored yet.${files}${bonus}${owed}`, ...wall].join('\n')
   }
 
   const skill =
@@ -947,7 +998,7 @@ export const asText = (found: Report, rankUp?: RankChange): string => {
   }
   if (found.medianMs !== undefined) lines.push(`Median turn ${asDuration(found.medianMs)}.`)
   if (found.owed > 0) lines.push(`${found.owed} bet${found.owed === 1 ? '' : 's'} waiting on your verdict.`)
-  lines.push('', ...badgeWallLines(found.badges))
+  lines.push(...wall)
 
   return lines.join('\n')
 }
@@ -965,6 +1016,11 @@ export type Recap = {
   badges: Badge[]
   /** The daily challenge's own line: a streak once there is one, else today's result. */
   dailyChallenge: string
+  /**
+   * Days before the bonus question and the daily challenge join the row, in
+   * a new person's first week; absent or 0 once they have.
+   */
+  extrasIn?: number
 }
 
 /**
@@ -980,6 +1036,7 @@ export const recapOf = (
   all: readonly TurnRecord[],
   dailyChallenges: readonly DailyChallengeRecord[],
   today: string,
+  extrasInDays = 0,
 ): Recap => {
   const found = report(session)
   const { best, worst } = extremeCalls(session)
@@ -995,20 +1052,28 @@ export const recapOf = (
     bonus: found.bonus,
     badges: badges(all),
     dailyChallenge: dailyChallengeValue(dailyChallenges, today),
+    ...(extrasInDays > 0 ? { extrasIn: extrasInDays } : {}),
   }
 }
 
 /** How much of a recap row the ask gets once its own label and verdict are placed. */
 const RECAP_ASK_ROOM = 40
 
-const missLine = (miss: Miss): string => {
+const missLine = (miss: Miss, room = RECAP_ASK_ROOM): string => {
   const prefix = `${asPercent(miss.said)} ${miss.landed ? 'and it landed' : 'and it did not'} — `
 
-  return `${prefix}${shortAsk(miss.ask ?? 'a turn with no prompt', Math.max(0, RECAP_ASK_ROOM - prefix.length))}`
+  return `${prefix}${shortAsk(miss.ask ?? 'a turn with no prompt', Math.max(0, room - prefix.length))}`
 }
 
 /** A recap row's label column, so every value lines up under the next — wide enough for "Daily challenge", its longest label. */
 const RECAP_LABEL = 16
+
+/**
+ * Columns around the card's own text where a command's reply is printed: the
+ * transcript's five-column gutter (`  ⎿  `) and the card's frame (`│ ` … ` │`).
+ * A card wider than the terminal less these wraps every row, borders and all.
+ */
+export const RECAP_CHROME = 5 + 4
 
 const recapRow = (label: string, value: string): string => `${label.padEnd(RECAP_LABEL)}${value}`
 
@@ -1026,18 +1091,27 @@ export const badgeValue = (badge: Badge): string => {
   return badge.progress ? `${badge.progress.have}/${badge.progress.of}` : '—'
 }
 
-export const recapCard = (recap: Recap): string => {
+/**
+ * `columns` is the terminal's width as the command runs: the asks quoted in
+ * the best and worst rows, the card's widest, are cut to fit it, so the card
+ * keeps its frame in a narrow terminal rather than wrapping every row.
+ */
+export const recapCard = (recap: Recap, columns = Number.POSITIVE_INFINITY): string => {
   const title = 'Session recap'
+  const askRoom = Math.min(RECAP_ASK_ROOM, Math.max(0, columns - RECAP_CHROME - RECAP_LABEL))
+  // In a new person's first week these two are not asked yet: the card is
+  // where they are found, so it says when they start rather than a bare dash.
+  const waiting = recap.extrasIn !== undefined && recap.extrasIn > 0 ? startsIn(recap.extrasIn) : undefined
   const rows = [
     recapRow('Turns bet', String(recap.turnsBet)),
     recapRow('Turns scored', String(recap.turnsScored)),
     recapRow('Session Brier', recap.brier === undefined ? '—' : recap.brier.toFixed(3)),
-    recapRow('Best call', recap.best ? missLine(recap.best) : '—'),
-    recapRow('Worst call', recap.worst ? missLine(recap.worst) : '—'),
+    recapRow('Best call', recap.best ? missLine(recap.best, askRoom) : '—'),
+    recapRow('Worst call', recap.worst ? missLine(recap.worst, askRoom) : '—'),
     recapRow('Rank', recap.rank),
     recapRow('Streak', String(recap.streak)),
-    recapRow('Bonus', recap.bonus ? `${recap.bonus.right}/${recap.bonus.of} correct` : '—'),
-    recapRow('Daily challenge', recap.dailyChallenge),
+    recapRow('Bonus', recap.bonus ? `${recap.bonus.right}/${recap.bonus.of} correct` : (waiting ?? '—')),
+    recapRow('Daily challenge', waiting !== undefined && recap.dailyChallenge === '—' ? waiting : recap.dailyChallenge),
   ]
   const badgeRows = recap.badges.map(badge => recapRow(badge.name, badgeValue(badge)))
   const width = Math.max(title.length, ...rows.map(row => row.length), ...badgeRows.map(row => row.length))
@@ -1055,3 +1129,49 @@ export const recapCard = (recap: Recap): string => {
     border(['└', '┘']),
   ].join('\n')
 }
+
+// ---------------------------------------------------------------------------
+// The row above the prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * The waitroom mods that draw into the row above the prompt, the one with
+ * precedence first: wait-breathe, then wait-ship, then bet-on-your-agent.
+ *
+ * The row shows one of them at a time. Hooks of different plugins nest in an
+ * order the person's installs decide, not this code, so each of the three
+ * draws only after asking what is already beneath it (`next(e)`), and hands
+ * the row to a mod ahead of it here: whatever the load order, the mod with
+ * precedence is the one row on screen, and the others wait for it.
+ */
+export const BAND_PRECEDENCE = ['wait-breathe', 'wait-ship', 'bet-on-your-agent'] as const
+
+export type BandMod = (typeof BAND_PRECEDENCE)[number]
+
+/**
+ * The plugin whose hook drew a band tree: the engine stamps each hook's
+ * returned root with it (`part`), and a hook that passes a tree on leaves
+ * the stamp as it was.
+ */
+export const drawnBy = (tree: unknown): string | undefined => {
+  const part = typeof tree === 'object' && tree !== null ? (tree as { part?: { plugin?: unknown } }).part : undefined
+
+  return typeof part?.plugin === 'string' ? part.plugin : undefined
+}
+
+/** Whether the row a mod drew beneath `mine` keeps the band: only one ahead of it does. */
+export const yieldsBand = (mine: BandMod, beneath: string | undefined): boolean => {
+  const at = BAND_PRECEDENCE.indexOf(beneath as BandMod)
+
+  return at !== -1 && at < BAND_PRECEDENCE.indexOf(mine)
+}
+
+/**
+ * Whether the bet's own row gives way to the one beneath it. Between turns
+ * that is `yieldsBand`: a ship offer, then "Did it land?". While a turn runs
+ * the forecast is now or never — the window closes when the turn lands — and
+ * a ship offer belongs between turns (wait-ship drops its kit the moment one
+ * starts), so only a breathe nudge holds the forecast back.
+ */
+export const betYields = (beneath: string | undefined, isWorking: boolean): boolean =>
+  isWorking ? beneath === 'wait-breathe' : yieldsBand('bet-on-your-agent', beneath)

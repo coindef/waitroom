@@ -13,13 +13,19 @@ export type ShipOffer = {
   prBody: string
   /** Absent when there is no CHANGELOG.md, or `includeChangelog` is off. */
   changelogEntry?: string
+  /**
+   * Set once "More" was pressed: the row then offers each draft on its own
+   * key (commit, PR, changelog, for editing) beside accept-all and skip,
+   * which are all it offers until then.
+   */
+  isExpanded?: true
 }
 
 export type ArtifactKind = 'commit' | 'pr' | 'changelog'
 
 export type ShipMode = 'all' | ArtifactKind | 'edit' | 'skip'
 
-/** What came of answering the band's prompt, shown once beside it. */
+/** What came of answering the band's prompt; its receipt goes to the transcript. */
 export type ShipResult = {
   turnId: string
   mode: ShipMode
@@ -32,8 +38,12 @@ declare module 'claude-code' {
     'wait-ship': {
       /** The pending kit for the turn that just ended, or null once answered or superseded. */
       offer: ShipOffer | null
-      /** The most recent answer, shown once beside the band's own next draw; cleared at the next turn. */
-      lastResult: ShipResult | null
+      /**
+       * The fingerprint of the tree's changes as the last scan read them (at
+       * session start, then at each turn's end), or null before the first: a
+       * turn that leaves it as it was changed nothing and gets no kit.
+       */
+      lastSeen: string | null
     }
   }
 }

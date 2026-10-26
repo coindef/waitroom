@@ -21,27 +21,29 @@ is that you, not the agent, get a turn once a session runs long. That is a
 different kind of claim on your attention, and not everyone wants a plugin
 making it — so it stays silent until you turn it on.
 
-**To turn it on:** check *Enable the breathing nudges* on this mod's install
-screen, or open it any time after with `/plugin` → `wait-breathe`. `/breathe`
-tells you, at any point, whether it is on and exactly where that option lives.
+**To turn it on:** send `/breathe`. The next `/breathe` turns it off again.
+It is the same switch as *Enable the breathing nudges* on this mod's install
+screen and under `/plugin` → `wait-breathe`, so flipping it either way moves
+both.
 
 ## What it does
 
-Turn on `enabled` and nothing changes about a normal turn. Only once a single
-turn runs past `longTurnSeconds` (90 by default) does one line show up in the
-row above the prompt — the same row `bet-on-your-agent` uses:
+Turned on, nothing changes about a normal turn. Only once a single turn runs
+past `longTurnSeconds` (90 by default) does one line show up in the row above
+the prompt — the same row `bet-on-your-agent` and `wait-ship` use:
 
 <img src="../docs/breathe-nudge.svg" width="400" alt="The row above the prompt: a breathe tag, '4-4-4 breathing: in for 4, hold for 4, out for 4', and the b: Took it key">
 
 ```
- breathe  4-4-4 breathing: in for 4, hold for 4, out for 4
+ breathe  4-4-4 breathing: in for 4, hold for 4, out for 4 b: Took it
 ```
 
 That's the whole interaction. No health claim, no "you should," just the
 action: posture check, a 20-20-20 eye break, 4-4-4 breathing, or stand up and
 stretch — rotating in that order, so it is never the same one twice running.
-If you want it counted, `b: Took it`; if not, carry on and it clears itself
-once the turn ends either way.
+If you want it counted, give the row the keys (`ctrl+x tab`, or a click) and
+press `b`; a letter typed into the prompt stays in the prompt. If not, carry
+on: it clears itself once the turn ends either way.
 
 - **At most one line per turn.** However long the turn keeps running past the
   threshold, it already said its one thing.
@@ -49,38 +51,51 @@ once the turn ends either way.
   long in between.
 - **Zero required keys.** Nothing here ever needs an answer — not even the
   `Took it` button, which only exists to let the count mean something.
-- **It yields to a real survey.** If the band is already asking you something
-  else — `bet-on-your-agent`'s forecast, say — this waits rather than stack a
-  second row of buttons on top.
+- **It comes first in the shared row.** The row shows one mod at a time, so
+  while the nudge is up a `bet-on-your-agent` question waits behind it rather
+  than stacking a second row of buttons on top, and has the row back the
+  moment you press `b` or the turn ends. Only a survey of Claude Code's own
+  holds the nudge back.
 
-At the end of the session, one line sums it up, the same way `wait-review`
-sums up a session's reading:
+When the session ends, one line goes into its transcript, the same way
+`wait-review` records a session's reading:
 
 ```
 breathe: 3 prompts, 2 taken this session
 ```
 
-Said only when at least one nudge actually showed. A quiet session — nothing
-ran long, or the plugin is off — ends with no line at all.
+Claude Code is closing by then, so this line is for the record rather than
+the screen. It is written only when at least one nudge actually showed. A
+quiet session — nothing ran long, or the plugin is off — writes nothing.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `/breathe` | One line: whether the nudges are on, the threshold either way, and how to flip it |
+| `/breathe` | Turns the nudges on, or off again, and says which it is now |
 
 ```
-breathe: off · would nudge after a turn runs 90s · turn on in /plugin → wait-breathe → Enable the breathing nudges
+breathe: on · one quiet nudge once a turn runs 90s · /breathe again turns it off
+breathe: off · /breathe turns it on
 ```
 
-This is the one place to find this mod again once the install screen has
-scrolled past — there is no pane and no band entry to stumble into otherwise.
+If the setting cannot be changed, nothing moves and the reply says so, with
+where else the switch lives:
+
+```
+breathe: still off · the setting did not change (<the reason>) · /plugin → wait-breathe → Enable the breathing nudges
+```
+
+Turned on, the nudges start from the next turn, not one already running.
+Turned off, nothing more shows from that moment. `/breathe` is also how to
+find this mod again once the install screen has scrolled past, since there is
+no pane to stumble into otherwise.
 
 ## Settings
 
 | Option | Default | What it means |
 | --- | --- | --- |
-| `enabled` | `false` | Turn the nudges on. Off means zero output, ever. |
+| `enabled` | `false` | Turn the nudges on. Off means zero output, ever. `/breathe` flips it. |
 | `longTurnSeconds` | `90` | How long a single turn runs before one nudge appears. |
 
 ## What it does not do
@@ -100,11 +115,14 @@ scrolled past — there is no pane and no band entry to stumble into otherwise.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 20 tests
+claude plugin test .         # 27 tests
 ```
 
-The rotation, the cooldown and the session counting live in `hooks/breathe.ts`
-with no engine dependency and are tested directly; `hooks/register.tsx` is the
-hooks module and `types/index.d.ts` the state contract. `tests/flow.test.tsx`
-drives the whole loop through the engine with the mock clock, arming the
-threshold at `turn.start` and advancing past it the way a real long turn would.
+The rotation, the cooldown, the session counting and the `/breathe` reply
+lines live in `hooks/breathe.ts` with no engine dependency and are tested
+directly; `hooks/register.tsx` is the hooks module and `types/index.d.ts` the
+state contract. `tests/flow.test.tsx` drives the whole loop through the engine
+with the mock clock, arming the threshold at `turn.start` and advancing past it
+the way a real long turn would — including `/breathe` flipping the setting
+both ways, and the nudge taking the shared row from a bet question or a ship
+offer beneath it.

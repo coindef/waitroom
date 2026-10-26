@@ -2,9 +2,12 @@ import { expect, test } from 'claude-code/testing'
 
 import type { DailyChallengeRecord, TurnRecord } from '../types'
 import {
+  addDays,
   asDuration,
   askRoomFor,
   badges,
+  BAND_PRECEDENCE,
+  betYields,
   BONUS_HUNTER_TARGET,
   calibrationLine,
   CALIBRATION_HEAD,
@@ -27,7 +30,12 @@ import {
   dailyChallengeStreak,
   dailyChallengeValue,
   dailyOutcome,
+  daysBetween,
+  drawnBy,
+  extrasFromFor,
+  extrasIn,
   extremeCalls,
+  FIRST_WEEK_DAYS,
   FALLBACK_MEDIAN,
   FILE_LABELS,
   filesPhrase,
@@ -52,10 +60,12 @@ import {
   SHARPSHOOTER_WINDOW,
   shortAsk,
   skipVerdict,
+  startsIn,
   undoVerdict,
   VERDICT_CHROME,
   VERDICT_WINDOW_MS,
   worstCalls,
+  yieldsBand,
 } from '../hooks/bet'
 
 let next = 0
@@ -715,6 +725,40 @@ test('the recap card is a box-drawn, plain-text summary with every field on its 
   expect(widths.size).toBe(1)
 })
 
+test('in a 60-column terminal the recap card keeps its frame: the quoted asks give way, and nothing else', async () => {
+  const recap = {
+    turnsBet: 7,
+    turnsScored: 5,
+    brier: 0.147,
+    best: { said: 0.8, landed: true, error: 0.04, ask: 'In src/config_loader_for_the_extremely_long_module_name.ts append' },
+    worst: { said: 0.95, landed: false, error: 0.9025, ask: 'Refactor the authentication middleware so it retries' },
+    rank: 'Platinum' as const,
+    streak: 3,
+    dailyChallenge: 'starts in 7 days',
+    extrasIn: 7,
+    badges: badges([]),
+  }
+  const unbounded = recapCard(recap)
+  // The card as it always was is 60 wide: with the reply's five-column gutter
+  // it wrapped every row in a 60-column terminal, frame and all.
+  expect([...(unbounded.split('\n')[0] ?? '')].length).toBe(60)
+  // From 69 columns there is room for it whole: nothing changes there.
+  expect(recapCard(recap, 80)).toBe(unbounded)
+  expect(recapCard(recap, 69)).toBe(unbounded)
+
+  const narrow = recapCard(recap, 60)
+  const lines = narrow.split('\n')
+  expect(new Set(lines.map(line => [...line].length)).size).toBe(1)
+  expect([...(lines[0] ?? '')].length).toBeLessThanOrEqual(60 - 5)
+  expect(narrow.startsWith('┌')).toBe(true)
+  expect(narrow.endsWith('┘')).toBe(true)
+  // Only the quotes were cut: every row and its verdict are still there.
+  expect(narrow).toContain('80% and it landed — In src/')
+  expect(narrow).toContain('95% and it did not — Refactor')
+  expect(narrow).toContain('Daily challenge starts in 7 days')
+  expect(narrow).toContain('Platinum')
+})
+
 test('a thin recap still draws a complete card, an em dash standing in for what has not happened yet', async () => {
   const card = recapCard({ turnsBet: 0, turnsScored: 0, rank: 'Unranked', streak: 0, badges: badges([]), dailyChallenge: '—' })
 
@@ -987,4 +1031,60 @@ test('the recap value is the streak once it is worth naming, else today’s own 
   // all, which stays a plain em dash.
   expect(dailyChallengeValue([{ date: 'd1', dim: 'files', isNotTaken: true }], 'd1')).toBe('not taken')
   expect(dailyChallengeValue([], 'd1')).toBe('—')
+})
+
+test('a calendar day is counted the same across a month end and a daylight-saving shift', () => {
+  expect(addDays('2026-10-29', 7)).toBe('2026-11-05')
+  expect(addDays('2026-12-31', 1)).toBe('2027-01-01')
+  // Early November and mid-March hold a clock change in many zones; the count stays whole days.
+  expect(daysBetween('2026-10-30', '2026-11-06')).toBe(7)
+  expect(daysBetween('2027-03-10', '2027-03-17')).toBe(7)
+  expect(daysBetween('2026-11-06', '2026-10-30')).toBe(-7)
+})
+
+test('the extras wait a week for someone new, and not a day for anyone with a record', () => {
+  expect(FIRST_WEEK_DAYS).toBe(7)
+  expect(extrasFromFor(false, '2026-10-25')).toBe('2026-11-01')
+  expect(extrasFromFor(true, '2026-10-25')).toBe('2026-10-25')
+  expect(extrasIn('2026-11-01', '2026-10-25')).toBe(7)
+  expect(extrasIn('2026-11-01', '2026-10-31')).toBe(1)
+  expect(extrasIn('2026-11-01', '2026-11-01')).toBe(0)
+  expect(extrasIn('2026-11-01', '2026-12-01')).toBe(0)
+  // A day never fixed holds nothing back.
+  expect(extrasIn(undefined, '2026-10-25')).toBe(0)
+  expect(startsIn(1)).toBe('starts tomorrow')
+  expect(startsIn(4)).toBe('starts in 4 days')
+})
+
+test('a first-week day fixed by a clock running ahead holds nothing back once the clock is right', () => {
+  // Fixed while the clock read a year ahead, then the clock was put right.
+  const fixedAhead = extrasFromFor(false, '2027-10-25')
+  expect(extrasIn(fixedAhead, '2026-10-25')).toBe(0)
+  // A full week out is still a first week, not a wrong clock.
+  expect(extrasIn('2026-11-01', '2026-10-25')).toBe(FIRST_WEEK_DAYS)
+  expect(extrasIn('2026-11-02', '2026-10-25')).toBe(0)
+})
+
+test('the row goes to breathe, then ship, then the bet: one waitroom mod at a time', () => {
+  expect(BAND_PRECEDENCE).toEqual(['wait-breathe', 'wait-ship', 'bet-on-your-agent'])
+  expect(yieldsBand('bet-on-your-agent', 'wait-breathe')).toBe(true)
+  expect(yieldsBand('bet-on-your-agent', 'wait-ship')).toBe(true)
+  expect(yieldsBand('wait-ship', 'bet-on-your-agent')).toBe(false)
+  expect(yieldsBand('bet-on-your-agent', undefined)).toBe(false)
+  expect(yieldsBand('bet-on-your-agent', 'some-other-plugin')).toBe(false)
+  expect(drawnBy({ type: 'Box', part: { plugin: 'wait-ship' } })).toBe('wait-ship')
+  expect(drawnBy({ type: 'Box' })).toBeUndefined()
+})
+
+test('while a turn runs only a breathe nudge holds the forecast back; between turns a ship offer does too', () => {
+  // The forecast can only be placed while the turn runs, and a ship offer belongs between turns.
+  expect(betYields('wait-breathe', true)).toBe(true)
+  expect(betYields('wait-ship', true)).toBe(false)
+  expect(betYields(undefined, true)).toBe(false)
+  expect(betYields('some-other-plugin', true)).toBe(false)
+  // Between turns the precedence stands: the offer first, "Did it land?" after.
+  expect(betYields('wait-breathe', false)).toBe(true)
+  expect(betYields('wait-ship', false)).toBe(true)
+  expect(betYields(undefined, false)).toBe(false)
+  expect(betYields('some-other-plugin', false)).toBe(false)
 })

@@ -33,8 +33,11 @@ const mountBand = ($: Engine, isWorking: boolean, hasSurvey = false) =>
 
 const NUDGE = /posture|20-20-20|4-4-4|stretch/
 
+/** What the `/config` menu would answer, and every write the plugin asked of it. */
+type Settings = { refuse?: string; set: { key: string; value: unknown }[] }
+
 /** Nothing sits beneath the plugin in a test, so the test stands in for the engine. */
-const engineBottom = (on: On) => {
+const engineBottom = (on: On, settings: Settings = { set: [] }) => {
   const clock = mock.clock(on)
   mock.store(on)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
@@ -52,6 +55,24 @@ const engineBottom = (on: On) => {
     logged.push(e.text)
 
     return { value: undefined }
+  })
+  on('config.list', () => ({
+    value: [
+      {
+        key: 'wait-breathe.enabled',
+        label: 'Enable the breathing nudges',
+        kind: 'boolean',
+        value: false,
+        provider: { plugin: 'wait-breathe', tier: 'user' },
+        isLocked: false,
+      },
+    ],
+  }))
+  on('config.set', ($, e) => {
+    if (settings.refuse !== undefined) return { deny: settings.refuse }
+    settings.set.push({ key: e.key, value: e.value })
+
+    return { value: e.value }
   })
 
   return { clock, logged }
@@ -92,6 +113,55 @@ test(
     expect(await onTime.find({ text: NUDGE })).toBeDefined()
     expect(await onTime.findAll({ type: 'Button' })).toHaveLength(1)
     await onTime.unmount()
+  },
+)
+
+type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
+
+/** The Box directly holding the first child that `holds` matches, read off the tree as drawn. */
+const parentOf = (tree: unknown, holds: (child: Node) => boolean): Node | undefined => {
+  const node = tree as Node
+  const kids = (Array.isArray(node?.children) ? node.children : []) as Node[]
+  if (node?.type === 'Box' && kids.some(holds)) return node
+  for (const kid of kids) {
+    const found = parentOf(kid, holds)
+    if (found) return found
+  }
+
+  return undefined
+}
+
+const textOf = (node: Node): string =>
+  (Array.isArray(node?.children) ? node.children : [])
+    .map(kid => (typeof kid === 'string' ? kid : textOf(kid as Node)))
+    .join('')
+
+test(
+  'in a 60-column terminal the message is what gets cut: the tag and the key keep their width',
+  SHORT_FUSE,
+  async ($, on) => {
+    const { clock } = engineBottom(on)
+    await $.turn.start({ text: 'a long one', turnId: 'turn-narrow' })
+    await clock.advance(5000)
+
+    const band = await $.ui.mount({
+      plugin: 'wait-breathe',
+      surface: 'terminal',
+      ...BAND,
+      viewport: { columns: 60, rows: 30 },
+      props: { ...bandProps(true), bodyColumns: 55 },
+    })
+    const drawn = await band.drawn()
+    // Shrunk to fit, " breathe " and "b: Took it" each wrapped onto a second
+    // line in their own narrowed column, beside the message's first.
+    const tag = parentOf(drawn, kid => kid.type === 'Text' && textOf(kid) === ' breathe ')
+    const key = parentOf(drawn, kid => kid.type === 'Button')
+    expect(tag?.props?.flexShrink).toBe(0)
+    expect(key?.props?.flexShrink).toBe(0)
+    const message = parentOf(drawn, kid => kid.type === 'Text' && NUDGE.test(textOf(kid)))
+    const messageText = (message?.children as Node[] | undefined)?.find(kid => NUDGE.test(textOf(kid)))
+    expect(messageText?.props?.wrap).toBe('truncate-end')
+    await band.unmount()
   },
 )
 
@@ -203,28 +273,149 @@ test('a session with no long turn at all ends with no line', { options: { enable
   expect(logged).toHaveLength(0)
 })
 
-test('/breathe answers off by default: the state, the threshold, and how to turn it on', async ($, on) => {
-  engineBottom(on)
+test('/breathe turns the nudges on from the default off, in the setting the install screen shows', async ($, on) => {
+  const settings: Settings = { set: [] }
+  const { clock } = engineBottom(on, settings)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  const reply = await $.command.run({ command: 'breathe' } as never)
+
+  expect(reply.text).toContain('breathe: on')
+  expect(reply.text).toContain('90s')
+  expect(reply.text).toContain('/breathe again turns it off')
+  // One switch, not two: the same `enabled` field `/plugin` and the install screen show.
+  expect(settings.set).toEqual([{ key: 'wait-breathe.enabled', value: true }])
+
+  // And it holds from the next turn: one quiet nudge at the default 90s.
+  await $.turn.start({ text: 'a long one', turnId: 'turn-t1' })
+  await clock.advance(90 * 1000)
+  const band = await mountBand($, true)
+  expect(await band.find({ text: NUDGE })).toBeDefined()
+  await band.unmount()
+})
+
+test('/breathe turns them off again when on, and a long turn is quiet after', SHORT_FUSE, async ($, on) => {
+  const settings: Settings = { set: [] }
+  const { clock } = engineBottom(on, settings)
   await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
 
   const reply = await $.command.run({ command: 'breathe' } as never)
 
   expect(reply.text).toContain('breathe: off')
-  expect(reply.text).toContain('90s')
-  expect(reply.text).toContain('turn on')
+  expect(reply.text).toContain('/breathe turns it on')
+  expect(settings.set).toEqual([{ key: 'wait-breathe.enabled', value: false }])
+
+  await $.turn.start({ text: 'a long one', turnId: 'turn-t2' })
+  await clock.advance(60 * 1000)
+  const band = await mountBand($, true)
+  expect(await band.find({ text: NUDGE })).toBeUndefined()
+  await band.unmount()
 })
 
+test('a toggle the settings refuse changes nothing, and says so', async ($, on) => {
+  const settings: Settings = { refuse: 'a managed setting owns it', set: [] }
+  const { clock } = engineBottom(on, settings)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  const reply = await $.command.run({ command: 'breathe' } as never)
+
+  expect(reply.text).toContain('breathe: still off')
+  expect(reply.text).toContain('a managed setting owns it')
+  await $.turn.start({ text: 'a long one', turnId: 'turn-t3' })
+  await clock.advance(5 * 60 * 1000)
+  const band = await mountBand($, true)
+  expect(await band.find({ text: NUDGE })).toBeUndefined()
+  await band.unmount()
+})
+
+/*
+ * The row above the prompt is shared with wait-ship and bet-on-your-agent,
+ * and the nudge comes first in it. Each stand-in below loads beneath this
+ * mod (`append`) under the real mod's name, which is what the engine stamps
+ * on its row. An inline plugin closes over nothing of this file.
+ */
+
 test(
-  '/breathe reports on and the threshold configured, with how to turn it off',
-  SHORT_FUSE,
+  'a due nudge takes the row from a bet question beneath it, without stacking the two',
+  {
+    options: { enabled: true, longTurnSeconds: 5 },
+    plugins: [
+      {
+        name: 'bet-on-your-agent',
+        tier: 'append',
+        register(on) {
+          on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+            const { Box, Text, Button } = $.ui.resolve(e)
+
+            return (
+              <Box flexDirection="column">
+                <Text>bet: Will it land first try?</Text>
+                <Button key="p80" hotkey="3" plain onPress={() => undefined}>
+                  80%
+                </Button>
+              </Box>
+            )
+          })
+        },
+      },
+    ],
+  },
   async ($, on) => {
-    engineBottom(on)
-    await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+    const { clock } = engineBottom(on)
+    await $.turn.start({ text: 'a long one', turnId: 'turn-p1' })
 
-    const reply = await $.command.run({ command: 'breathe' } as never)
+    // Before the threshold the bet's question has the row, untouched.
+    const early = await mountBand($, true)
+    expect(await early.find({ text: /Will it land first try\?/ })).toBeDefined()
+    await early.unmount()
 
-    expect(reply.text).toContain('breathe: on')
-    expect(reply.text).toContain('5s')
-    expect(reply.text).toContain('turn off')
+    await clock.advance(5000)
+    const due = await mountBand($, true)
+    expect(await due.find({ text: NUDGE })).toBeDefined()
+    expect(await due.find({ text: /Will it land/ })).toBeUndefined()
+    expect((await due.findAll({ type: 'Button' })).map(one => one.key)).toEqual(['taken'])
+
+    // Taken, the nudge steps aside and the question it waited in front of is back.
+    await due.press({ key: 'taken' })
+    expect(await due.find({ text: /Will it land first try\?/ })).toBeDefined()
+    await due.unmount()
+  },
+)
+
+test(
+  'a due nudge takes the row from a ship offer beneath it, too',
+  {
+    options: { enabled: true, longTurnSeconds: 5 },
+    plugins: [
+      {
+        name: 'wait-ship',
+        tier: 'append',
+        register(on) {
+          on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+            const { Box, Text, Button } = $.ui.resolve(e)
+
+            return (
+              <Box flexDirection="column">
+                <Text>ship: Drafts ready</Text>
+                <Button key="all" hotkey="a" plain onPress={() => undefined}>
+                  Accept all
+                </Button>
+              </Box>
+            )
+          })
+        },
+      },
+    ],
+  },
+  async ($, on) => {
+    const { clock } = engineBottom(on)
+    await $.turn.start({ text: 'a long one', turnId: 'turn-p2' })
+    await clock.advance(5000)
+
+    const band = await mountBand($, true)
+    expect(await band.find({ text: NUDGE })).toBeDefined()
+    expect(await band.find({ text: /Drafts ready/ })).toBeUndefined()
+    expect(await band.find({ key: 'all' })).toBeUndefined()
+    await band.unmount()
   },
 )

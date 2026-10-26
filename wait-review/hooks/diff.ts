@@ -360,7 +360,11 @@ export const gradeOf = (stats: SessionStats): Grade => {
   return percent >= GRADE_B_PERCENT ? 'B' : 'C'
 }
 
-/** The session's combo stats and grade, one line shared by the pane and the command. */
+/**
+ * The session's combo stats and grade in one line: shown on the pane's
+ * caught-up card and written to the transcript when the session ends, never
+ * while a hunk is up.
+ */
 export const sessionSummaryLine = (stats: SessionStats): string =>
   `Session: ${stats.read} read · ${stats.flagged} flagged · ${stats.skipped} skipped · ` +
   `longest combo ${stats.longestCombo} — grade ${gradeOf(stats)}.`

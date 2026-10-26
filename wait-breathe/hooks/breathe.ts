@@ -68,11 +68,27 @@ export const wholePositive = (value: unknown, fallback: number): number => {
 }
 
 /**
- * The one-line answer to "is this even on": current state, the threshold it
- * acts on either way, and exactly where to flip it. `/breathe` is this
- * plugin's only way to be found once the install screen has scrolled by.
+ * What `/breathe` answers once it has flipped the setting: the state it is in
+ * now, the threshold it acts on while on, and that the same command flips it
+ * back — one key either way, and no reason given for either choice.
  */
-export const statusLine = (enabled: boolean, longTurnSeconds: number): string =>
+export const toggledLine = (enabled: boolean, longTurnSeconds: number): string =>
   enabled
-    ? `breathe: on · nudges after a turn runs ${longTurnSeconds}s · turn off in /plugin → wait-breathe → Enable the breathing nudges`
-    : `breathe: off · would nudge after a turn runs ${longTurnSeconds}s · turn on in /plugin → wait-breathe → Enable the breathing nudges`
+    ? `breathe: on · one quiet nudge once a turn runs ${longTurnSeconds}s · /breathe again turns it off`
+    : 'breathe: off · /breathe turns it on'
+
+/** What `/breathe` answers when the setting could not be changed: nothing moved, and where else it lives. */
+export const toggleRefusedLine = (enabled: boolean, reason: string): string =>
+  `breathe: still ${enabled ? 'on' : 'off'} · the setting did not change (${reason}) · ` +
+  '/plugin → wait-breathe → Enable the breathing nudges'
+
+/**
+ * The `/config` row this plugin's `enabled` field answers to: a row's key is
+ * `<plugin>.<field>`, and a working copy loaded with `--plugin-dir` may carry
+ * a suffix on its name (`wait-breathe@inline`).
+ */
+export const ENABLED_ROW = /^wait-breathe(@[\w-]+)?\.enabled$/
+
+/** The key `$.config.set` takes for `enabled`, read off the rows `$.config.list()` returns. */
+export const enabledRowKey = (rows: readonly { key: string }[]): string =>
+  rows.find(row => ENABLED_ROW.test(row.key))?.key ?? 'wait-breathe.enabled'

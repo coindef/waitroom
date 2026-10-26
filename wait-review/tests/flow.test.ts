@@ -751,44 +751,200 @@ const FOUR_HUNKS_DIFF = ['a', 'b', 'c', 'd']
   )
   .join('\n')
 
-test('a combo of three or more shows in the pane, and a skip breaks it back to nothing', async ($, on) => {
+/**
+ * Catches what the mod writes to the transcript, and answers for the engine's
+ * own end step, so a test can end the session and read what it said there.
+ */
+const transcript = (on: On) => {
+  const logged: string[] = []
+  on('session.end', ($, e) => ({ sessionId: e.sessionId }))
+  on('ui.log', ($, e) => {
+    logged.push(e.text)
+
+    return { value: undefined }
+  })
+
+  return logged
+}
+
+const endSession = ($: Engine) =>
+  $.session.end({ reason: 'other', sessionId: 's1', resume: { id: 's1' } } as never)
+
+/** Anything that would be the combo or the grade, live badge or summary alike. */
+const SCORE = /combo|grade|Session:/
+
+test('the pane shows no combo and no grade while a hunk is up, and one line of both once caught up', async ($, on) => {
   await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-combo')
   const ui = await mountPane($, 'terminal')
 
-  // `/combo x\d/` and not the bare word: the session summary says "longest
-  // combo 0" from the first hunk read on, which is not the live streak badge.
-  expect(await ui.find({ text: /combo x\d/ })).toBeUndefined()
+  // The header used to grow a `combo x3` badge at the third hunk in a row and
+  // a grade line under it; both now wait until the reading is done.
+  expect(await ui.find({ text: SCORE })).toBeUndefined()
   await ui.press({ key: 'ok' }) // a.ts
   await ui.press({ key: 'ok' }) // b.ts
-  expect(await ui.find({ text: /combo x\d/ })).toBeUndefined()
+  expect(await ui.find({ text: SCORE })).toBeUndefined()
   await ui.press({ key: 'ok' }) // c.ts: the third in a row
-  expect(await ui.find({ text: /combo x3/ })).toBeDefined()
+  expect(await ui.find({ text: SCORE })).toBeUndefined()
 
+  // Caught up, the reading is done for now: its one line shows on the card,
+  // since the line `session.end` writes is never on screen once it closes.
   await ui.press({ key: 'drop' }) // skips the last file, d.ts, in bulk
-  expect(await ui.find({ text: /combo x\d/ })).toBeUndefined()
+  expect(await ui.find({ text: /All caught up/ })).toBeDefined()
+  expect(
+    await ui.find({ text: 'Session: 3 read · 0 flagged · 1 skipped · longest combo 3 — grade A.' }),
+  ).toBeDefined()
+  expect(await ui.find({ text: /combo x/ })).toBeUndefined()
 
   await ui.unmount()
 })
 
-test('the session summary and grade appear in the /wait-review reply, and undo reverts the combo too', async ($, on) => {
-  await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-grade')
+test('a fresh pane with nothing read yet shows no session line, caught up or not', async ($, on) => {
+  await queueOne($, on, '', 'turn-fresh')
+  const ui = await mountPane($, 'terminal')
+  expect(await ui.find({ text: /Nothing to read yet/ })).toBeDefined()
+  expect(await ui.find({ text: SCORE })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the /wait-review reply carries the counts and no grade or combo', async ($, on) => {
+  await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-reply')
   const ui = await mountPane($, 'terminal')
 
   await ui.press({ key: 'ok' })
   await ui.press({ key: 'ok' })
   await ui.press({ key: 'ok' })
   await ui.press({ key: 'drop' })
+  await ui.unmount()
 
-  // 3 read, 1 skipped: 75% acted on, no flag — grade A.
-  const dropped = await $.command.run({ command: 'wait-review', args: '' } as never)
-  expect(dropped.text).toContain('Session: 3 read · 0 flagged · 1 skipped · longest combo 3 — grade A.')
+  const reply = await $.command.run({ command: 'wait-review', args: '' } as never)
+  expect(reply.text).toContain('0 hunks to read, 3 reviewed, 0 flagged.')
+  expect(reply.text).not.toMatch(SCORE)
+})
 
-  await ui.press({ key: 'undo' })
-  // The drop alone is undone: the combo it broke is whole again.
-  expect(await ui.find({ text: /combo x3/ })).toBeDefined()
+test('a skip breaks the combo, and the session ends with one line of the reading and its grade', async ($, on) => {
+  const logged = transcript(on)
+  await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-grade')
+  const ui = await mountPane($, 'terminal')
 
-  const undone = await $.command.run({ command: 'wait-review', args: '' } as never)
-  expect(undone.text).toContain('Session: 3 read · 0 flagged · 0 skipped · longest combo 3 — grade A.')
+  await ui.press({ key: 'ok' }) // a.ts
+  await ui.press({ key: 'flag' }) // b.ts: two in a row
+  await ui.press({ key: 'drop' }) // skips c.ts in bulk, breaking the run
+  await ui.press({ key: 'ok' }) // d.ts starts a new one
+  await ui.unmount()
 
+  // Nothing is said while the session runs, only once it ends.
+  expect(logged).toHaveLength(0)
+  await endSession($)
+
+  // 3 read, 1 skipped: 75% acted on — grade A, since S needs 90%. The run
+  // the skip broke was two long; without the break it would read three.
+  expect(logged).toEqual(['Session: 3 read · 1 flagged · 1 skipped · longest combo 2 — grade A.'])
+})
+
+test('undo reverts the combo a skip broke, and the session-end line shows the run whole', async ($, on) => {
+  const logged = transcript(on)
+  await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-undo')
+  const ui = await mountPane($, 'terminal')
+
+  await ui.press({ key: 'ok' }) // a.ts
+  await ui.press({ key: 'ok' }) // b.ts
+  await ui.press({ key: 'drop' }) // skips c.ts, breaking a run of two
+  await ui.press({ key: 'undo' }) // c.ts is back, and so is the run
+  await ui.press({ key: 'ok' }) // c.ts
+  await ui.press({ key: 'ok' }) // d.ts
+  await ui.unmount()
+  await endSession($)
+
+  // An undo left un-reverted would read `1 skipped · longest combo 2` here.
+  expect(logged).toEqual(['Session: 4 read · 0 flagged · 0 skipped · longest combo 4 — grade A.'])
+})
+
+test('a session with no review activity ends with no line', async ($, on) => {
+  const logged = transcript(on)
+  // Hunks are waiting, but none was read or skipped: a zero says nothing.
+  await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-idle')
+  const ui = await mountPane($, 'terminal')
+  expect(await ui.find({ text: /4 to read/ })).toBeDefined()
+  await ui.unmount()
+
+  await endSession($)
+
+  expect(logged).toHaveLength(0)
+})
+
+/*
+ * A 60-column terminal: no dock below 110, so the pane sits inline above the
+ * prompt with 56 columns inside its frame. Squeezed to fit, every part of a
+ * row shrank alike, and the parts that cannot be cut wrapped instead: the
+ * tag split " wait-revi" / "ew", the bar broke over two lines, and the path's
+ * counts wrapped "file 1 of" / "2" into a column of their own.
+ */
+
+type Node = { type?: string; props?: Record<string, unknown>; children?: unknown[] }
+
+const kidsOf = (node: Node): Node[] => (Array.isArray(node?.children) ? (node.children as Node[]) : [])
+
+const textOf = (node: Node): string =>
+  kidsOf(node)
+    .map(kid => (typeof kid === 'string' ? kid : textOf(kid)))
+    .join('')
+
+/** The Box directly holding the first child `holds` matches, read off the tree as drawn. */
+const parentOf = (tree: unknown, holds: (child: Node) => boolean): Node | undefined => {
+  const node = tree as Node
+  if (node?.type === 'Box' && kidsOf(node).some(holds)) return node
+  for (const kid of kidsOf(node)) {
+    const found = parentOf(kid, holds)
+    if (found) return found
+  }
+
+  return undefined
+}
+
+/** A child that is a Text whose whole text `matches`. */
+const isText = (matches: (text: string) => boolean) => (kid: Node) => kid.type === 'Text' && matches(textOf(kid))
+
+const mountNarrowPane = ($: Engine) =>
+  $.ui.mount({
+    plugin: 'wait-review',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'wait-review',
+    props: { ...PANE_PROPS, bodyColumns: 56, placement: 'inline' },
+    viewport: { columns: 60, rows: 30 },
+  })
+
+const BAR = /^─{12}$/
+
+test('in a 60-column pane the header keeps its tag whole and gives up the bar before the counts', async ($, on) => {
+  await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-narrow-head')
+  const ui = await mountNarrowPane($)
+
+  // Four to read: the counts are short, and the bar still fits beside them.
+  const fresh = await ui.drawn()
+  expect(parentOf(fresh, isText(kid => kid === ' wait-review '))?.props?.flexShrink).toBe(0)
+  expect(parentOf(fresh, isText(kid => BAR.test(kid)))?.props?.flexShrink).toBe(0)
+
+  await ui.press({ key: 'ok' }) // a.ts
+  await ui.press({ key: 'flag' }) // b.ts
+  await ui.press({ key: 'drop' }) // c.ts
+  // "1 to read · 1 read · 1 flagged · 1 skipped" beside the tag and a bar would
+  // take 71 columns of the 56 there are: the bar goes, the counts stay.
+  const busy = await ui.drawn()
+  expect(textOf(busy)).toContain('1 to read · 1 read · 1 flagged · 1 skipped')
+  expect(parentOf(busy, isText(kid => BAR.test(kid)))).toBeUndefined()
+  expect(parentOf(busy, isText(kid => kid === ' wait-review '))?.props?.flexShrink).toBe(0)
+  await ui.unmount()
+})
+
+test('in a 60-column pane the path is cut from its start, and its counts never wrap', async ($, on) => {
+  await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-narrow-path')
+  const ui = await mountNarrowPane($)
+
+  const drawn = await ui.drawn()
+  const counts = parentOf(drawn, isText(kid => /file 1 of 4/.test(kid)))
+  expect(counts?.props?.flexShrink).toBe(0)
+  const path = (await ui.findAll({ type: 'Text' })).find(one => one.props.wrap === 'truncate-start')
+  expect(path).toBeDefined()
   await ui.unmount()
 })

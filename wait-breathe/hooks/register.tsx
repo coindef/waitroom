@@ -4,12 +4,14 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 import type { ActivePrompt } from '../types'
 import {
   canPrompt,
+  enabledRowKey,
   keepHistory,
   messageAt,
   type PromptEvent,
   sessionCountsOf,
   sessionSummaryLine,
-  statusLine,
+  toggledLine,
+  toggleRefusedLine,
   wholePositive,
 } from './breathe'
 
@@ -84,7 +86,7 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'breathe',
-      description: 'Whether the breathing nudges are on, the threshold, and how to flip it',
+      description: 'Turn the breathing nudges on or off',
     })
     // Guarded: session.start fires again on every hot reload while $.state
     // survives it, so an unconditional write would move "this session" to
@@ -97,7 +99,26 @@ export const register: Register = (on, options) => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  on('command.run', { command: 'breathe' }, async () => ({ text: statusLine(config.enabled, config.longTurnSeconds) }))
+  /**
+   * One key, on or off: `/breathe` flips the same `enabled` setting the
+   * install screen and `/plugin` show, so there is one switch, not two.
+   *
+   * The engine reloads a plugin whose options change; the flip is applied
+   * here as well, so it holds from the next turn whether or not that reload
+   * has happened yet. A turn already running is left as it was armed.
+   */
+  on('command.run', { command: 'breathe' }, async $ => {
+    const want = !config.enabled
+    const rows = await $.config.list().catch(() => [])
+    const done = await $.config
+      .set({ key: enabledRowKey(rows), value: want })
+      .catch((error: unknown) => ({ deny: error instanceof Error ? error.message : String(error) }))
+    if (done.deny !== undefined) return { text: toggleRefusedLine(config.enabled, done.deny) }
+    config.enabled = want
+    if (!want) cancelPending()
+
+    return { text: toggledLine(want, config.longTurnSeconds) }
+  })
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
@@ -131,6 +152,11 @@ export const register: Register = (on, options) => {
   /**
    * The nudge rides the same band the other mods use, so it costs no pane and
    * sits where a glance during a long wait already lands.
+   *
+   * The band shows one waitroom mod at a time, and the nudge comes first: a
+   * bet question or a ship offer beneath gives way to it, so it draws without
+   * asking what is there. They have the row back once it is taken, or once
+   * the turn ends and it clears.
    */
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (!config.enabled || e.props.hasSurvey || !e.props.isWorking) return next(e)
@@ -139,17 +165,23 @@ export const register: Register = (on, options) => {
 
     const { Box, Text, Button } = $.ui.resolve(e)
 
+    // The tag and the key keep their width, so a narrow band cuts the message
+    // and never splits " breathe " or "b: Took it" across two lines.
     return (
       <Box gap={1}>
-        <Text backgroundColor="subtle" color="inverseText" weight="bold">
-          {' breathe '}
-        </Text>
+        <Box flexShrink={0}>
+          <Text backgroundColor="subtle" color="inverseText" weight="bold">
+            {' breathe '}
+          </Text>
+        </Box>
         <Text dimColor wrap="truncate-end">
           {prompt.message}
         </Text>
-        <Button key="taken" hotkey="b" plain dimColor onPress={() => takeBreak($, prompt.turnId)}>
-          Took it
-        </Button>
+        <Box flexShrink={0}>
+          <Button key="taken" hotkey="b" plain dimColor onPress={() => takeBreak($, prompt.turnId)}>
+            Took it
+          </Button>
+        </Box>
       </Box>
     )
   }).catch(($, e, next) => next(e))

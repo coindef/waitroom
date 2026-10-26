@@ -32,38 +32,53 @@ you want them. The ship is still yours.
 When a turn ends having changed anything, the row above the prompt — the same
 one `bet-on-your-agent` uses — offers the kit it drafted:
 
-<img src="../docs/ship-offer.svg" width="480" alt="The row above the prompt: a green ship tag, 'Drafts ready: feat(wait-ship): add hooks/ship.ts +2 more' with commit, PR and changelog sizes, and the a/c/p/l/e/s keys to accept, write one, or skip">
+<img src="../docs/ship-offer.svg" width="480" alt="The row above the prompt: a green ship tag, 'Drafts ready: feat(wait-ship): add hooks/ship.ts +2 more' with commit, PR and changelog sizes, and the a, m and s keys to accept every draft, show each on its own key, or skip">
 
 ```
  ship  Drafts ready: feat(wait-ship): add hooks/ship.ts +2 more · commit 412B · PR 1.1KB · changelog 180B
-a: Accept all  c: Commit msg  p: PR body  l: Changelog  e: Drafts for editing  s: Skip
+a: Accept all  m: More  s: Skip
+Drafts — read them before using them.
 ```
 
-**Type the bare letter into an empty composer and it answers** — no focus
-needed, same as `bet-on-your-agent`'s digits: no pane to place, nothing to
-click.
+**The keys are letters, so give the row the keys first** — `ctrl+x tab`, or a
+click — then press one. A letter typed into the composer stays in the
+composer; only `bet-on-your-agent`'s digits answer from there.
 
-- **`a` accepts every drafted artifact.** `c`, `p` and `l` write just the one.
-  `e` writes the same drafts as `a`, framed for editing rather than for
-  immediate use — all of them are called drafts either way.
+- **`a` accepts every drafted artifact.**
 - **`s` skips.** Nothing is written, and the row goes quiet.
+- **`m` (More) puts each draft on a key of its own**, in place: `c` writes
+  just the commit message, `p` just the PR body, `l` just the changelog entry,
+  and `e` writes the same drafts as `a`, framed for editing rather than for
+  immediate use — all of them are called drafts either way. Most offers are
+  answered with `a` or `s`, so those are all the row shows until you ask.
 - Accepted drafts are written under `shipDir` (`.waitroom/ship` by default):
-  `COMMIT_EDITMSG.txt`, `PR_BODY.md`, `CHANGELOG_ENTRY.md`. The row then
-  prints exactly what to run:
+  `COMMIT_EDITMSG.txt`, `PR_BODY.md`, `CHANGELOG_ENTRY.md`. One line per draft
+  in the transcript says exactly what to run, and the row is free again at
+  once:
 
 ```
-Drafts written:
-  .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F .waitroom/ship/COMMIT_EDITMSG.txt
-  .waitroom/ship/PR_BODY.md — gh pr create --body-file .waitroom/ship/PR_BODY.md
+wait-ship: Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F .waitroom/ship/COMMIT_EDITMSG.txt
+wait-ship: Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file .waitroom/ship/PR_BODY.md
 ```
+
+- The drafts folder ignores itself: the first time it writes there, it adds a
+  `.gitignore` of `*` (never over one you already have, and never when
+  `shipDir` is the repository root). So drafts stay out of `git status`, out of
+  `wait-review`'s queue, and out of the next kit's diff.
 
 Nothing here is ever executed on your behalf — not the commit, not a `gh`
-call, not an edit to `CHANGELOG.md`. The row names the command; you decide
-whether to run it.
+call, not an edit to `CHANGELOG.md`. The transcript names the command; you
+decide whether to run it.
 
-**No changes, no row.** A turn that touched nothing leaves this plugin
-completely silent, same as a turn with nothing for `wait-review` to show.
-**Outside a git repository**, same thing — there is no diff to draft from.
+**No changes, no row.** A turn that changed nothing leaves this plugin
+completely silent — even when earlier changes are still sitting uncommitted in
+the tree, since those were offered when they were made (or were there before
+the session began). **Outside a git repository**, same thing — there is no
+diff to draft from.
+
+The row is shared, and shows one mod at a time: a `wait-breathe` nudge comes
+first, then this kit, then `bet-on-your-agent`'s "Did it land?", which takes
+the row the moment the kit is answered.
 
 ## What goes into each draft
 
@@ -92,7 +107,7 @@ completely silent, same as a turn with nothing for `wait-review` to show.
 | Option | Default | What it means |
 | --- | --- | --- |
 | `enabled` | `true` | Draft a kit at the end of each turn that changed anything. |
-| `shipDir` | `.waitroom/ship` | Repository-relative folder accepted drafts are written into. |
+| `shipDir` | `.waitroom/ship` | Repository-relative folder accepted drafts are written into; a folder of its own gets a `.gitignore` of `*`. |
 | `includeChangelog` | `true` | Draft a changelog entry when `CHANGELOG.md` exists. |
 
 ## What it does not do
@@ -111,7 +126,7 @@ completely silent, same as a turn with nothing for `wait-review` to show.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 53 tests
+claude plugin test .         # 70 tests
 ```
 
 The diff parsing, style inference and every drafted artifact live in
@@ -119,5 +134,6 @@ The diff parsing, style inference and every drafted artifact live in
 fixture diffs and fixture commit histories. `hooks/register.tsx` is the hooks
 module; `types/index.d.ts` is the state contract. `tests/flow.test.tsx` drives
 the whole loop through the engine, with git and the filesystem answered by the
-test — including a turn with no changes, one outside a repository, and each
-of the band's keys actually writing (or not writing) the right files.
+test — including a turn with no changes, a turn that changed nothing in an
+already-dirty tree, one outside a repository, and each of the band's keys
+actually writing (or not writing) the right files.

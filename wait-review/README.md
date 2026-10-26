@@ -52,13 +52,26 @@ and the correction rides along with whatever you type next. No extra turn.
 
 ## Combo and session grade
 
-Deciding a hunk — `o`, `f` or `l` — without an intervening `x` builds a combo,
-shown as `combo x5` once it reaches three; skipping a file breaks it back to
-nothing. The session keeps count of hunks read, flagged and skipped, and the
-longest combo reached, and grades the session on how much of what was
-resolved was actually read rather than waved away in bulk: `S` needs at least
-90% read and one flag, `A` 75%, `B` 50%, else `C`. Both show in the pane and
-in `/wait-review`'s reply, and an undo reverses them along with the hunk.
+Deciding a hunk — `o`, `f` or `l` — without an intervening `x` builds a combo;
+skipping a file breaks it back to nothing. The session keeps count of hunks
+read, flagged and skipped, and the longest combo reached, and grades the
+session on how much of what was resolved was actually read rather than waved
+away in bulk: `S` needs at least 90% read and one flag, `A` 75%, `B` 50%, else
+`C`.
+
+Neither shows while you read: the pane's header is the queue alone, and
+`/wait-review`'s reply leaves them out. Once you are caught up, one dim line
+under `✓ All caught up` sums the session so far:
+
+```
+Session: 12 read · 2 flagged · 3 skipped · longest combo 7 — grade A.
+```
+
+The same line is written to the session's transcript when the session ends.
+By then Claude Code is closing, so that copy is for the record; the
+caught-up card is where you see it. A session that read and skipped nothing
+shows the line nowhere. An undo reverses the counts and the combo along with
+the hunk, so the line counts the call as never made.
 
 ## Commands
 
@@ -171,7 +184,8 @@ read, and the counts — counts that are zero are left out. Under it, the hunk's
 `path:line` and its `+`/`−` counts, then the diff. Each control carries its own
 key, so there is no legend to learn, and the controls are dim until the pane
 holds the keyboard: lit, `Looks right` is green and `Flag` amber, so a glance
-says where a letter will land. Read to the end and it says `✓ All caught up`.
+says where a letter will land. Read to the end and it says `✓ All caught up`,
+with the session's one line under it.
 
 ## Saying why
 
@@ -219,7 +233,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 78 tests
+claude plugin test .         # 84 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,
@@ -232,8 +246,8 @@ by the test — `$.process.run` is an event like any other — so the scan is
 exercised rather than mocked away. Its first test makes no tool call at all,
 which is the regression for the bug above.
 
-Run a working copy without installing it:
+Run a working copy without installing it, from inside this folder:
 
 ```
-claude --plugin-dir /path/to/Plugin
+claude --plugin-dir .
 ```

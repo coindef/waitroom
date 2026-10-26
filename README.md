@@ -21,41 +21,49 @@ calibration, an outbox for what ships, and a breathing ring for you.
 
 ## Install
 
-Send these at the Claude Code prompt, each as its own message:
+Two steps. Start with the two that make the core loop — read the diff as it
+lands, call how the turn will go — and add the other two once those feel at
+home.
 
-```
-/plugin marketplace add coindef/waitroom
-```
-```
-/plugin install wait-review@waitroom
-```
-```
-/plugin install bet-on-your-agent@waitroom
-```
-```
-/plugin install wait-ship@waitroom
-```
-```
-/plugin install wait-breathe@waitroom
+### Step 1: wait-review and bet-on-your-agent
+
+One paste, in a terminal:
+
+```sh
+claude plugin marketplace add coindef/waitroom
+claude plugin install wait-review@waitroom
+claude plugin install bet-on-your-agent@waitroom
 ```
 
-Each install shows the plugin's options on the way in. Every option has a
-working default, so save them as they are; it answers `Installed and configured
-wait-review. Plugin is now active.` That is the whole install — active in that
-session straight away, and in every session after it. No key, no service, and
-nothing written to your repository. Skip any of the last four lines for a mod
-you don't want.
+Then start Claude Code (restart it, if it was already running). Both run on
+their defaults — no key, no service, nothing written to your repository. The
+installer's `userConfig options not yet set` lines are fine: every option has
+a working default ([more](#what-the-installer-says-on-the-way-in)).
 
-**wait-breathe is the one exception to "save the defaults."** Its default is
-off, so saving it as-is leaves it silent forever, not merely quiet — there is
-nothing wrong to fix, it is just not asking yet. Turn on *Enable the breathing
-nudges* on its own install screen if you want the nudges; `/breathe` any time
-after tells you whether it is on and how to flip it.
+Already at the Claude Code prompt? Send the same three as slash commands
+instead, each as its own message — `/plugin marketplace add coindef/waitroom`,
+then `/plugin install wait-review@waitroom`, then `/plugin install
+bet-on-your-agent@waitroom` — and save each install screen as it is. That
+answers `Installed and configured wait-review. Plugin is now active.`, active
+in that session straight away.
 
-Every line is safe to send again: adding a marketplace that is already there,
-or installing a plugin that already is, changes nothing. So when in doubt, send
-all five — then `/plugin` should read `4 mods active · wait-review,
-bet-on-your-agent, wait-ship, wait-breathe`.
+### Step 2, when you want them: wait-ship and wait-breathe
+
+```sh
+claude plugin install wait-ship@waitroom
+claude plugin install wait-breathe@waitroom
+```
+
+(Or `/plugin install wait-ship@waitroom` and `/plugin install
+wait-breathe@waitroom` at the prompt.) wait-ship drafts the commit message, PR
+description and changelog entry once a turn has changed files. **wait-breathe
+starts off**: installed, it stays silent until you send `/breathe`, which turns
+it on — and off again, the next time you send it.
+
+Every line in both steps is safe to run again: adding a marketplace that is
+already there, or installing a plugin that already is, changes nothing. With
+all four in, `/plugin` reads `4 mods active · wait-review, bet-on-your-agent,
+wait-ship, wait-breathe`.
 
 It needs **Claude Code 2.1.291 or later** — `claude --version` says which you
 have, `claude update` moves you on. An older build installs it without
@@ -69,7 +77,7 @@ after the `@`.
 You may also see the one-line form, `/plugin install wait-review --marketplace
 coindef/waitroom`. It works once. Sent again, it answers `Plugin "wait-review"
 not found in any marketplace`, because by then `--marketplace` wants the name
-`waitroom`, not the repository path. The three lines above have no such trap.
+`waitroom`, not the repository path. The lines above have no such trap.
 
 ### Updating
 
@@ -124,8 +132,9 @@ so your calibration starts fresh under the new name.
     state helpers those builds predate (`claude plugin validate` says so on
     2.1.242, 2.1.260 and 2.1.280);
   - 2.1.281 to 2.1.290 accept the module but were not run live.
-- **A git repository** for wait-review. It reads the diff, so outside one it
-  has nothing to show. bet-on-your-agent works anywhere.
+- **A git repository** for wait-review and wait-ship. Both read the diff, so
+  outside one they have nothing to show. bet-on-your-agent and wait-breathe
+  work anywhere.
 - Plugins that hook Claude Code's own events are **early access**. See
   [If a plugin shows an error](#if-a-plugin-shows-an-error).
 
@@ -187,7 +196,9 @@ above the prompt while a turn runs:
 ```
 
 Type a bare digit into the empty composer and it answers — no pane, no focus,
-no click. `/bet` shows what it has learned about you.
+no click. `/bet` shows what it has learned about you. For your first week that
+and the file count are all it asks; the extras — a bonus question, a daily
+challenge, a badge wall — wait in `/bet-recap` until then.
 
 **wait-ship** needs no setup either. When a turn ends having changed anything,
 the same row offers the kit it drafted — a commit message, a PR description,
@@ -195,27 +206,32 @@ and, where `CHANGELOG.md` exists, a changelog entry:
 
 ```
  ship  Drafts ready: feat(wait-ship): add hooks/ship.ts +2 more · commit 412B · PR 1.1KB · changelog 180B
-a: Accept all  c: Commit msg  p: PR body  l: Changelog  e: Drafts for editing  s: Skip
+a: Accept all  m: More  s: Skip
+Drafts — read them before using them.
 ```
 
-Type the bare letter into the empty composer and it answers, the same
-no-focus way as bet-on-your-agent's digits. Accepted drafts land under
-`.waitroom/ship`, with the exact command to run printed beside them — nothing
-here ever runs on your behalf. **No changes, no row.**
+Its keys are letters, so give the row the keys first — `ctrl+x tab`, or a
+click — then `a` takes every draft and `s` skips. `m` puts each draft on a key
+of its own (`c` commit message, `p` PR body, `l` changelog, `e` drafts for
+editing). A letter typed into the composer stays in the composer; only
+bet-on-your-agent's digits answer from there. Accepted drafts land under
+`.waitroom/ship`, a folder that ignores itself in git, with the exact command
+to run printed in the transcript — nothing here ever runs on your behalf.
+**A turn that changed nothing gets no row**, even with earlier changes still
+uncommitted.
 
-**wait-breathe** is the one mod that starts off — turn on *Enable the
-breathing nudges* on its install screen if you want it (see
-[Install](#install) above). Once it is on, a single turn running past
+**wait-breathe** is the one mod that starts off — send `/breathe` to turn it
+on (see [Install](#install) above). Once it is on, a single turn running past
 `longTurnSeconds` (90s by default) gets one quiet line, never more than one
 every ten minutes:
 
 ```
- breathe  4-4-4 breathing: in for 4, hold for 4, out for 4
+ breathe  4-4-4 breathing: in for 4, hold for 4, out for 4 b: Took it
 ```
 
 No health claim, no "you should" — just the action, rotating so it is never
-the same one twice running. `/breathe` tells you, any time, whether it is on
-and how to flip it.
+the same one twice running. `/breathe` turns it on, and off again; the same
+switch is *Enable the breathing nudges* under `/plugin` → wait-breathe.
 
 ## What they are
 
@@ -254,9 +270,11 @@ be abandoned mid-thought:
   plugin making that particular claim on their attention.
 
 They compose rather than compete for room: **wait-review** takes the pane,
-and the other three share the row just above the prompt, each yielding to
-whichever of them is already asking something rather than stacking two sets
-of buttons on it at once. bet-on-your-agent asks what you expect from what
+and the other three share the row just above the prompt, one at a time — a
+breathe nudge first, then a ship offer, then the bet's question — so two sets
+of buttons never stack on it; the one behind waits its turn. While a turn runs,
+the bet's forecast gives way only to a breathe nudge, since the window to call
+the turn closes when it lands. bet-on-your-agent asks what you expect from what
 Claude is writing, wait-ship hands you the words for what it just wrote, and
 wait-breathe — once you turn it on — asks something of you instead of Claude.
 
@@ -275,11 +293,11 @@ so every plugin built that way fails to load the same way — including ones fro
 other marketplaces. Run `claude update`, restart, and they load. (Reproduced on
 2.1.200 and 2.1.241; 2.1.242 is the first build that reads it.)
 
-Otherwise, check whether they are running at all. Open `/plugin`: when both are
-loaded, the line under the tabs reads
+Otherwise, check whether they are running at all. Open `/plugin`: when all
+four are loaded, the line under the tabs reads
 
 ```
-2 mods active · wait-review, bet-on-your-agent
+4 mods active · wait-review, bet-on-your-agent, wait-ship, wait-breathe
 ```
 
 If one is missing from it, the **Errors** tab in the same menu names the reason
@@ -332,10 +350,16 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 78 tests
+claude plugin test     ./wait-review          # 84 tests
 
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 113 tests
+claude plugin test     ./bet-on-your-agent    # 129 tests
+
+claude plugin validate ./wait-ship
+claude plugin test     ./wait-ship            # 70 tests
+
+claude plugin validate ./wait-breathe
+claude plugin test     ./wait-breathe         # 27 tests
 ```
 
 Neither of those runs a real type checker, so also run `tsc` from each mod's
@@ -351,8 +375,8 @@ npx -y -p typescript@5.7 tsc -p .
 clean run prints nothing. This caught a real bug once already (two call
 sites where a status literal silently widened to `string` inside a `.map`,
 erasing the protection `HunkStatus` was there to give) that 84 passing tests
-and a clean `validate` both missed — run it after any change to either
-mod's `hooks/`, not just when something looks wrong.
+and a clean `validate` both missed — run it after any change to any mod's
+`hooks/`, not just when something looks wrong.
 
 Run a working copy without installing it, or install from this clone so edits
 reload in place:
@@ -364,10 +388,11 @@ claude plugin marketplace add .     # then /plugin install <mod>@waitroom
 ```
 
 Each mod keeps the logic that needs no engine in one plain module
-(`hooks/diff.ts`, `hooks/bet.ts`) so it can be tested directly, with the hooks
-module beside it and a `types/index.d.ts` state contract that
-`claude plugin validate` holds it to. `tests/flow.test.ts` and
-`tests/band.test.tsx` drive the real loops through the engine, git and all.
+(`hooks/diff.ts`, `hooks/bet.ts`, `hooks/ship.ts`, `hooks/breathe.ts`) so it
+can be tested directly, with the hooks module beside it and a
+`types/index.d.ts` state contract that `claude plugin validate` holds it to.
+Each mod's own `tests/flow.test.*` or `tests/band.test.tsx` drives the real
+loop through the engine, git and all.
 
 `.claude-plugin/types/` inside a mod is written by the engine on each load and
 is not checked in.

@@ -3,12 +3,14 @@ import { expect, test } from 'claude-code/testing'
 import {
   canPrompt,
   COOLDOWN_MS,
+  enabledRowKey,
   keepHistory,
   messageAt,
   MESSAGES,
   sessionCountsOf,
   sessionSummaryLine,
-  statusLine,
+  toggledLine,
+  toggleRefusedLine,
   wholePositive,
 } from '../hooks/breathe'
 
@@ -72,16 +74,38 @@ test('a non-positive or non-numeric config value falls back, a positive one is f
   expect(wholePositive(12.9, 999)).toBe(12)
 })
 
-test('the status line names the threshold either way, but only tells you how to turn on when off, and off when on', () => {
-  const on = statusLine(true, 90)
+test('the toggle line says the state it is in now, the threshold while on, and that /breathe flips it back', () => {
+  const on = toggledLine(true, 90)
   expect(on).toContain('breathe: on')
   expect(on).toContain('90s')
-  expect(on).toContain('turn off')
-  expect(on).not.toContain('turn on')
+  expect(on).toContain('/breathe again turns it off')
 
-  const off = statusLine(false, 90)
+  const off = toggledLine(false, 90)
   expect(off).toContain('breathe: off')
-  expect(off).toContain('90s')
-  expect(off).toContain('turn on')
-  expect(off).not.toContain('turn off')
+  expect(off).toContain('/breathe turns it on')
+  // Off is just off: no threshold to wait on, nothing to talk anyone into.
+  expect(off).not.toContain('90s')
+})
+
+test('the toggle lines make no health claim and no case for either choice', () => {
+  for (const line of [toggledLine(true, 90), toggledLine(false, 90), toggleRefusedLine(false, 'locked')]) {
+    expect(line).not.toMatch(/health|healthy|should|streak|miss(ed)?|good for|wellness/i)
+  }
+})
+
+test('a refused toggle says nothing moved, why, and where else the setting lives', () => {
+  const line = toggleRefusedLine(false, 'a managed setting owns it')
+  expect(line).toContain('breathe: still off')
+  expect(line).toContain('a managed setting owns it')
+  expect(line).toContain('/plugin → wait-breathe → Enable the breathing nudges')
+  expect(toggleRefusedLine(true, 'x')).toContain('breathe: still on')
+})
+
+test('the enabled row is found under the installed name or a working copy\'s, and nothing else', () => {
+  expect(enabledRowKey([{ key: 'theme' }, { key: 'wait-breathe.enabled' }])).toBe('wait-breathe.enabled')
+  expect(enabledRowKey([{ key: 'wait-breathe@inline.enabled' }])).toBe('wait-breathe@inline.enabled')
+  expect(enabledRowKey([{ key: 'wait-breathe.longTurnSeconds' }, { key: 'wait-breathe-x.enabled' }])).toBe(
+    'wait-breathe.enabled',
+  )
+  expect(enabledRowKey([])).toBe('wait-breathe.enabled')
 })

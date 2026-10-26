@@ -3,22 +3,29 @@ import { expect, test } from 'claude-code/testing'
 import {
   applyCommandFor,
   areasOf,
+  BAND_PRECEDENCE,
   bodyOf,
   bulletStyleOf,
   changelogEntryOf,
   commitFileText,
   commitOf,
+  DRAFTS_GITIGNORE,
+  drawnBy,
   type FileChange,
   fileList,
+  fingerprintOf,
   formatSize,
   inferStyle,
   isChoreFile,
   isDocFile,
+  isOwnFolder,
   isTestFile,
+  isUnder,
   kitOf,
   parseDiffFiles,
   parseSubjects,
   prBodyOf,
+  receiptLines,
   scopeOf,
   subjectOf,
   summaryBullets,
@@ -26,6 +33,7 @@ import {
   truncate,
   typeOf,
   verbFor,
+  yieldsBand,
 } from '../hooks/ship'
 
 const diff = (lines: readonly string[]) => lines.join('\n') + '\n'
@@ -343,4 +351,84 @@ test('applyCommandFor names the right command per artifact, and never one that r
   )
   expect(applyCommandFor('pr', '.waitroom/ship/PR_BODY.md')).toContain('gh pr create')
   expect(applyCommandFor('changelog', '.waitroom/ship/CHANGELOG_ENTRY.md')).toContain('paste')
+})
+
+test('receiptLines names each draft written and the command that uses it, one line apiece', () => {
+  expect(
+    receiptLines([
+      { kind: 'commit', path: '.waitroom/ship/COMMIT_EDITMSG.txt' },
+      { kind: 'pr', path: '.waitroom/ship/PR_BODY.md' },
+    ]),
+  ).toEqual([
+    'Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F .waitroom/ship/COMMIT_EDITMSG.txt',
+    'Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file .waitroom/ship/PR_BODY.md',
+  ])
+  expect(receiptLines([])).toEqual([])
+})
+
+// ---------------------------------------------------------------------------
+// The row above the prompt
+// ---------------------------------------------------------------------------
+
+test('the row goes to breathe first, then ship, then bet: one mod at a time', () => {
+  expect(BAND_PRECEDENCE).toEqual(['wait-breathe', 'wait-ship', 'bet-on-your-agent'])
+  // A breathe nudge beneath keeps the row ahead of a kit...
+  expect(yieldsBand('wait-ship', 'wait-breathe')).toBe(true)
+  // ...a bet question beneath gives it up to one...
+  expect(yieldsBand('wait-ship', 'bet-on-your-agent')).toBe(false)
+  // ...and the same holds across the other pairs, whichever mod asks.
+  expect(yieldsBand('bet-on-your-agent', 'wait-breathe')).toBe(true)
+  expect(yieldsBand('bet-on-your-agent', 'wait-ship')).toBe(true)
+  expect(yieldsBand('wait-breathe', 'wait-ship')).toBe(false)
+  expect(yieldsBand('wait-breathe', 'bet-on-your-agent')).toBe(false)
+})
+
+test('a row from nobody in particular, or from outside waitroom, never outranks a waitroom mod', () => {
+  expect(yieldsBand('bet-on-your-agent', undefined)).toBe(false)
+  expect(yieldsBand('bet-on-your-agent', 'engine')).toBe(false)
+  expect(yieldsBand('bet-on-your-agent', 'some-other-plugin')).toBe(false)
+  // Its own row beneath (a second load of the same mod) is no reason to yield either.
+  expect(yieldsBand('wait-ship', 'wait-ship')).toBe(false)
+})
+
+test('drawnBy reads the plugin the engine stamped on a tree, and nothing off anything else', () => {
+  expect(drawnBy({ type: 'Box', part: { plugin: 'wait-breathe' } })).toBe('wait-breathe')
+  expect(drawnBy({ type: 'Box' })).toBeUndefined()
+  expect(drawnBy({ type: 'Box', part: { plugin: 7 } })).toBeUndefined()
+  expect(drawnBy(undefined)).toBeUndefined()
+  expect(drawnBy('text')).toBeUndefined()
+})
+
+// ---------------------------------------------------------------------------
+// The drafts folder and the tree between turns
+// ---------------------------------------------------------------------------
+
+test('isUnder places a path inside the drafts folder however the folder is written', () => {
+  expect(isUnder('.waitroom/ship/PR_BODY.md', '.waitroom/ship')).toBe(true)
+  expect(isUnder('.waitroom/ship/PR_BODY.md', './.waitroom/ship/')).toBe(true)
+  expect(isUnder('.waitroom/ship', '.waitroom/ship')).toBe(true)
+  // A sibling sharing the prefix is not inside it.
+  expect(isUnder('.waitroom/shipping.md', '.waitroom/ship')).toBe(false)
+  expect(isUnder('src/feature.ts', '.waitroom/ship')).toBe(false)
+  // The root holds everything, so it is never treated as the drafts folder.
+  expect(isUnder('src/feature.ts', '.')).toBe(false)
+})
+
+test('only a folder of its own gets the drafts .gitignore: never the root, an absolute path, or a step outside', () => {
+  expect(DRAFTS_GITIGNORE).toBe('*\n')
+  expect(isOwnFolder('.waitroom/ship')).toBe(true)
+  expect(isOwnFolder('./drafts')).toBe(true)
+  expect(isOwnFolder('.')).toBe(false)
+  expect(isOwnFolder('./')).toBe(false)
+  expect(isOwnFolder('')).toBe(false)
+  expect(isOwnFolder('/tmp/drafts')).toBe(false)
+  expect(isOwnFolder('../drafts')).toBe(false)
+  expect(isOwnFolder('drafts/../..')).toBe(false)
+})
+
+test('the same changes read the same fingerprint, and any change reads another', () => {
+  const tree = added('src/feature.ts')
+  expect(fingerprintOf(tree)).toBe(fingerprintOf(`${tree}`))
+  expect(fingerprintOf(tree)).not.toBe(fingerprintOf(added('src/feature.ts', ['+two'])))
+  expect(fingerprintOf('')).not.toBe(fingerprintOf(tree))
 })

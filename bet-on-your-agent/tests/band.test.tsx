@@ -1,4 +1,5 @@
 import type { On } from 'claude-code'
+import type { Engine } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 
 /** The band is drawn on whatever surface the session has, not an assumed one. */
@@ -92,6 +93,10 @@ test('one question at a time, each answered by a bare digit', async ($, on) => {
   // The daily challenge is a fourth, optional question — still one at a time.
   expect(await ui.find({ text: /Daily challenge:/ })).toBeDefined()
   expect(await ui.findAll({ type: 'Button' })).toHaveLength(3)
+  // Fixed text with no quote to give way: wrapped in a narrow band, never cut
+  // at its edge, where "…use more tool ca…" lost what it was asking.
+  const [question] = await ui.findAll({ type: 'Text', text: /Daily challenge: will this turn/ })
+  expect(question?.props.wrap).toBe('wrap')
 
   await ui.press({ key: 'decline' })
 
@@ -510,12 +515,22 @@ test('a declined turn leaves the status line alone', async ($, on) => {
 })
 
 /**
+ * Someone past their first week: the day the extras surface on their own is
+ * already behind the mock clock (which starts at 0), so every question and
+ * the badge wall surface as they always have.
+ */
+const PAST_FIRST_WEEK = { extrasFrom: '1900-01-01' }
+
+/**
  * Session-start-aware engine bottom: `/bet` and `/bet-recap` both need the
  * commands registered, which only happens through `session.start`.
+ *
+ * `entries` is what the store holds before the session: someone past their
+ * first week unless a test says otherwise, `{}` for someone brand new.
  */
-const fullEngine = (on: On) => {
-  mock.clock(on)
-  mock.store(on)
+const fullEngine = (on: On, entries: Record<string, unknown> = PAST_FIRST_WEEK) => {
+  const clock = mock.clock(on)
+  mock.store(on, entries)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
@@ -525,6 +540,8 @@ const fullEngine = (on: On) => {
 
     return <Box />
   })
+
+  return clock
 }
 
 test('the bonus question scores against what actually happened, and shows up in the pane', async ($, on) => {
@@ -681,6 +698,34 @@ test('/bet-recap prints a shareable, plain-text card for this session', async ($
   expect(reply.text).toContain('Daily challenge')
   // Copy-paste friendly: no ANSI escapes inside the box.
   expect(reply.text).not.toMatch(/\u001b/)
+})
+
+test('/bet-recap draws its card to fit the terminal it is printed in', async ($, on) => {
+  fullEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'In src/config_loader_for_the_extremely_long_module_name.ts append a function', turnId: 'turn-fit-1' })
+  const betting = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(true) })
+  await betting.press({ key: 'p80' })
+  await betting.press({ key: 'f1' })
+  await betting.press({ key: 'decline' })
+  await betting.unmount()
+  await $.turn.complete({ turnId: 'turn-fit-1', answer: 'done', durationMs: 20000, isAborted: false, reason: 'answer' })
+  const idle = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(false) })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  const widest = async (columns: number) => {
+    const reply = await $.command.run({
+      command: 'bet-recap',
+      args: '',
+      presentation: { isFullscreen: true, columns },
+    } as never)
+
+    return Math.max(...(reply.text ?? '').split('\n').map(line => [...line].length))
+  }
+  // The reply sits behind a five-column gutter: in 60 columns the card gets 55.
+  expect(await widest(60)).toBeLessThanOrEqual(55)
+  expect(await widest(120)).toBe(60)
 })
 
 test('/bet and its pane both show the badge wall beside the record, not just /bet-recap', async ($, on) => {
@@ -948,3 +993,295 @@ test('the daily challenge asks about a typical turn, not a personal median, befo
   expect(await ui.find({ text: /than your median\?/ })).toBeUndefined()
   await ui.unmount()
 })
+
+const DAY = 24 * 60 * 60 * 1000
+
+/** Opens the band while a turn runs, answers the two core questions, and hands back what is left on screen. */
+const callCore = async ($: Engine, turnId: string) => {
+  await $.turn.start({ text: 'add a cache', turnId })
+  const band = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(true) })
+  await band.press({ key: 'p80' })
+  await band.press({ key: 'f1' })
+
+  return band
+}
+
+test('a new person’s first week asks the core questions alone: no bonus, no daily challenge', async ($, on) => {
+  fullEngine(on, {})
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  const band = await callCore($, 'turn-new-1')
+  // Straight from the files question to the quiet line: nothing more to answer.
+  expect(await band.find({ text: /Bonus:/ })).toBeUndefined()
+  expect(await band.find({ text: /Daily challenge:/ })).toBeUndefined()
+  expect(await band.find({ text: /bet 80% · 1 file/ })).toBeDefined()
+  expect(await band.findAll({ type: 'Button' })).toHaveLength(0)
+  await band.unmount()
+
+  // Held back, not gone: /bet-recap is where they are found, and says when they start.
+  const reply = await $.command.run({ command: 'bet-recap' } as never)
+  expect(reply.text).toMatch(/Bonus\s+starts in 7 days/)
+  expect(reply.text).toMatch(/Daily challenge\s+starts in 7 days/)
+  expect(reply.text).toContain('Badges')
+})
+
+test('the extras surface on their own the day the first week is over, not a day before', async ($, on) => {
+  const clock = fullEngine(on, {})
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  await clock.advance(6 * DAY)
+  const sixth = await callCore($, 'turn-day-7')
+  expect(await sixth.find({ text: /Bonus:/ })).toBeUndefined()
+  await sixth.unmount()
+  await $.turn.complete({ turnId: 'turn-day-7', answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer' })
+  const reply = await $.command.run({ command: 'bet-recap' } as never)
+  expect(reply.text).toMatch(/Bonus\s+starts tomorrow/)
+
+  await clock.advance(DAY)
+  const eighth = await callCore($, 'turn-day-8')
+  expect(await eighth.find({ text: /Bonus: how long will this turn take\?/ })).toBeDefined()
+  await eighth.press({ key: 'decline' })
+  expect(await eighth.find({ text: /Daily challenge:/ })).toBeDefined()
+  await eighth.unmount()
+})
+
+test('in the first week a scored call earns its badge quietly: no note in the row, the wall in /bet-recap alone', async ($, on) => {
+  fullEngine(on, {})
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const betting = await callCore($, 'turn-new-badge')
+  await betting.unmount()
+  await $.turn.complete({ turnId: 'turn-new-badge', answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer' })
+
+  const idle = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(false) })
+  await idle.press({ key: 'landed' })
+  expect(await idle.find({ text: /Recorded: Landed/ })).toBeDefined()
+  expect(await idle.find({ text: /Badge earned/ })).toBeUndefined()
+  await idle.unmount()
+
+  // The core loop stays in view: the record and the rank, without the wall.
+  const record = await $.command.run({ command: 'bet' } as never)
+  expect(record.text).toContain('Rank: Unranked.')
+  expect(record.text).not.toContain('Badges')
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /Calibrating/ })).toBeDefined()
+  expect(await pane.find({ text: /Badges/ })).toBeUndefined()
+  await pane.unmount()
+
+  // The badge it earned is there to be found.
+  const recap = await $.command.run({ command: 'bet-recap' } as never)
+  expect(recap.text).toMatch(/First Steps\s+✓/)
+})
+
+test('someone with a record already keeps every extra from the first session of this version on', async ($, on) => {
+  const earlier = {
+    turnId: 'from-before',
+    at: 0,
+    durationMs: 20000,
+    files: 1,
+    filesBucket: '1',
+    toolCalls: 2,
+    isAborted: false,
+    saidConfidence: 0.8,
+    landed: true,
+  }
+  fullEngine(on, { turns: [earlier] })
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  const band = await callCore($, 'turn-existing')
+  expect(await band.find({ text: /Bonus:/ })).toBeDefined()
+  await band.unmount()
+
+  const record = await $.command.run({ command: 'bet' } as never)
+  expect(record.text).toContain('✓ First Steps')
+  const recap = await $.command.run({ command: 'bet-recap' } as never)
+  expect(recap.text).not.toContain('starts in')
+})
+
+/*
+ * The row above the prompt is shared with wait-breathe and wait-ship, and the
+ * bet comes last in it. Each stand-in below loads beneath this mod (`append`)
+ * under the real mod's name, which is what the engine stamps on its row, so
+ * it is what this mod finds when it asks what is beneath it. An inline plugin
+ * closes over nothing of this file, so each is written out whole.
+ */
+
+test(
+  'a breathe nudge beneath keeps the row while the bet question waits, never both at once',
+  {
+    plugins: [
+      {
+        name: 'wait-breathe',
+        tier: 'append',
+        register(on) {
+          on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+            const { Box, Text, Button } = $.ui.resolve(e)
+
+            return (
+              <Box gap={1}>
+                <Text>breathe: stand up and stretch</Text>
+                <Button key="taken" hotkey="b" plain onPress={() => undefined}>
+                  Took it
+                </Button>
+              </Box>
+            )
+          })
+        },
+      },
+    ],
+  },
+  async ($, on) => {
+    engineBottom(on)
+    await $.turn.start({ text: 'add the retry logic', turnId: 'turn-q1' })
+
+    const band = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(true) })
+    expect(await band.find({ text: /stand up and stretch/ })).toBeDefined()
+    expect(await band.find({ text: /land first try/ })).toBeUndefined()
+    expect(await band.find({ key: 'p80' })).toBeUndefined()
+    await band.unmount()
+  },
+)
+
+test(
+  'a ship offer beneath comes ahead of "Did it land?", which is asked the moment the offer is answered',
+  {
+    plugins: [
+      {
+        name: 'wait-ship',
+        tier: 'append',
+        register(on) {
+          let isAnswered = false
+          on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
+            if (isAnswered) return next(e)
+            const { Box, Text, Button } = $.ui.resolve(e)
+
+            return (
+              <Box flexDirection="column">
+                <Text>ship: Drafts ready</Text>
+                <Button
+                  key="skip"
+                  hotkey="s"
+                  plain
+                  onPress={() => {
+                    isAnswered = true
+                    $.ui.invalidate('ui.render')
+                  }}
+                >
+                  Skip
+                </Button>
+              </Box>
+            )
+          })
+        },
+      },
+    ],
+  },
+  async ($, on) => {
+    engineBottom(on)
+    await $.turn.start({ text: 'refactor the auth layer', turnId: 'turn-q2' })
+    const betting = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(true) })
+    await betting.press({ key: 'p95' })
+    await betting.unmount()
+    await $.turn.complete({ turnId: 'turn-q2', answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer' })
+
+    const idle = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(false) })
+    expect(await idle.find({ text: /Drafts ready/ })).toBeDefined()
+    expect(await idle.find({ text: /Did it land\?/ })).toBeUndefined()
+
+    await idle.press({ key: 'skip', plugin: 'wait-ship' })
+
+    // Queued, not lost: the verdict owed is the row's next question.
+    expect(await idle.find({ text: /Drafts ready/ })).toBeUndefined()
+    expect(await idle.find({ text: /Did it land\?/ })).toBeDefined()
+    expect(await idle.find({ text: /you said 95%/ })).toBeDefined()
+    await idle.unmount()
+  },
+)
+
+test(
+  'while a turn runs the forecast takes the row from a ship offer beneath, never stacked beside it',
+  {
+    plugins: [
+      {
+        name: 'wait-ship',
+        tier: 'append',
+        register(on) {
+          on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+            const { Box, Text, Button } = $.ui.resolve(e)
+
+            return (
+              <Box flexDirection="column">
+                <Text>ship: Drafts ready</Text>
+                <Button key="skip" hotkey="s" plain onPress={() => undefined}>
+                  Skip
+                </Button>
+              </Box>
+            )
+          })
+        },
+      },
+    ],
+  },
+  async ($, on) => {
+    engineBottom(on)
+    await $.turn.start({ text: 'refactor the auth layer', turnId: 'turn-q3' })
+    const betting = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(true) })
+    // The betting window closes when the turn lands, so the forecast cannot wait behind the offer.
+    expect(await betting.find({ text: /land first try/ })).toBeDefined()
+    expect(await betting.find({ key: 'p80' })).toBeDefined()
+    expect(await betting.find({ text: /Drafts ready/ })).toBeUndefined()
+    expect(await betting.find({ key: 'skip' })).toBeUndefined()
+    await betting.unmount()
+  },
+)
+
+test(
+  'with nothing of its own to ask, the bet passes the row beneath through untouched',
+  {
+    plugins: [
+      {
+        name: 'wait-ship',
+        tier: 'append',
+        register(on) {
+          on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+            const { Text } = $.ui.resolve(e)
+
+            return <Text>ship: Drafts ready</Text>
+          })
+        },
+      },
+    ],
+  },
+  async ($, on) => {
+    engineBottom(on)
+    const idle = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(false) })
+    expect(await idle.find({ text: /Drafts ready/ })).toBeDefined()
+    await idle.unmount()
+  },
+)
+
+test(
+  'a row beneath from outside waitroom does not hold the bet back, as before',
+  {
+    plugins: [
+      {
+        name: 'some-other-plugin',
+        tier: 'append',
+        register(on) {
+          on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+            const { Text } = $.ui.resolve(e)
+
+            return <Text>another plugin's row</Text>
+          })
+        },
+      },
+    ],
+  },
+  async ($, on) => {
+    engineBottom(on)
+    await $.turn.start({ text: 'add the retry logic', turnId: 'turn-q4' })
+    const band = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(true) })
+    expect(await band.find({ text: /land first try/ })).toBeDefined()
+    expect(await band.find({ text: /another plugin's row/ })).toBeUndefined()
+    await band.unmount()
+  },
+)

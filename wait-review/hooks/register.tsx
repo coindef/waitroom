@@ -7,7 +7,6 @@ import {
   DEFAULT_IGNORE,
   EMPTY_SESSION,
   filledCells,
-  gradeOf,
   isIgnored,
   linesThatFit,
   mergeHunks,
@@ -53,6 +52,11 @@ const session = atom({ plugin: 'wait-review', key: 'session' } as const, EMPTY_S
  * the gaps between them. What only sometimes shows is added where it is drawn.
  */
 const CHROME_ROWS = 9
+
+/** The header's tag, the progress bar's cells, and the note shown while Claude works. */
+const HEAD_TAG = ' wait-review '
+const BAR_CELLS = 12
+const BUSY_TEXT = 'Claude is working'
 /**
  * Rows the note box takes around the hunk it shows: the header, the question,
  * the bordered field (three rows), its hint, the gaps between them, and a
@@ -359,6 +363,19 @@ export const register: Register = (on, options) => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
+  // The combo and the grade are a look back at the session, so they are said
+  // once the reading is done and nowhere while it runs: a streak in the pane's
+  // header is a score to play for, and the header is for the diff. The pane's
+  // caught-up card shows the line; this one keeps it in the session's
+  // transcript, where a resume finds it (at exit the screen closes over it).
+  // A session that resolved nothing ends quietly, as a zero says nothing.
+  on('session.end', async ($, e, next) => {
+    const stats = await read($, session)
+    if (stats.read > 0 || stats.skipped > 0) $.ui.log(sessionSummaryLine(stats))
+
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
   on('command.run', { command: 'wait-review' }, async $ => {
     await scan($, config)
     await showStatus($)
@@ -380,11 +397,9 @@ export const register: Register = (on, options) => {
         : 'Review pane open.'
     const truncatedCount = await read($, truncatedFiles)
     const truncatedNote = truncatedCount > 0 ? ` +${truncatedCount} more files not shown.` : ''
-    const stats = await read($, session)
-    const sessionNote = stats.read > 0 || stats.skipped > 0 ? ` ${sessionSummaryLine(stats)}` : ''
 
     return {
-      text: `${where} ${counts.pending} hunk${counts.pending === 1 ? '' : 's'} to read, ${counts.reviewed} reviewed, ${counts.flagged} flagged.${truncatedNote}${sessionNote}`,
+      text: `${where} ${counts.pending} hunk${counts.pending === 1 ? '' : 's'} to read, ${counts.reviewed} reviewed, ${counts.flagged} flagged.${truncatedNote}`,
     }
   })
 
@@ -440,7 +455,6 @@ export const register: Register = (on, options) => {
     const last = await read($, lastDecision)
     const noteFor = await read($, noting)
     const truncatedCount = await read($, truncatedFiles)
-    const stats = await read($, session)
     const counts = tally(list)
     const current = nextHunk(list)
     // Only a single-hunk decision can be "the hunk just flagged" - a dropped
@@ -455,25 +469,32 @@ export const register: Register = (on, options) => {
     const summary = summaryOf(list)
     const decided = list.length - (counts.pending + counts.later)
     // A bar for the reading so far: a count says how many, the bar says how far.
-    const barCells = width >= 56 && list.length > 0 ? 12 : 0
+    // The counts say more, so the bar only draws where they still fit beside it.
+    const headRoom = HEAD_TAG.length + 1 + BAR_CELLS + 1 + summary.length + (isBusy ? 1 + BUSY_TEXT.length : 0)
+    const barCells = width >= 56 && list.length > 0 && headRoom <= width ? BAR_CELLS : 0
     const filled = filledCells(decided, list.length, barCells)
-    // A zero says nothing, same as the rest of this pane's counts, so the
-    // summary line only shows once there has been something to resolve.
-    const hasSessionActivity = stats.read > 0 || stats.skipped > 0
+    // Kept to the queue itself: the combo and the grade are said once the
+    // reading is done (the caught-up card, and `session.end`), not while it runs.
+    // The tag, the bar and the busy note keep their width; only the counts are
+    // cut, so a narrow pane never splits " wait-review " across two lines.
     const head = (
       <Box flexDirection="column">
         <Box justifyContent="space-between" gap={1}>
           <Box gap={1}>
-            <Text backgroundColor="suggestion" color="inverseText" weight="bold">
-              {' wait-review '}
-            </Text>
+            <Box flexShrink={0}>
+              <Text backgroundColor="suggestion" color="inverseText" weight="bold">
+                {HEAD_TAG}
+              </Text>
+            </Box>
             {barCells > 0 && (
               // Same weight as the hunk separator below (─, not ━): the two
               // read as one family of rule, and color alone carries progress.
-              <Text>
-                <Text color="success">{'─'.repeat(filled)}</Text>
-                <Text dimColor>{'─'.repeat(barCells - filled)}</Text>
-              </Text>
+              <Box flexShrink={0}>
+                <Text>
+                  <Text color="success">{'─'.repeat(filled)}</Text>
+                  <Text dimColor>{'─'.repeat(barCells - filled)}</Text>
+                </Text>
+              </Box>
             )}
             {summary !== '' && (
               <Text dimColor tabular wrap="truncate-end">
@@ -481,17 +502,13 @@ export const register: Register = (on, options) => {
               </Text>
             )}
           </Box>
-          <Box gap={1}>
-            {stats.combo >= 3 && (
-              <Text color="success" weight="bold">
-                combo x{stats.combo}
-              </Text>
-            )}
-            {isBusy && <Text color="claude">Claude is working</Text>}
-          </Box>
+          {isBusy && (
+            <Box flexShrink={0}>
+              <Text color="claude">{BUSY_TEXT}</Text>
+            </Box>
+          )}
         </Box>
         {truncatedCount > 0 && <Text dimColor>+{truncatedCount} more files not shown</Text>}
-        {hasSessionActivity && <Text dimColor>{sessionSummaryLine(stats)}</Text>}
       </Box>
     )
 
@@ -581,6 +598,11 @@ export const register: Register = (on, options) => {
 
     if (!current) {
       const isFresh = counts.reviewed === 0 && counts.dropped === 0 && counts.flagged === 0
+      // The reading is done for now, so its one line is said here: the line
+      // `session.end` writes at exit lands in the transcript as the screen
+      // closes, where nobody reads it, and shows only on a resume.
+      const stats = await read($, session)
+      const hasSessionActivity = stats.read > 0 || stats.skipped > 0
       const key = (letter: string, does: string) => (
         <Text>
           <Text color="suggestion" weight="bold">
@@ -620,6 +642,7 @@ export const register: Register = (on, options) => {
                 {counts.flagged > 0 ? '' : ', nothing to send Claude'}. New changes land here as Claude
                 makes them.
               </Text>
+              {hasSessionActivity && <Text dimColor>{sessionSummaryLine(stats)}</Text>}
             </Box>
           )}
           {flagCallout}
@@ -666,22 +689,26 @@ export const register: Register = (on, options) => {
         {head}
 
         <Box flexDirection="column">
+          {/* The counts keep their width and the path gives way, cut from its
+              start: shrunk alike, "file 1 of 2" wrapped into a column of its own. */}
           <Box justifyContent="space-between" gap={2}>
             <Text wrap="truncate-start">
               <Text weight="bold">{current.path}</Text>
               <Text dimColor>:{current.start}</Text>
               {current.status === 'later' && <Text color="warning"> · put off</Text>}
             </Text>
-            <Text tabular>
-              <Text color="diffAdded">+{current.added}</Text>{' '}
-              <Text color="diffRemoved">−{current.removed}</Text>
-              {where.ofFiles > 1 && (
-                <Text dimColor>
-                  {' '}
-                  · file {where.atFile} of {where.ofFiles}
-                </Text>
-              )}
-            </Text>
+            <Box flexShrink={0}>
+              <Text tabular>
+                <Text color="diffAdded">+{current.added}</Text>{' '}
+                <Text color="diffRemoved">−{current.removed}</Text>
+                {where.ofFiles > 1 && (
+                  <Text dimColor>
+                    {' '}
+                    · file {where.atFile} of {where.ofFiles}
+                  </Text>
+                )}
+              </Text>
+            </Box>
           </Box>
           {current.note !== undefined && (
             <Text color="warning" wrap="truncate-end">

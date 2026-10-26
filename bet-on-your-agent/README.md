@@ -70,6 +70,12 @@ never the question:
 1: Landed  2: Needed fixing  0: Skip
 ```
 
+The row is shared with `wait-ship` and `wait-breathe`, and shows one of them
+at a time. Between turns a ship offer comes first, and "Did it land?" takes
+the row the moment the offer is answered. While a turn runs, only a breathe
+nudge holds the forecast back, since the window to call the turn closes when
+it lands.
+
 - **Will it land first try?** Resolved by your own verdict, which it asks for
   once the turn lands — with a `skip` if you would rather not say. Answered it
   wrong? The band holds what it recorded for one more press of `u: Undo`,
@@ -80,10 +86,11 @@ never the question:
   no `Edit` call. Outside one, it counts the `Edit`, `Write` and
   `NotebookEdit` calls the turn made.
 
-Once those are answered, one more optional question rotates in — how long the
-turn will take, how many files (again, as a bucket of three this time), or
-how many tool calls it will make — one dimension per turn, cycling through all
-three over time. Same `skip`, costing nothing:
+From your second week (see [Your first week](#your-first-week)), once those
+are answered, one more optional question rotates in — how long the turn will
+take, how many files (again, as a bucket of three this time), or how many tool
+calls it will make — one dimension per turn, cycling through all three over
+time. Same `skip`, costing nothing:
 
 ```
  bet  Bonus: how long will this turn take?
@@ -139,12 +146,54 @@ lately: `Coin-Flipper`, `Bronze`, `Silver`, `Gold`, `Platinum`, `Oracle` — or
 `Unranked` under five scored turns. It sits beside the pane's own tag, and
 climbing a level prints one line once: `Rank up: Silver -> Gold`.
 
+## Your first week
+
+For someone new, the first seven days are the core loop alone: the forecast,
+the file count, the verdict, the calibration and the rank. The bonus question,
+the daily challenge and the badge wall stay out of the row and out of `/bet`
+until then — nothing is switched off, they are simply not pushed at you while
+you learn the two questions that matter. They are all in `/bet-recap` from the
+first day: the badges with their progress, and the bonus and daily-challenge
+rows saying when they start (`starts in 7 days`, then `starts tomorrow`).
+
+The week is counted on this machine's own calendar, from the first session
+this version meets you in — no account, nothing fetched. Anyone who already has
+a record keeps everything they had, from that session on.
+
+## Badges
+
+Six badges sit beside the record in `/bet` and `/bet-recap` (only
+`/bet-recap` in your first week), always the full set, earned or locked, so
+the wall never changes shape: **First Steps** (one
+scored call), **Hot Streak** (5 landed calls running), **Sharpshooter** (ten
+straight scored calls under a 0.20 Brier), **Oracle Path** (reaching the top
+rank once, lifetime), **Bonus Hunter** (five bonus questions right), and
+**Regular** (five distinct days with a scored bet).
+
+## Daily challenge
+
+Once a day from your second week, one optional yes/no question rides the
+same row as the bonus question — will this turn beat your own median on whichever dimension the
+date picks (duration, files, or tool calls) — scored the moment the turn
+lands, no verdict needed from you:
+
+```
+ bet  Daily challenge: will this turn touch more files than your median?
+1: Yes  2: No  0: Skip
+```
+
+Before five calls are scored, it asks against a fixed stand-in turn instead
+and says so ("...than a typical turn?"), since there is no personal median
+yet to judge against. In a narrow terminal the question wraps onto a second
+line rather than being cut. `/bet-recap`'s "Daily challenge" row shows a run of
+right days once it reaches two (`4-day streak`), else today's own result.
+
 ## Commands
 
 | Command | What it does |
 | --- | --- |
 | `/bet` | Prints your record and opens the pane |
-| `/bet-recap` | A shareable, plain-text recap card for this session |
+| `/bet-recap` | A shareable, plain-text recap card for this session, sized to fit the terminal it is printed in; in your first week, also where the badges and extras are |
 
 ## Settings
 
@@ -179,7 +228,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 113 tests
+claude plugin test .         # 129 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested
