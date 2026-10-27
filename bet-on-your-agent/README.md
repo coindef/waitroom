@@ -1,5 +1,12 @@
 # bet-on-your-agent
 
+<img src="./.claude-plugin/icon.svg" width="56" align="right" alt="bet-on-your-agent's icon: a target, one ring with four ticks and a dot at its center">
+
+One of four rooms in [waitroom](../README.md#one-family-four-rooms):
+[wait-review](../wait-review) (the diff) ·
+**bet-on-your-agent (your calibration)** ·
+[wait-ship](../wait-ship) (what ships) · [wait-breathe](../wait-breathe) (you).
+
 A Claude Code plugin that scores how well you call your own agent. While a turn
 runs, the row above the prompt asks you how it will go. Afterwards it tells you
 how calibrated you were.
@@ -33,17 +40,18 @@ lands.
 
 ## What it does
 
-![Claude Code just after a turn lands: above the prompt the bet row asks "Did it land?" with 1: Landed, 2: Needed fixing, 0: Skip, beside the review pane showing the diff the turn wrote](../docs/waitroom.svg)
+![Claude Code just after a turn lands: above the prompt the bet row asks Did it land? you said 90% · "Fix what I flagged" with 1: Landed  2: Needed fixing  0: Skip, under wait-ship's three Draft written lines, beside the wait-review pane on src/client.ts](../docs/waitroom.svg)
 
+*A real capture (Claude Code 2.1.311), not a mockup. The ship offer was
+answered a moment before, so "Did it land?" has the row.*
 
 It lives just above the prompt, which is where you are already looking
-while you wait. **Type a bare digit into an empty composer and it answers** —
-no pane to place, no focus to manage, nothing to click.
+while you wait. **Type 1 to 5 into an empty composer and it answers** — no
+pane to place, no focus to manage, nothing to click. (`0: Skip` is the one key
+that wants the row's focus first, `ctrl+x tab` or a click: on 2.1.311 a bare
+`0` stays in the composer.)
 
-```
- bet  Will "add the retry logic to the client" land first try?
-1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip
-```
+<img src="../docs/bet-forecast.svg" width="600" alt="The row above the prompt while a turn runs: a bet tag, Will &quot;In src/retry.ts, rewrite retry to take an options…&quot; land first try?, and 1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip">
 
 The orange `bet` tag names the row, so a question that appears above the
 prompt says whose it is. `0` waves the turn away and the band goes quiet for the rest of it: a prompt you
@@ -66,7 +74,7 @@ lands, the question leads and the ask trails, so a narrow row cuts the ask and
 never the question:
 
 ```
- bet  Did it land?  you said 80% · "add the retry logic to the client"
+ bet  Did it land? you said 80% · "add the retry logic to the client"
 1: Landed  2: Needed fixing  0: Skip
 ```
 
@@ -144,7 +152,7 @@ The record also carries a rank, from the Brier score over your last 20 scored
 turns rather than the lifetime one, so it reflects how you are calling it
 lately: `Coin-Flipper`, `Bronze`, `Silver`, `Gold`, `Platinum`, `Oracle` — or
 `Unranked` under five scored turns. It sits beside the pane's own tag, and
-climbing a level prints one line once: `Rank up: Silver -> Gold`.
+climbing a level prints one line once: `Rank up: Silver → Gold`.
 
 ## Your first week
 
@@ -228,7 +236,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 129 tests
+claude plugin test .         # 130 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested

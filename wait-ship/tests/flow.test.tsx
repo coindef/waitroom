@@ -151,6 +151,10 @@ test('the offer shows accept-all and skip, and More puts each draft on its own k
   const offering = await mountBand($)
   const keysNow = async () => (await offering.findAll({ type: 'Button' })).map(one => one.props.hotkey)
   expect(await keysNow()).toEqual(['a', 'm', 's'])
+  // Letters only answer once the row holds the keyboard, so the row says how,
+  // in the words wait-review's pane uses, and still asks for a read first.
+  expect(await offering.find({ text: /ctrl\+x tab to use these keys · or click them/ })).toBeDefined()
+  expect(await offering.find({ text: /read each draft before using it/ })).toBeDefined()
   for (const key of ['commit', 'pr', 'changelog', 'edit']) expect(await offering.find({ key })).toBeUndefined()
 
   await offering.press({ key: 'more' })

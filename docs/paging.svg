@@ -1,231 +1,95 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="558" height="640" viewBox="0 0 558 640" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" width="581.8" height="538" viewBox="0 0 581.8 538" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
 <rect width="100%" height="100%" rx="8" fill="#0f1115"/>
-<rect x="14.0" y="14.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="26.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="14.0" width="507.0" height="17" fill="#262626"/>
-<rect x="528.8" y="14.0" width="7.8" height="17" fill="#262626"/>
-<text x="528.8" y="26.5" fill="#999999" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">✕</text>
-<rect x="536.6" y="14.0" width="7.8" height="17" fill="#262626"/>
-<rect x="14.0" y="31.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="31.0" width="101.4" height="17" fill="#b1b9f9"/>
-<text x="21.8" y="43.5" fill="#000000" textLength="101.4" lengthAdjust="spacingAndGlyphs" font-weight="700" xml:space="preserve"> wait-review </text>
-<rect x="123.2" y="31.0" width="7.8" height="17" fill="#262626"/>
-<rect x="131.0" y="31.0" width="46.8" height="17" fill="#262626"/>
-<text x="131.0" y="43.5" fill="#4eba65" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">━━━━━━</text>
-<rect x="177.8" y="31.0" width="46.8" height="17" fill="#262626"/>
-<text x="177.8" y="43.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">━━━━━━</text>
-<rect x="224.6" y="31.0" width="7.8" height="17" fill="#262626"/>
-<rect x="232.4" y="31.0" width="163.8" height="17" fill="#262626"/>
-<text x="232.4" y="43.5" fill="#999999" textLength="163.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1 to read · 1 flagged</text>
-<rect x="396.2" y="31.0" width="148.2" height="17" fill="#262626"/>
-<rect x="14.0" y="48.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="60.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="48.0" width="522.6" height="17" fill="#262626"/>
-<rect x="14.0" y="65.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="77.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="65.0" width="93.6" height="17" fill="#262626"/>
-<text x="21.8" y="77.5" fill="#d6d9de" textLength="93.6" lengthAdjust="spacingAndGlyphs" font-weight="700" xml:space="preserve">src/retry.ts</text>
-<rect x="115.4" y="65.0" width="15.6" height="17" fill="#262626"/>
-<text x="115.4" y="77.5" fill="#999999" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">:1</text>
-<rect x="131.0" y="65.0" width="366.6" height="17" fill="#262626"/>
-<rect x="497.6" y="65.0" width="23.4" height="17" fill="#262626"/>
-<text x="497.6" y="77.5" fill="#225c2b" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+21</text>
-<rect x="521.0" y="65.0" width="7.8" height="17" fill="#262626"/>
-<rect x="528.8" y="65.0" width="15.6" height="17" fill="#262626"/>
-<text x="528.8" y="77.5" fill="#7a2936" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">−6</text>
-<rect x="14.0" y="82.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="94.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="82.0" width="522.6" height="17" fill="#262626"/>
-<rect x="14.0" y="99.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="111.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="99.0" width="522.6" height="17" fill="#262626"/>
-<text x="21.8" y="111.5" fill="#999999" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────────────────────────────────</text>
-<rect x="14.0" y="116.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="128.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="116.0" width="39.0" height="17" fill="#3d0100"/>
-<text x="21.8" y="128.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  1 -</text>
-<rect x="60.8" y="116.0" width="483.6" height="17" fill="#3d0100"/>
-<text x="60.8" y="128.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const retry = async &lt;T&gt;(run: () =&gt; Promise&lt;T&gt;, times = </text>
-<rect x="14.0" y="133.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="145.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="133.0" width="39.0" height="17" fill="#3d0100"/>
-<text x="21.8" y="145.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    -</text>
-<rect x="60.8" y="133.0" width="483.6" height="17" fill="#3d0100"/>
-<text x="60.8" y="145.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">3): Promise&lt;T&gt; =&gt; {                                           </text>
-<rect x="14.0" y="150.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="162.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="150.0" width="39.0" height="17" fill="#3d0100"/>
-<text x="21.8" y="162.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  2 -</text>
-<rect x="60.8" y="150.0" width="483.6" height="17" fill="#3d0100"/>
-<text x="60.8" y="162.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  try {                                                       </text>
-<rect x="14.0" y="167.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="179.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="167.0" width="39.0" height="17" fill="#3d0100"/>
-<text x="21.8" y="179.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  3 -</text>
-<rect x="60.8" y="167.0" width="483.6" height="17" fill="#3d0100"/>
-<text x="60.8" y="179.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    return await run()                                        </text>
-<rect x="14.0" y="184.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="196.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="184.0" width="39.0" height="17" fill="#3d0100"/>
-<text x="21.8" y="196.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  4 -</text>
-<rect x="60.8" y="184.0" width="483.6" height="17" fill="#3d0100"/>
-<text x="60.8" y="196.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  } catch (error) {                                           </text>
-<rect x="14.0" y="201.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="213.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="201.0" width="39.0" height="17" fill="#3d0100"/>
-<text x="21.8" y="213.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  5 -</text>
-<rect x="60.8" y="201.0" width="483.6" height="17" fill="#3d0100"/>
-<text x="60.8" y="213.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    if (times &lt;= 1) throw error                               </text>
-<rect x="14.0" y="218.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="230.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="218.0" width="39.0" height="17" fill="#3d0100"/>
-<text x="21.8" y="230.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  6 -</text>
-<rect x="60.8" y="218.0" width="483.6" height="17" fill="#3d0100"/>
-<text x="60.8" y="230.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    return retry(run, times - 1)                              </text>
-<rect x="14.0" y="235.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="247.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="235.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="247.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  1 +</text>
-<rect x="60.8" y="235.0" width="483.6" height="17" fill="#022800"/>
-<text x="60.8" y="247.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export type RetryOptions = {                                  </text>
-<rect x="14.0" y="252.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="264.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="252.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="264.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  2 +</text>
-<rect x="60.8" y="252.0" width="483.6" height="17" fill="#022800"/>
-<text x="60.8" y="264.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  times?: number                                              </text>
-<rect x="14.0" y="269.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="281.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="269.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="281.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  3 +</text>
-<rect x="60.8" y="269.0" width="483.6" height="17" fill="#022800"/>
-<text x="60.8" y="281.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  baseMs?: number                                             </text>
-<rect x="14.0" y="286.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="298.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="286.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="298.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  4 +</text>
-<rect x="60.8" y="286.0" width="483.6" height="17" fill="#022800"/>
-<text x="60.8" y="298.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  maxMs?: number                                              </text>
-<rect x="14.0" y="303.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="315.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="303.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="315.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  5 +</text>
-<rect x="60.8" y="303.0" width="483.6" height="17" fill="#022800"/>
-<text x="60.8" y="315.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  shouldRetry?: (error: unknown) =&gt; boolean                   </text>
-<rect x="14.0" y="320.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="332.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="320.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="332.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  6 +</text>
-<rect x="60.8" y="320.0" width="483.6" height="17" fill="#022800"/>
-<text x="60.8" y="332.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">}                                                             </text>
-<rect x="14.0" y="337.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="349.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="337.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="349.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  7 +</text>
-<rect x="60.8" y="337.0" width="483.6" height="17" fill="#022800"/>
-<rect x="14.0" y="354.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="366.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="354.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="366.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  8 +</text>
-<rect x="60.8" y="354.0" width="483.6" height="17" fill="#022800"/>
-<text x="60.8" y="366.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">const sleep = (ms: number) =&gt; new Promise&lt;void&gt;(resolve =&gt; set</text>
-<rect x="14.0" y="371.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="383.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="371.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="383.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    +</text>
-<rect x="60.8" y="371.0" width="483.6" height="17" fill="#022800"/>
-<text x="60.8" y="383.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Timeout(resolve, ms))                                         </text>
-<rect x="14.0" y="388.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="400.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="388.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="400.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  9 +</text>
-<rect x="60.8" y="388.0" width="483.6" height="17" fill="#022800"/>
-<rect x="14.0" y="405.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="417.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="405.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="417.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 10 +</text>
-<rect x="60.8" y="405.0" width="483.6" height="17" fill="#022800"/>
-<text x="60.8" y="417.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const retry = async &lt;T&gt;(                               </text>
-<rect x="14.0" y="422.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="434.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="422.0" width="39.0" height="17" fill="#022800"/>
-<text x="21.8" y="434.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 11 +</text>
-<rect x="60.8" y="422.0" width="483.6" height="17" fill="#022800"/>
-<text x="60.8" y="434.5" fill="#f8f8f2" textLength="483.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  run: () =&gt; Promise&lt;T&gt;,                                      </text>
-<rect x="14.0" y="439.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="451.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="439.0" width="124.8" height="17" fill="#262626"/>
-<text x="21.8" y="451.5" fill="#999999" textLength="124.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">lines 1–17 of 29</text>
-<rect x="146.6" y="439.0" width="327.6" height="17" fill="#262626"/>
-<rect x="474.2" y="439.0" width="7.8" height="17" fill="#262626"/>
-<text x="474.2" y="451.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">j</text>
-<rect x="482.0" y="439.0" width="62.4" height="17" fill="#262626"/>
-<text x="482.0" y="451.5" fill="#d6d9de" textLength="62.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: more ↓</text>
-<rect x="14.0" y="456.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="468.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="456.0" width="522.6" height="17" fill="#262626"/>
-<rect x="14.0" y="473.0" width="15.6" height="17" fill="#262626"/>
-<text x="14.0" y="485.5" fill="#b1b9f9" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│o</text>
-<rect x="29.6" y="473.0" width="15.6" height="17" fill="#262626"/>
-<text x="29.6" y="485.5" fill="#d6d9de" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: </text>
-<rect x="45.2" y="473.0" width="85.8" height="17" fill="#262626"/>
-<text x="45.2" y="485.5" fill="#4eba65" textLength="85.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Looks right</text>
-<rect x="131.0" y="473.0" width="15.6" height="17" fill="#262626"/>
-<rect x="146.6" y="473.0" width="7.8" height="17" fill="#262626"/>
-<text x="146.6" y="485.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">f</text>
-<rect x="154.4" y="473.0" width="15.6" height="17" fill="#262626"/>
-<text x="154.4" y="485.5" fill="#d6d9de" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: </text>
-<rect x="170.0" y="473.0" width="31.2" height="17" fill="#262626"/>
-<text x="170.0" y="485.5" fill="#ffc107" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Flag</text>
-<rect x="201.2" y="473.0" width="15.6" height="17" fill="#262626"/>
-<rect x="216.8" y="473.0" width="7.8" height="17" fill="#262626"/>
-<text x="216.8" y="485.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">l</text>
-<rect x="224.6" y="473.0" width="54.6" height="17" fill="#262626"/>
-<text x="224.6" y="485.5" fill="#999999" textLength="54.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Later</text>
-<rect x="279.2" y="473.0" width="15.6" height="17" fill="#262626"/>
-<rect x="294.8" y="473.0" width="7.8" height="17" fill="#262626"/>
-<text x="294.8" y="485.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">x</text>
-<rect x="302.6" y="473.0" width="85.8" height="17" fill="#262626"/>
-<text x="302.6" y="485.5" fill="#999999" textLength="85.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Skip file</text>
-<rect x="388.4" y="473.0" width="15.6" height="17" fill="#262626"/>
-<rect x="404.0" y="473.0" width="7.8" height="17" fill="#262626"/>
-<text x="404.0" y="485.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">u</text>
-<rect x="411.8" y="473.0" width="46.8" height="17" fill="#262626"/>
-<text x="411.8" y="485.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Undo</text>
-<rect x="458.6" y="473.0" width="85.8" height="17" fill="#262626"/>
-<rect x="14.0" y="490.0" width="312.0" height="17" fill="#262626"/>
-<text x="14.0" y="502.5" fill="#b1b9f9" textLength="312.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│● esc hands the keys back to the prompt</text>
-<rect x="326.0" y="490.0" width="218.4" height="17" fill="#262626"/>
-<rect x="14.0" y="507.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="519.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="507.0" width="522.6" height="17" fill="#262626"/>
-<rect x="14.0" y="524.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="536.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="524.0" width="522.6" height="17" fill="#262626"/>
-<rect x="14.0" y="541.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="553.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="541.0" width="7.8" height="17" fill="#262626"/>
-<text x="21.8" y="553.5" fill="#ffc107" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
-<rect x="29.6" y="541.0" width="7.8" height="17" fill="#262626"/>
-<rect x="37.4" y="541.0" width="70.2" height="17" fill="#262626"/>
-<text x="37.4" y="553.5" fill="#ffc107" textLength="70.2" lengthAdjust="spacingAndGlyphs" font-weight="700" xml:space="preserve">1 flagged</text>
-<rect x="107.6" y="541.0" width="312.0" height="17" fill="#262626"/>
-<text x="107.6" y="553.5" fill="#999999" textLength="312.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · goes to Claude with your next message</text>
-<rect x="419.6" y="541.0" width="117.0" height="17" fill="#262626"/>
-<rect x="536.6" y="541.0" width="7.8" height="17" fill="#262626"/>
-<rect x="14.0" y="558.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="570.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="558.0" width="7.8" height="17" fill="#262626"/>
-<text x="21.8" y="570.5" fill="#ffc107" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
-<rect x="29.6" y="558.0" width="7.8" height="17" fill="#262626"/>
-<rect x="37.4" y="558.0" width="7.8" height="17" fill="#262626"/>
-<text x="37.4" y="570.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">n</text>
-<rect x="45.2" y="558.0" width="491.4" height="17" fill="#262626"/>
-<text x="45.2" y="570.5" fill="#d6d9de" textLength="491.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Say why                                                      </text>
-<rect x="536.6" y="558.0" width="7.8" height="17" fill="#262626"/>
-<rect x="14.0" y="575.0" width="7.8" height="17" fill="#262626"/>
-<text x="14.0" y="587.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="21.8" y="575.0" width="522.6" height="17" fill="#262626"/>
-<text x="14.0" y="604.5" fill="#888888" textLength="530.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────────────────</text>
+<rect x="14.0" y="14" width="553.8" height="17" fill="#262626"/>
+<text x="552.2" y="26.5" fill="#999999" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">✕</text>
+<rect x="14.0" y="31" width="101.4" height="17" fill="#b1b9f9"/>
+<rect x="115.4" y="31" width="452.4" height="17" fill="#262626"/>
+<text x="14.0" y="43.5" fill="#000000" font-weight="700" textLength="101.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> wait-review </text>
+<text x="123.2" y="43.5" fill="#4eba65" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────</text>
+<text x="170.0" y="43.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────</text>
+<text x="224.6" y="43.5" fill="#999999" textLength="163.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1 to read · 1 flagged</text>
+<rect x="14.0" y="48" width="553.8" height="17" fill="#262626"/>
+<rect x="14.0" y="65" width="553.8" height="17" fill="#262626"/>
+<text x="14.0" y="77.5" fill="#d6d9de" font-weight="700" textLength="93.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">src/retry.ts</text>
+<text x="107.6" y="77.5" fill="#999999" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">:1</text>
+<text x="521.0" y="77.5" fill="#4eba65" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+20</text>
+<text x="552.2" y="77.5" fill="#ff6b80" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">−6</text>
+<rect x="14.0" y="82" width="553.8" height="17" fill="#262626"/>
+<rect x="14.0" y="99" width="553.8" height="17" fill="#262626"/>
+<text x="14.0" y="111.5" fill="#999999" textLength="553.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────────────────────────────────────</text>
+<rect x="14.0" y="116" width="553.8" height="17" fill="#3d0100"/>
+<text x="14.0" y="128.5" fill="#dc5a5a" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 1 -</text>
+<text x="45.2" y="128.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const retry = async &lt;T&gt;(run: () =&gt; Promise&lt;T&gt;, times = 3): P</text>
+<rect x="14.0" y="133" width="553.8" height="17" fill="#3d0100"/>
+<text x="14.0" y="145.5" fill="#dc5a5a" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   -</text>
+<text x="45.2" y="145.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">romise&lt;T&gt; =&gt; {                                                     </text>
+<rect x="14.0" y="150" width="553.8" height="17" fill="#3d0100"/>
+<text x="14.0" y="162.5" fill="#dc5a5a" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 2 -</text>
+<text x="45.2" y="162.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  try {                                                            </text>
+<rect x="14.0" y="167" width="553.8" height="17" fill="#3d0100"/>
+<text x="14.0" y="179.5" fill="#dc5a5a" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 3 -</text>
+<text x="45.2" y="179.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    return await run()                                             </text>
+<rect x="14.0" y="184" width="553.8" height="17" fill="#3d0100"/>
+<text x="14.0" y="196.5" fill="#dc5a5a" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 4 -</text>
+<text x="45.2" y="196.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  } catch (error) {                                                </text>
+<rect x="14.0" y="201" width="553.8" height="17" fill="#3d0100"/>
+<text x="14.0" y="213.5" fill="#dc5a5a" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 5 -</text>
+<text x="45.2" y="213.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    if (times &lt;= 1) throw error                                    </text>
+<rect x="14.0" y="218" width="553.8" height="17" fill="#3d0100"/>
+<text x="14.0" y="230.5" fill="#dc5a5a" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 6 -</text>
+<text x="45.2" y="230.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    return retry(run, times - 1)                                   </text>
+<rect x="14.0" y="235" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="247.5" fill="#50c850" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 1 +</text>
+<text x="45.2" y="247.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export type RetryOptions = {                                       </text>
+<rect x="14.0" y="252" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="264.5" fill="#50c850" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 2 +</text>
+<text x="45.2" y="264.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  times?: number                                                   </text>
+<rect x="14.0" y="269" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="281.5" fill="#50c850" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 3 +</text>
+<text x="45.2" y="281.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  baseMs?: number                                                  </text>
+<rect x="14.0" y="286" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="298.5" fill="#50c850" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 4 +</text>
+<text x="45.2" y="298.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  maxMs?: number                                                   </text>
+<rect x="14.0" y="303" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="315.5" fill="#50c850" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 5 +</text>
+<text x="45.2" y="315.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  shouldRetry?: (error: unknown) =&gt; boolean                        </text>
+<rect x="14.0" y="320" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="332.5" fill="#50c850" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 6 +</text>
+<text x="45.2" y="332.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">}                                                                  </text>
+<rect x="14.0" y="337" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="349.5" fill="#50c850" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 7 +</text>
+<rect x="14.0" y="354" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="366.5" fill="#50c850" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 8 +</text>
+<text x="45.2" y="366.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const retry = async &lt;T&gt;(                                    </text>
+<rect x="14.0" y="371" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="383.5" fill="#50c850" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 9 +</text>
+<text x="45.2" y="383.5" fill="#f8f8f2" textLength="522.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  run: () =&gt; Promise&lt;T&gt;,                                           </text>
+<rect x="14.0" y="388" width="483.6" height="17" fill="#262626"/>
+<rect x="497.6" y="388" width="7.8" height="17" fill="#b1b9f9"/>
+<rect x="505.4" y="388" width="62.4" height="17" fill="#d6d9de"/>
+<text x="14.0" y="400.5" fill="#999999" textLength="124.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">lines 1–15 of 28</text>
+<text x="497.6" y="400.5" fill="#262626" textLength="70.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">j: more ↓</text>
+<rect x="14.0" y="405" width="553.8" height="17" fill="#262626"/>
+<rect x="14.0" y="422" width="553.8" height="17" fill="#262626"/>
+<text x="14.0" y="434.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">o</text>
+<text x="21.8" y="434.5" fill="#d6d9de" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: </text>
+<text x="37.4" y="434.5" fill="#4eba65" textLength="85.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Looks right</text>
+<text x="138.8" y="434.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">f</text>
+<text x="146.6" y="434.5" fill="#d6d9de" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: </text>
+<text x="162.2" y="434.5" fill="#ffc107" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Flag</text>
+<text x="209.0" y="434.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">l</text>
+<text x="216.8" y="434.5" fill="#999999" textLength="54.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Later</text>
+<text x="287.0" y="434.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">x</text>
+<text x="294.8" y="434.5" fill="#999999" textLength="85.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Skip file</text>
+<text x="396.2" y="434.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">u</text>
+<text x="404.0" y="434.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Undo</text>
+<rect x="14.0" y="439" width="553.8" height="17" fill="#262626"/>
+<text x="14.0" y="451.5" fill="#b1b9f9" textLength="304.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">● esc hands the keys back to the prompt</text>
+<rect x="14.0" y="456" width="553.8" height="17" fill="#262626"/>
+<rect x="14.0" y="473" width="553.8" height="17" fill="#262626"/>
+<rect x="14.0" y="490" width="553.8" height="17" fill="#262626"/>
+<text x="14.0" y="502.5" fill="#ffc107" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▎</text>
+<text x="29.6" y="502.5" fill="#ffc107" font-weight="700" textLength="70.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1 flagged</text>
+<text x="99.8" y="502.5" fill="#999999" textLength="312.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · goes to Claude with your next message</text>
+<rect x="14.0" y="507" width="553.8" height="17" fill="#262626"/>
 </svg>

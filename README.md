@@ -14,10 +14,23 @@ only while Claude works; this is a 15-second cut of it. Bet on the turn while
 it runs, read the diff as it lands, flag a hunk with a reason, and "Fix what I
 flagged" is all the next message needs. [Full-length video](docs/demo.mp4).*
 
-<img src="docs/lockup.svg" width="400" alt="The four plugin icons side by side: wait-review's magnifying glass, bet-on-your-agent's target, wait-ship's inbox with an arrow out of it, and wait-breathe's breathing rings">
+<a id="what-they-are"></a>
 
-One family, four rooms: a magnifying glass for the diff, a target for your
-calibration, an outbox for what ships, and a breathing ring for you.
+## One family, four rooms
+
+<img src="docs/lockup.svg" width="560" alt="The four plugin icons, each over its name and its room: wait-review's magnifying glass, the diff; bet-on-your-agent's target, your calibration; wait-ship's outbox, what ships; wait-breathe's breathing rings, you">
+
+A magnifying glass for the diff, a target for your calibration, an outbox for
+what ships, and breathing rings for you, always in that order. wait-review
+keeps a pane beside the transcript. The other three take turns in the one row
+above the prompt.
+
+| | Plugin | Spends the wait on | Where | Starts |
+| --- | --- | --- | --- | --- |
+| <img src="wait-review/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-review**](./wait-review) | The diff Claude already wrote, a hunk at a time. What you flag goes back with your next message, with your reason. | A pane | On |
+| <img src="bet-on-your-agent/.claude-plugin/icon.svg" width="24" alt=""> | [**bet-on-your-agent**](./bet-on-your-agent) | Your call on how the turn will go, scored afterwards: a Brier score, and a calibration table that shows where your confidence runs hot or cold. | The row | On |
+| <img src="wait-ship/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-ship**](./wait-ship) | The words that ship the change: a drafted commit message, PR description and changelog entry, to review the way wait-review lets you review the code. | The row | On |
+| <img src="wait-breathe/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-breathe**](./wait-breathe) | You. One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. | The row | **Off** until `/breathe` |
 
 ## Install
 
@@ -140,11 +153,17 @@ so your calibration starts fresh under the new name.
 
 ## The first minute
 
-**wait-review** needs no setup. Ask Claude for a change; when the turn ends, the
-pane starts offering the diff a hunk at a time — here paging through a hunk
-longer than the pane, with one already flagged:
+Each room shows up by itself the first time it has something to say. Every
+image below is a real capture of this build: Claude Code 2.1.311 in a scratch
+repository, cut from the terminal as it was, never redrawn.
 
-<img src="docs/paging.svg" width="480" alt="The review pane: its wait-review tag and a progress bar, src/retry.ts lines 1 to 17 of 29 as a colored diff, the controls lit because the pane holds the keys, and an amber note that one flagged hunk goes to Claude with the next message">
+### wait-review · the diff
+
+wait-review needs no setup. Ask Claude for a change. When the turn ends, the
+pane starts offering the diff a hunk at a time. Here it is paging through a
+hunk longer than the pane, with the one before it already flagged:
+
+<img src="docs/paging.svg" width="490" alt="The review pane: its wait-review tag and a progress bar, 1 to read · 1 flagged, src/retry.ts +20 −6, lines 1–15 of 28 of a colored diff with j: more, the controls lit because the pane holds the keys, and an amber note that 1 flagged hunk goes to Claude with your next message">
 
 **Give the pane the keys first: `/wait-review` or `ctrl+x tab`** (or click
 it). Its letters only work while it holds the keyboard — press `o` without that
@@ -186,61 +205,65 @@ so the side is wait-review's from then on, in later sessions too; `/diff` again
 brings the built-in panel back whenever you want it. If you run `/wait-review`
 and see nothing, its reply says when this is why.
 
-**bet-on-your-agent** scores your calibration, not a wager — it keeps no
-currency and no winnings, just whether you called it — by putting a question
-above the prompt while a turn runs:
+### bet-on-your-agent · your calibration
 
-```
- bet  Will "add the retry logic to the client" land first try?
-1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip
-```
+bet-on-your-agent scores your calibration, not a wager. It keeps no currency
+and no winnings, just whether you called it. While a turn runs, it puts a
+question above the prompt:
 
-Type a bare digit into the empty composer and it answers — no pane, no focus,
-no click. `/bet` shows what it has learned about you. For your first week that
-and the file count are all it asks; the extras — a bonus question, a daily
-challenge, a badge wall — wait in `/bet-recap` until then.
+<img src="docs/bet-forecast.svg" width="600" alt="The row above the prompt while a turn runs: a bet tag, Will &quot;In src/retry.ts, rewrite retry to take an options…&quot; land first try?, and 1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip">
 
-**wait-ship** needs no setup either. When a turn ends having changed anything,
-the same row offers the kit it drafted — a commit message, a PR description,
-and, where `CHANGELOG.md` exists, a changelog entry:
+Type 1 to 5 into the empty composer and it answers: no pane, no focus, no
+click. `0: Skip` is the exception. A bare `0` stays in the composer (seen live
+on 2.1.311), so give the row the keys first with `ctrl+x tab`, or click it.
+`/bet` shows what it has learned about you. In your first week, the forecast
+and the file count are all it asks. The extras (a bonus question, a daily
+challenge, a badge wall) wait in `/bet-recap` until then.
 
-```
- ship  Drafts ready: feat(wait-ship): add hooks/ship.ts +2 more · commit 412B · PR 1.1KB · changelog 180B
-a: Accept all  m: More  s: Skip
-Drafts — read them before using them.
-```
+### wait-ship · what ships
 
-Its keys are letters, so give the row the keys first — `ctrl+x tab`, or a
-click — then `a` takes every draft and `s` skips. `m` puts each draft on a key
-of its own (`c` commit message, `p` PR body, `l` changelog, `e` drafts for
-editing). A letter typed into the composer stays in the composer; only
-bet-on-your-agent's digits answer from there. Accepted drafts land under
+wait-ship needs no setup either. When a turn ends having changed anything, the
+same row offers the kit it drafted: a commit message, a PR description, and,
+where `CHANGELOG.md` exists, a changelog entry:
+
+<img src="docs/ship-offer.svg" width="600" alt="The row above the prompt: a green ship tag, Drafts ready: Update 2 files · commit 61B · PR 180B · changelog 55B, then a: Accept all  m: More  s: Skip, then ctrl+x tab to use these keys · or click them · read each draft before using it">
+
+Its keys are letters, so give the row the keys first (`ctrl+x tab`, or a
+click, as the row's last line says). Then `a` takes every draft and `s` skips.
+`m` puts each draft on a key of its own (`c` commit message, `p` PR body, `l`
+changelog, `e` drafts for editing). A letter typed into the composer stays in
+the composer; only bet-on-your-agent's digits 1 to 5 answer from there. Accepted drafts land under
 `.waitroom/ship`, a folder that ignores itself in git, with the exact command
 to run printed in the transcript — nothing here ever runs on your behalf.
 **A turn that changed nothing gets no row**, even with earlier changes still
 uncommitted.
 
-**wait-breathe** is the one mod that starts off — send `/breathe` to turn it
-on (see [Install](#install) above). Once it is on, a single turn running past
-`longTurnSeconds` (90s by default) gets one quiet line, never more than one
-every ten minutes:
+### wait-breathe · you
 
-```
- breathe  4-4-4 breathing: in for 4, hold for 4, out for 4 b: Took it
-```
+wait-breathe is the one plugin that starts off. Send `/breathe` to turn it on
+(see [Install](#install) above); it answers `wait-breathe: on · one quiet nudge
+once a turn runs 90s · /breathe again turns it off`. Once it is on, a single
+turn running past `longTurnSeconds` (90s by default) gets one quiet line, never
+more than one every ten minutes:
 
-No health claim, no "you should" — just the action, rotating so it is never
-the same one twice running. `/breathe` turns it on, and off again; the same
-switch is *Enable the breathing nudges* under `/plugin` → wait-breathe.
+<img src="docs/breathe-nudge.svg" width="600" alt="The row above the prompt: a grey breathe tag, posture check: reset how you are sitting, and b: Took it">
 
-## What they are
+No health claim and no "you should": just the action, rotating so it is never
+the same one twice running. Its tag stays grey, the quietest thing on the
+screen. `/breathe` turns it on, and off again; the same switch is *Enable the
+breathing nudges* under `/plugin` → wait-breathe.
 
-| Mod | What it does |
-| --- | --- |
-| [**wait-review**](./wait-review) | Offers the diff the agent already wrote, one hunk at a time, and sends what you flag — with your reason — back with your next message. |
-| [**bet-on-your-agent**](./bet-on-your-agent) | Forecast how the turn will go from the row above the prompt, then see a Brier score and a calibration table that shows exactly where your confidence runs hot or cold. |
-| [**wait-ship**](./wait-ship) | Drafts the commit message, PR description and changelog entry for the turn's changes, so you can review the words the way wait-review lets you review the code. |
-| [**wait-breathe**](./wait-breathe) | A quiet reminder to take care of yourself during a long turn — a posture check, an eye break, a breath, a stretch — off by default until you turn it on. |
+## How they share the screen
+
+<img src="docs/waitroom.svg" alt="One real Claude Code screen with all of it at once: on the left, Claude's fix for the hunk flagged in the last turn, wait-ship's three Draft written lines, and below them the bet row asking Did it land? you said 90% · &quot;Fix what I flagged&quot; with 1: Landed  2: Needed fixing  0: Skip; on the right, the wait-review pane on src/client.ts +26 −4 · file 1 of 2; at the bottom, the status lines bet-on-your-agent: did it land? 1 to answer and wait-review: 2 to read">
+
+They compose rather than compete for room. **wait-review** takes the pane, and
+the other three share the row just above the prompt, one at a time: a breathe
+nudge first, then a ship offer, then the bet's question. Two sets of buttons
+never stack there; the one behind waits its turn. Above, the ship offer was
+answered a moment ago, its receipts are in the transcript, and the bet's "Did
+it land?" has the row. While a turn runs, the bet's forecast gives way only to
+a breathe nudge, since the window to call the turn closes when it lands.
 
 ## The idea behind all four
 
@@ -269,14 +292,9 @@ be abandoned mid-thought:
   moment in a long session. It is off by default because not everyone wants a
   plugin making that particular claim on their attention.
 
-They compose rather than compete for room: **wait-review** takes the pane,
-and the other three share the row just above the prompt, one at a time — a
-breathe nudge first, then a ship offer, then the bet's question — so two sets
-of buttons never stack on it; the one behind waits its turn. While a turn runs,
-the bet's forecast gives way only to a breathe nudge, since the window to call
-the turn closes when it lands. bet-on-your-agent asks what you expect from what
-Claude is writing, wait-ship hands you the words for what it just wrote, and
-wait-breathe — once you turn it on — asks something of you instead of Claude.
+bet-on-your-agent asks what you expect from what Claude is writing, wait-ship
+hands you the words for what it just wrote, and wait-breathe — once you turn it
+on — asks something of you instead of Claude.
 
 ## If a plugin shows an error
 
@@ -350,16 +368,16 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 84 tests
+claude plugin test     ./wait-review          # 85 tests
 
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 129 tests
+claude plugin test     ./bet-on-your-agent    # 130 tests
 
 claude plugin validate ./wait-ship
 claude plugin test     ./wait-ship            # 70 tests
 
 claude plugin validate ./wait-breathe
-claude plugin test     ./wait-breathe         # 27 tests
+claude plugin test     ./wait-breathe         # 28 tests
 ```
 
 Neither of those runs a real type checker, so also run `tsc` from each mod's

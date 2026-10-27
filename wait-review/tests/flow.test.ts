@@ -119,6 +119,10 @@ test('a file written with no Edit or Write call is still queued', async ($, on) 
   const ui = await mountPane($, 'terminal')
   expect(await ui.find({ text: /src\/auth\.ts/ })).toBeDefined()
   expect(await ui.find({ text: /1 to read/ })).toBeDefined()
+  // The card's counts are text, so they take text colors: the theme's diff
+  // keys are the lines' background fills, all but unreadable as text.
+  expect((await ui.find({ text: /^\+\d+$/ }))?.props.color).toBe('success')
+  expect((await ui.find({ text: /^−\d+$/ }))?.props.color).toBe('error')
 
   // Every control carries its own key, so the pane teaches the keyboard
   // instead of needing a legend.

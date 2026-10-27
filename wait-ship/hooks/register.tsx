@@ -277,7 +277,12 @@ export const register: Register = (on, options) => {
             Skip
           </Button>
         </Box>
-        <Text dimColor>Drafts — read them before using them.</Text>
+        {/* Its keys are letters, which only answer once the row holds the
+            keyboard: said in wait-review's own words, on the line the
+            drafts' caveat already had, so the row grows no taller. */}
+        <Text dimColor wrap="truncate-end">
+          ctrl+x tab to use these keys · or click them · read each draft before using it
+        </Text>
       </Box>
     )
     const beneath = await next(e).catch(() => undefined)

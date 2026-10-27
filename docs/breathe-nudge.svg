@@ -1,12 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="574.0" height="96" viewBox="0 0 574.0 96" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" width="714.4" height="45" viewBox="0 0 714.4 45" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
 <rect width="100%" height="100%" rx="8" fill="#0f1115"/>
-<rect x="14" y="14" width="70.2" height="17" fill="#44474d"/>
-<text x="14" y="26.5" fill="#ffffff" textLength="70.2" lengthAdjust="spacingAndGlyphs" font-weight="700" xml:space="preserve"> breathe </text>
-<text x="84.2" y="26.5" fill="#999999" textLength="382.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 4-4-4 breathing: in for 4, hold for 4, out for 4</text>
-<text x="466.4" y="26.5" fill="#d6d9de" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
-<text x="474.2" y="26.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">b</text>
-<text x="482.0" y="26.5" fill="#999999" textLength="70.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Took it</text>
-<text x="14" y="43.5" fill="#888888" textLength="546.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────────────────────────────────────</text>
-<text x="14" y="60.5" fill="#d6d9de" textLength="546.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">❯                                                                     </text>
-<text x="14" y="77.5" fill="#888888" textLength="546.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────────────────────────────────────</text>
+<rect x="14.0" y="14" width="70.2" height="17" fill="#505050"/>
+<text x="14.0" y="26.5" fill="#000000" font-weight="700" textLength="70.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> breathe </text>
+<text x="92.0" y="26.5" fill="#999999" textLength="312.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">posture check: reset how you are sitting</text>
+<text x="411.8" y="26.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">b</text>
+<text x="419.6" y="26.5" fill="#999999" textLength="70.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Took it</text>
+<text x="669.2" y="26.5" fill="#999999" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[-]</text>
 </svg>

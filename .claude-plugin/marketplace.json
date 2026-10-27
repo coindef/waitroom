@@ -13,17 +13,17 @@
     {
       "name": "bet-on-your-agent",
       "source": "./bet-on-your-agent",
-      "description": "Forecast how a turn will go, and see how your calibration holds up."
+      "description": "Forecast how a turn will go from the row above the prompt, and get scored on your calibration."
     },
     {
       "name": "wait-ship",
       "source": "./wait-ship",
-      "description": "Drafts the commit message, PR description and changelog entry for the turn's changes."
+      "description": "Drafts the commit message, PR description and changelog entry for the turn's changes, so you can review the words the way wait-review lets you review the code."
     },
     {
       "name": "wait-breathe",
       "source": "./wait-breathe",
-      "description": "Nudges you to take care of yourself during a long turn."
+      "description": "Shows one quiet nudge in the row above the prompt once a turn runs long — off by default until you turn it on."
     }
   ]
 }

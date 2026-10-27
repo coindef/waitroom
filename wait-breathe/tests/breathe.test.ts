@@ -57,13 +57,13 @@ test('session counts only include what happened at or after the session began', 
   expect(sessionCountsOf(history, null)).toEqual({ shown: 3, taken: 2 })
 })
 
-test('the summary line counts a singular prompt correctly and pluralizes past it', () => {
-  expect(sessionSummaryLine(1, 1)).toBe('breathe: 1 prompt, 1 taken this session')
-  expect(sessionSummaryLine(3, 2)).toBe('breathe: 3 prompts, 2 taken this session')
+test('the summary line counts a singular nudge correctly and pluralizes past it', () => {
+  expect(sessionSummaryLine(1, 1)).toBe('1 nudge, 1 taken this session')
+  expect(sessionSummaryLine(3, 2)).toBe('3 nudges, 2 taken this session')
 })
 
 test('the summary line omits the taken clause when the key is unsupported', () => {
-  expect(sessionSummaryLine(3, undefined)).toBe('breathe: 3 prompts this session')
+  expect(sessionSummaryLine(3, undefined)).toBe('3 nudges this session')
 })
 
 test('a non-positive or non-numeric config value falls back, a positive one is floored', () => {
@@ -76,12 +76,12 @@ test('a non-positive or non-numeric config value falls back, a positive one is f
 
 test('the toggle line says the state it is in now, the threshold while on, and that /breathe flips it back', () => {
   const on = toggledLine(true, 90)
-  expect(on).toContain('breathe: on')
+  expect(on).toMatch(/^on · /)
   expect(on).toContain('90s')
   expect(on).toContain('/breathe again turns it off')
 
   const off = toggledLine(false, 90)
-  expect(off).toContain('breathe: off')
+  expect(off).toMatch(/^off · /)
   expect(off).toContain('/breathe turns it on')
   // Off is just off: no threshold to wait on, nothing to talk anyone into.
   expect(off).not.toContain('90s')
@@ -95,10 +95,22 @@ test('the toggle lines make no health claim and no case for either choice', () =
 
 test('a refused toggle says nothing moved, why, and where else the setting lives', () => {
   const line = toggleRefusedLine(false, 'a managed setting owns it')
-  expect(line).toContain('breathe: still off')
+  expect(line).toMatch(/^still off · /)
   expect(line).toContain('a managed setting owns it')
   expect(line).toContain('/plugin → wait-breathe → Enable the breathing nudges')
-  expect(toggleRefusedLine(true, 'x')).toContain('breathe: still on')
+  expect(toggleRefusedLine(true, 'x')).toMatch(/^still on · /)
+})
+
+test('no line names the plugin again: the engine already prints wait-breathe: in front of it', () => {
+  for (const line of [
+    toggledLine(true, 90),
+    toggledLine(false, 90),
+    toggleRefusedLine(false, 'locked'),
+    sessionSummaryLine(2, 1),
+    sessionSummaryLine(2, undefined),
+  ]) {
+    expect(line).not.toMatch(/^(wait-)?breathe\b/)
+  }
 })
 
 test('the enabled row is found under the installed name or a working copy\'s, and nothing else', () => {

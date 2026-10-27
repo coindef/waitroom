@@ -246,7 +246,7 @@ test(
     await $.turn.complete({ turnId: 'turn-6', answer: 'done', durationMs: 5000, isAborted: false, reason: 'answer' })
     await $.session.end({ reason: 'other', sessionId: 's1', resume: { id: 's1' } } as never)
 
-    expect(logged.at(-1)).toBe('breathe: 1 prompt, 1 taken this session')
+    expect(logged.at(-1)).toBe('1 nudge, 1 taken this session')
   },
 )
 
@@ -260,7 +260,7 @@ test('a nudge left untaken still counts, as zero taken', SHORT_FUSE, async ($, o
 
   await $.session.end({ reason: 'other', sessionId: 's1', resume: { id: 's1' } } as never)
 
-  expect(logged.at(-1)).toBe('breathe: 1 prompt, 0 taken this session')
+  expect(logged.at(-1)).toBe('1 nudge, 0 taken this session')
 })
 
 test('a session with no long turn at all ends with no line', { options: { enabled: true } }, async ($, on) => {
@@ -280,7 +280,7 @@ test('/breathe turns the nudges on from the default off, in the setting the inst
 
   const reply = await $.command.run({ command: 'breathe' } as never)
 
-  expect(reply.text).toContain('breathe: on')
+  expect(reply.text).toMatch(/^on · /)
   expect(reply.text).toContain('90s')
   expect(reply.text).toContain('/breathe again turns it off')
   // One switch, not two: the same `enabled` field `/plugin` and the install screen show.
@@ -301,7 +301,7 @@ test('/breathe turns them off again when on, and a long turn is quiet after', SH
 
   const reply = await $.command.run({ command: 'breathe' } as never)
 
-  expect(reply.text).toContain('breathe: off')
+  expect(reply.text).toMatch(/^off · /)
   expect(reply.text).toContain('/breathe turns it on')
   expect(settings.set).toEqual([{ key: 'wait-breathe.enabled', value: false }])
 
@@ -319,7 +319,7 @@ test('a toggle the settings refuse changes nothing, and says so', async ($, on) 
 
   const reply = await $.command.run({ command: 'breathe' } as never)
 
-  expect(reply.text).toContain('breathe: still off')
+  expect(reply.text).toMatch(/^still off · /)
   expect(reply.text).toContain('a managed setting owns it')
   await $.turn.start({ text: 'a long one', turnId: 'turn-t3' })
   await clock.advance(5 * 60 * 1000)

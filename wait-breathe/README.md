@@ -1,5 +1,12 @@
 # wait-breathe
 
+<img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-breathe's icon: three breathing rings">
+
+One of four rooms in [waitroom](../README.md#one-family-four-rooms):
+[wait-review](../wait-review) (the diff) ·
+[bet-on-your-agent](../bet-on-your-agent) (your calibration) ·
+[wait-ship](../wait-ship) (what ships) · **wait-breathe (you)**.
+
 A Claude Code plugin that asks you, once in a while, to take care of yourself
 during a long turn. Off by default.
 
@@ -32,11 +39,10 @@ Turned on, nothing changes about a normal turn. Only once a single turn runs
 past `longTurnSeconds` (90 by default) does one line show up in the row above
 the prompt — the same row `bet-on-your-agent` and `wait-ship` use:
 
-<img src="../docs/breathe-nudge.svg" width="400" alt="The row above the prompt: a breathe tag, '4-4-4 breathing: in for 4, hold for 4, out for 4', and the b: Took it key">
+<img src="../docs/breathe-nudge.svg" width="600" alt="The row above the prompt: a grey breathe tag, posture check: reset how you are sitting, and b: Took it">
 
-```
- breathe  4-4-4 breathing: in for 4, hold for 4, out for 4 b: Took it
-```
+*A real capture (Claude Code 2.1.311), not a mockup. The tag stays grey on
+purpose: of the four rooms' tags, this one is the quietest.*
 
 That's the whole interaction. No health claim, no "you should," just the
 action: posture check, a 20-20-20 eye break, 4-4-4 breathing, or stand up and
@@ -61,7 +67,7 @@ When the session ends, one line goes into its transcript, the same way
 `wait-review` records a session's reading:
 
 ```
-breathe: 3 prompts, 2 taken this session
+wait-breathe: 3 nudges, 2 taken this session
 ```
 
 Claude Code is closing by then, so this line is for the record rather than
@@ -75,15 +81,18 @@ quiet session — nothing ran long, or the plugin is off — writes nothing.
 | `/breathe` | Turns the nudges on, or off again, and says which it is now |
 
 ```
-breathe: on · one quiet nudge once a turn runs 90s · /breathe again turns it off
-breathe: off · /breathe turns it on
+wait-breathe: on · one quiet nudge once a turn runs 90s · /breathe again turns it off
+wait-breathe: off · /breathe turns it on
 ```
+
+(Claude Code puts the plugin's name in front of every reply, so the reply
+itself starts at the state.)
 
 If the setting cannot be changed, nothing moves and the reply says so, with
 where else the switch lives:
 
 ```
-breathe: still off · the setting did not change (<the reason>) · /plugin → wait-breathe → Enable the breathing nudges
+wait-breathe: still off · the setting did not change (<the reason>) · /plugin → wait-breathe → Enable the breathing nudges
 ```
 
 Turned on, the nudges start from the next turn, not one already running.
@@ -115,7 +124,7 @@ no pane to stumble into otherwise.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 27 tests
+claude plugin test .         # 28 tests
 ```
 
 The rotation, the cooldown, the session counting and the `/breathe` reply

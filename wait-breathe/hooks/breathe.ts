@@ -50,15 +50,16 @@ export const sessionCountsOf = (
 }
 
 /**
- * The session-end line, in wait-review's style.
+ * The session-end line, in wait-review's style. The engine already puts
+ * `wait-breathe:` in front of it, so it does not name the plugin again.
  *
  * `taken` is `undefined` when the surfacing mechanism offered no key to take
- * a break with, in which case the line counts prompts shown alone.
+ * a break with, in which case the line counts nudges shown alone.
  */
 export const sessionSummaryLine = (shown: number, taken: number | undefined): string =>
   taken === undefined
-    ? `breathe: ${shown} prompt${shown === 1 ? '' : 's'} this session`
-    : `breathe: ${shown} prompt${shown === 1 ? '' : 's'}, ${taken} taken this session`
+    ? `${shown} nudge${shown === 1 ? '' : 's'} this session`
+    : `${shown} nudge${shown === 1 ? '' : 's'}, ${taken} taken this session`
 
 /** A positive whole number from config, or `fallback` for anything else. */
 export const wholePositive = (value: unknown, fallback: number): number => {
@@ -70,16 +71,17 @@ export const wholePositive = (value: unknown, fallback: number): number => {
 /**
  * What `/breathe` answers once it has flipped the setting: the state it is in
  * now, the threshold it acts on while on, and that the same command flips it
- * back — one key either way, and no reason given for either choice.
+ * back — one key either way, and no reason given for either choice. It starts
+ * at the state because the engine prints it as `wait-breathe: on · …`.
  */
 export const toggledLine = (enabled: boolean, longTurnSeconds: number): string =>
   enabled
-    ? `breathe: on · one quiet nudge once a turn runs ${longTurnSeconds}s · /breathe again turns it off`
-    : 'breathe: off · /breathe turns it on'
+    ? `on · one quiet nudge once a turn runs ${longTurnSeconds}s · /breathe again turns it off`
+    : 'off · /breathe turns it on'
 
 /** What `/breathe` answers when the setting could not be changed: nothing moved, and where else it lives. */
 export const toggleRefusedLine = (enabled: boolean, reason: string): string =>
-  `breathe: still ${enabled ? 'on' : 'off'} · the setting did not change (${reason}) · ` +
+  `still ${enabled ? 'on' : 'off'} · the setting did not change (${reason}) · ` +
   '/plugin → wait-breathe → Enable the breathing nudges'
 
 /**

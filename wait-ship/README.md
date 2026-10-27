@@ -1,5 +1,12 @@
 # wait-ship
 
+<img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-ship's icon: an outbox with an arrow rising out of it">
+
+One of four rooms in [waitroom](../README.md#one-family-four-rooms):
+[wait-review](../wait-review) (the diff) ·
+[bet-on-your-agent](../bet-on-your-agent) (your calibration) ·
+**wait-ship (what ships)** · [wait-breathe](../wait-breathe) (you).
+
 A Claude Code plugin that drafts the words around the turn's changes — the
 commit message, the PR description, the changelog entry — the moment the
 turn lands, so you can review them the way `wait-review` lets you review the
@@ -32,17 +39,15 @@ you want them. The ship is still yours.
 When a turn ends having changed anything, the row above the prompt — the same
 one `bet-on-your-agent` uses — offers the kit it drafted:
 
-<img src="../docs/ship-offer.svg" width="480" alt="The row above the prompt: a green ship tag, 'Drafts ready: feat(wait-ship): add hooks/ship.ts +2 more' with commit, PR and changelog sizes, and the a, m and s keys to accept every draft, show each on its own key, or skip">
+<img src="../docs/ship-offer.svg" width="600" alt="The row above the prompt: a green ship tag, Drafts ready: Update 2 files · commit 61B · PR 180B · changelog 55B, then a: Accept all  m: More  s: Skip, then ctrl+x tab to use these keys · or click them · read each draft before using it">
 
-```
- ship  Drafts ready: feat(wait-ship): add hooks/ship.ts +2 more · commit 412B · PR 1.1KB · changelog 180B
-a: Accept all  m: More  s: Skip
-Drafts — read them before using them.
-```
+*A real capture (Claude Code 2.1.311), not a mockup: the kit for a two-file
+change in a scratch repository.*
 
 **The keys are letters, so give the row the keys first** — `ctrl+x tab`, or a
-click — then press one. A letter typed into the composer stays in the
-composer; only `bet-on-your-agent`'s digits answer from there.
+click, as the row's own last line says, in the same words wait-review's pane
+uses — then press one. A letter typed into the composer stays in the
+composer; only `bet-on-your-agent`'s digits 1 to 5 answer from there.
 
 - **`a` accepts every drafted artifact.**
 - **`s` skips.** Nothing is written, and the row goes quiet.

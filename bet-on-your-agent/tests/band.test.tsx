@@ -209,7 +209,7 @@ test('files are counted from Edit, Write and NotebookEdit calls, the same path o
 
   const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
   // Called 2-3 and landed on exactly 3 distinct files: a right call.
-  expect(await pane.find({ text: /files called 1\/1/ })).toBeDefined()
+  expect(await pane.find({ text: /File count called right 1\/1\./ })).toBeDefined()
   await pane.unmount()
 })
 

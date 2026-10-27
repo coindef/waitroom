@@ -1,29 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
   <defs>
-    <g id="wait-review-icon">
-      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+    <g id="wait-review">
       <g stroke="#b1b9f9" stroke-width="24" stroke-linecap="round" fill="none">
-        <circle cx="216" cy="216" r="104"/>
-        <line x1="294" y1="294" x2="400" y2="400"/>
-      </g>
-      <g fill="#b1b9f9">
-        <rect x="160" y="190" width="96" height="18" rx="9"/>
-        <rect x="160" y="222" width="68" height="18" rx="9"/>
+      <circle cx="216" cy="216" r="104"/>
+      <line x1="294" y1="294" x2="400" y2="400"/>
+      <line x1="172" y1="200" x2="260" y2="200"/>
+      <line x1="172" y1="236" x2="228" y2="236"/>
       </g>
     </g>
-    <g id="bet-on-your-agent-icon">
-      <rect width="512" height="512" rx="96" fill="#0f1115"/>
-      <circle cx="256" cy="256" r="176" fill="none" stroke="#d77757" stroke-width="24"/>
-      <circle cx="256" cy="256" r="116" fill="none" stroke="#d77757" stroke-width="24"/>
-      <circle cx="256" cy="256" r="64" fill="#d77757"/>
+    <g id="bet-on-your-agent">
+      <g stroke="#d77757" stroke-width="24" stroke-linecap="round" fill="none">
+      <circle cx="256" cy="256" r="124"/>
+      <line x1="256" y1="60" x2="256" y2="132"/>
+      <line x1="256" y1="380" x2="256" y2="452"/>
+      <line x1="60" y1="256" x2="132" y2="256"/>
+      <line x1="380" y1="256" x2="452" y2="256"/>
+      </g>
+      <circle cx="256" cy="256" r="44" fill="#d77757"/>
     </g>
-    <g id="wait-ship-icon">
-      <rect width="512" height="512" rx="96" fill="#0f1115"/>
-      <path d="M 150 270 L 150 380 L 362 380 L 362 270" stroke="#4eba65" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-      <path d="M 256 110 L 330 210 L 286 210 L 286 260 L 226 260 L 226 210 L 182 210 Z" fill="#4eba65"/>
+    <g id="wait-ship">
+      <g stroke="#4eba65" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M 150 270 L 150 380 L 362 380 L 362 270"/>
+      <path d="M 256 304 L 256 116"/>
+      <path d="M 186 186 L 256 116 L 326 186"/>
+      </g>
     </g>
-    <g id="wait-breathe-icon">
-      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+    <g id="wait-breathe">
       <circle cx="256" cy="256" r="192" fill="none" stroke="#7ee8d0" stroke-width="24" opacity="0.6"/>
       <circle cx="256" cy="256" r="132" fill="none" stroke="#7ee8d0" stroke-width="24" opacity="0.8"/>
       <circle cx="256" cy="256" r="72" fill="none" stroke="#7ee8d0" stroke-width="24" opacity="1"/>
@@ -32,15 +34,306 @@
 
   <rect width="1280" height="640" fill="#0f1115"/>
 
-  <!-- four-icon lockup, centered -->
-  <svg x="288" y="128" width="152" height="152" viewBox="0 0 512 512"><use href="#wait-review-icon"/></svg>
-  <svg x="456" y="128" width="152" height="152" viewBox="0 0 512 512"><use href="#bet-on-your-agent-icon"/></svg>
-  <svg x="624" y="128" width="152" height="152" viewBox="0 0 512 512"><use href="#wait-ship-icon"/></svg>
-  <svg x="792" y="128" width="152" height="152" viewBox="0 0 512 512"><use href="#wait-breathe-icon"/></svg>
+  <text x="64" y="150" font-size="54" font-weight="600" fill="#f3f4f6">waitroom</text>
+  <text x="64" y="196" font-size="19" fill="#8b929b">Mods that make the wait on</text>
+  <text x="64" y="222" font-size="19" fill="#8b929b">a coding agent worth something.</text>
 
-  <text x="640" y="358" font-size="72" font-weight="600" fill="#f3f4f6" text-anchor="middle">waitroom</text>
-  <text x="640" y="402" font-size="26" fill="#9aa0a8" text-anchor="middle">Mods that make the wait on a coding agent worth something.</text>
+  <!-- one family, four rooms: glyph, name, room -->
+  <svg x="64" y="274" width="36" height="36" viewBox="0 0 512 512"><use href="#wait-review"/></svg>
+  <text x="116" y="294" font-size="17" fill="#d6d9de">wait-review</text>
+  <text x="116" y="314" font-size="15" fill="#8b929b">the diff</text>
+  <svg x="64" y="332" width="36" height="36" viewBox="0 0 512 512"><use href="#bet-on-your-agent"/></svg>
+  <text x="116" y="352" font-size="17" fill="#d6d9de">bet-on-your-agent</text>
+  <text x="116" y="372" font-size="15" fill="#8b929b">your calibration</text>
+  <svg x="64" y="390" width="36" height="36" viewBox="0 0 512 512"><use href="#wait-ship"/></svg>
+  <text x="116" y="410" font-size="17" fill="#d6d9de">wait-ship</text>
+  <text x="116" y="430" font-size="15" fill="#8b929b">what ships</text>
+  <svg x="64" y="448" width="36" height="36" viewBox="0 0 512 512"><use href="#wait-breathe"/></svg>
+  <text x="116" y="468" font-size="17" fill="#d6d9de">wait-breathe</text>
+  <text x="116" y="488" font-size="15" fill="#8b929b">you</text>
 
-  <text x="640" y="548" font-size="20" fill="#6b7280" text-anchor="middle">wait-review · bet-on-your-agent · wait-ship · wait-breathe</text>
-  <text x="640" y="582" font-size="20" fill="#7ee8d0" text-anchor="middle">github.com/coindef/waitroom</text>
+  <text x="64" y="586" font-size="15" fill="#5d636b">github.com/coindef/waitroom</text>
+
+  <!-- docs/waitroom.svg: a real Claude Code session, embedded as captured -->
+  <svg x="484" y="104.8" width="740" height="430.3" viewBox="0 0 1276.0 742.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+<rect width="100%" height="100%" rx="8" fill="#0f1115"/>
+<rect x="700.4" y="14" width="561.6" height="17" fill="#262626"/>
+<text x="53.0" y="26.5" fill="#8f908f" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 10 </text>
+<text x="84.2" y="26.5" fill="#f8f8f2" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   }</text>
+<text x="700.4" y="26.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1246.4" y="26.5" fill="#999999" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">✕</text>
+<rect x="700.4" y="31" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="31" width="101.4" height="17" fill="#b1b9f9"/>
+<rect x="809.6" y="31" width="452.4" height="17" fill="#262626"/>
+<text x="53.0" y="43.5" fill="#8f908f" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 11 </text>
+<text x="84.2" y="43.5" fill="#f8f8f2" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> }</text>
+<text x="700.4" y="43.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="43.5" fill="#000000" font-weight="700" textLength="101.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> wait-review </text>
+<text x="817.4" y="43.5" fill="#999999" textLength="93.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────</text>
+<text x="918.8" y="43.5" fill="#999999" textLength="70.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">2 to read</text>
+<rect x="700.4" y="48" width="561.6" height="17" fill="#262626"/>
+<text x="53.0" y="60.5" fill="#8f908f" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 12 </text>
+<text x="700.4" y="60.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="53.0" y="65" width="592.8" height="17" fill="#022800"/>
+<rect x="700.4" y="65" width="561.6" height="17" fill="#262626"/>
+<text x="53.0" y="77.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 13 +</text>
+<text x="92.0" y="77.5" fill="#75715e" textLength="553.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">// 408 (timeout) and 429 (rate limited) are transient, so they stay ret</text>
+<text x="700.4" y="77.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="77.5" fill="#d6d9de" font-weight="700" textLength="101.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">src/client.ts</text>
+<text x="809.6" y="77.5" fill="#999999" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">:1</text>
+<text x="1106.0" y="77.5" fill="#4eba65" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+26</text>
+<text x="1137.2" y="77.5" fill="#ff6b80" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">−4</text>
+<text x="1152.8" y="77.5" fill="#999999" textLength="109.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · file 1 of 2</text>
+<rect x="53.0" y="82" width="592.8" height="17" fill="#022800"/>
+<rect x="700.4" y="82" width="561.6" height="17" fill="#262626"/>
+<text x="53.0" y="94.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    +</text>
+<text x="92.0" y="94.5" fill="#75715e" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">ryable</text>
+<text x="700.4" y="94.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="700.4" y="99" width="561.6" height="17" fill="#262626"/>
+<text x="53.0" y="111.5" fill="#8f908f" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 14 </text>
+<text x="92.0" y="111.5" fill="#66d9ef" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">const</text>
+<text x="138.8" y="111.5" fill="#a6e22e" textLength="101.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">isClientError</text>
+<text x="240.2" y="111.5" fill="#f8f8f2" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> = (</text>
+<text x="271.4" y="111.5" fill="#a6e22e" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">error</text>
+<text x="310.4" y="111.5" fill="#fd971f" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: </text>
+<text x="326.0" y="111.5" fill="#a6e22e" textLength="54.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">unknown</text>
+<text x="380.6" y="111.5" fill="#f8f8f2" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">) =&gt;</text>
+<text x="700.4" y="111.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="111.5" fill="#999999" textLength="553.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────────────────────────────────────</text>
+<rect x="53.0" y="116" width="592.8" height="17" fill="#3d0100"/>
+<rect x="700.4" y="116" width="561.6" height="17" fill="#262626"/>
+<text x="53.0" y="128.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 14 -</text>
+<text x="92.0" y="128.5" fill="#f8f8f2" textLength="553.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error instanceof HttpError &amp;&amp; error.status &gt;= 400 &amp;&amp; error.status &lt; 5</text>
+<text x="700.4" y="128.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="128.5" fill="#9a9a96" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  1 </text>
+<text x="739.4" y="128.5" fill="#f8f8f2" textLength="249.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> import { retry } from './retry'</text>
+<rect x="53.0" y="133" width="592.8" height="17" fill="#3d0100"/>
+<rect x="700.4" y="133" width="561.6" height="17" fill="#262626"/>
+<text x="53.0" y="145.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    -</text>
+<text x="92.0" y="145.5" fill="#f8f8f2" textLength="553.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00                                                                     </text>
+<text x="700.4" y="145.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="145.5" fill="#9a9a96" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  2 </text>
+<rect x="53.0" y="150" width="592.8" height="17" fill="#022800"/>
+<rect x="700.4" y="150" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="150" width="553.8" height="17" fill="#3d0100"/>
+<text x="53.0" y="162.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 15 +</text>
+<text x="92.0" y="162.5" fill="#f8f8f2" textLength="62.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error </text>
+<text x="154.4" y="162.5" fill="#f92672" textLength="78.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">instanceof</text>
+<text x="240.2" y="162.5" fill="#a6e22e" textLength="70.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">HttpError</text>
+<text x="310.4" y="162.5" fill="#f8f8f2" textLength="335.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> &amp;&amp;                                        </text>
+<text x="700.4" y="162.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="162.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  3 -</text>
+<text x="747.2" y="162.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export const fetchJson = async (url: string) =&gt; {                 </text>
+<rect x="53.0" y="167" width="592.8" height="17" fill="#022800"/>
+<rect x="700.4" y="167" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="167" width="553.8" height="17" fill="#3d0100"/>
+<text x="53.0" y="179.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 16 +</text>
+<text x="92.0" y="179.5" fill="#f8f8f2" textLength="62.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error.</text>
+<text x="154.4" y="179.5" fill="#ffffff" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">status</text>
+<text x="201.2" y="179.5" fill="#f8f8f2" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> &gt;= </text>
+<text x="232.4" y="179.5" fill="#be84ff" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">400</text>
+<text x="255.8" y="179.5" fill="#f8f8f2" textLength="390.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> &amp;&amp;                                               </text>
+<text x="700.4" y="179.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="179.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  4 -</text>
+<text x="747.2" y="179.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  const sent = await fetch(url)                                   </text>
+<rect x="53.0" y="184" width="592.8" height="17" fill="#022800"/>
+<rect x="700.4" y="184" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="184" width="553.8" height="17" fill="#3d0100"/>
+<text x="53.0" y="196.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 17 +</text>
+<text x="92.0" y="196.5" fill="#f8f8f2" textLength="62.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error.</text>
+<text x="154.4" y="196.5" fill="#ffffff" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">status</text>
+<text x="201.2" y="196.5" fill="#f8f8f2" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> &lt; </text>
+<text x="224.6" y="196.5" fill="#be84ff" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">500</text>
+<text x="248.0" y="196.5" fill="#f8f8f2" textLength="397.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> &amp;&amp;                                                </text>
+<text x="700.4" y="196.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="196.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  5 -</text>
+<text x="747.2" y="196.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  if (!sent.ok) return retry(() =&gt; fetchJson(url))                </text>
+<rect x="53.0" y="201" width="592.8" height="17" fill="#022800"/>
+<rect x="700.4" y="201" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="201" width="553.8" height="17" fill="#3d0100"/>
+<text x="53.0" y="213.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 18 +</text>
+<text x="92.0" y="213.5" fill="#f8f8f2" textLength="62.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error.</text>
+<text x="154.4" y="213.5" fill="#ffffff" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">status</text>
+<text x="201.2" y="213.5" fill="#f8f8f2" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> !== </text>
+<text x="240.2" y="213.5" fill="#be84ff" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">408</text>
+<text x="263.6" y="213.5" fill="#f8f8f2" textLength="382.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> &amp;&amp;                                              </text>
+<text x="700.4" y="213.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="213.5" fill="#dc5a5a" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  6 -</text>
+<text x="747.2" y="213.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  return sent.json()                                              </text>
+<rect x="53.0" y="218" width="592.8" height="17" fill="#022800"/>
+<rect x="700.4" y="218" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="218" width="553.8" height="17" fill="#022800"/>
+<text x="53.0" y="230.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 19 +</text>
+<text x="92.0" y="230.5" fill="#f8f8f2" textLength="62.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error.</text>
+<text x="154.4" y="230.5" fill="#ffffff" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">status</text>
+<text x="201.2" y="230.5" fill="#f8f8f2" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> !== </text>
+<text x="240.2" y="230.5" fill="#be84ff" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">429</text>
+<text x="700.4" y="230.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="230.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  3 +</text>
+<text x="747.2" y="230.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export class HttpError extends Error {                            </text>
+<rect x="700.4" y="235" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="235" width="553.8" height="17" fill="#022800"/>
+<text x="53.0" y="247.5" fill="#8f908f" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 20 </text>
+<text x="700.4" y="247.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="247.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  4 +</text>
+<text x="747.2" y="247.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  status: number                                                  </text>
+<rect x="700.4" y="252" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="252" width="553.8" height="17" fill="#022800"/>
+<text x="53.0" y="264.5" fill="#8f908f" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 21 </text>
+<text x="92.0" y="264.5" fill="#f92672" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export</text>
+<text x="146.6" y="264.5" fill="#66d9ef" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">const</text>
+<text x="193.4" y="264.5" fill="#a6e22e" textLength="70.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">fetchJson</text>
+<text x="263.6" y="264.5" fill="#f8f8f2" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> = (</text>
+<text x="294.8" y="264.5" fill="#a6e22e" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">url</text>
+<text x="318.2" y="264.5" fill="#fd971f" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: </text>
+<text x="333.8" y="264.5" fill="#a6e22e" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">string</text>
+<text x="380.6" y="264.5" fill="#f8f8f2" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">) =&gt;</text>
+<text x="700.4" y="264.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="264.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  5 +</text>
+<rect x="700.4" y="269" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="269" width="553.8" height="17" fill="#022800"/>
+<text x="53.0" y="281.5" fill="#8f908f" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 22 </text>
+<text x="107.6" y="281.5" fill="#a6e22e" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">retry</text>
+<text x="146.6" y="281.5" fill="#f8f8f2" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">(</text>
+<text x="700.4" y="281.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="281.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  6 +</text>
+<text x="747.2" y="281.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  constructor(status: number, url: string) {                      </text>
+<rect x="700.4" y="286" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="286" width="553.8" height="17" fill="#022800"/>
+<text x="700.4" y="298.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="298.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  7 +</text>
+<text x="747.2" y="298.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    super(`HTTP ${status} for ${url}`)                            </text>
+<rect x="700.4" y="303" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="303" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="315.5" fill="#ffffff" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⏺</text>
+<text x="21.8" y="315.5" fill="#d6d9de" textLength="257.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> I fixed the one flagged hunk in </text>
+<text x="279.2" y="315.5" fill="#b1b9f9" textLength="101.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">src/client.ts</text>
+<text x="380.6" y="315.5" fill="#d6d9de" textLength="319.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">. 408 and 429 are now retried, and       </text>
+<text x="700.4" y="315.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="315.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  8 +</text>
+<text x="747.2" y="315.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    this.name = 'HttpError'                                       </text>
+<rect x="700.4" y="320" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="320" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="332.5" fill="#d6d9de" textLength="686.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  everything else in the 4xx range still fails on the first attempt.                    </text>
+<text x="700.4" y="332.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="332.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  9 +</text>
+<text x="747.2" y="332.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    this.status = status                                          </text>
+<rect x="700.4" y="337" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="337" width="553.8" height="17" fill="#022800"/>
+<text x="700.4" y="349.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="349.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 10 +</text>
+<text x="747.2" y="349.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  }                                                               </text>
+<rect x="700.4" y="354" width="561.6" height="17" fill="#262626"/>
+<text x="29.6" y="366.5" fill="#b1b9f9" textLength="101.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">isClientError</text>
+<text x="131.0" y="366.5" fill="#d6d9de" textLength="569.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> now excludes 408 and 429, with a one-line comment saying why. I haven't </text>
+<text x="700.4" y="366.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="366.5" fill="#9a9a96" textLength="31.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 11 </text>
+<text x="739.4" y="366.5" fill="#f8f8f2" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> }</text>
+<rect x="700.4" y="371" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="371" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="383.5" fill="#d6d9de" textLength="686.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  run anything, so this is checked by reading only.                                     </text>
+<text x="700.4" y="383.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="383.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 12 +</text>
+<rect x="700.4" y="388" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="388" width="553.8" height="17" fill="#022800"/>
+<text x="700.4" y="400.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="400.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 13 +</text>
+<text x="747.2" y="400.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">// 408 (timeout) and 429 (rate limited) are transient, so they sta</text>
+<rect x="700.4" y="405" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="405" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="417.5" fill="#999999" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">✻</text>
+<text x="29.6" y="417.5" fill="#999999" textLength="241.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Crunched for 3s · done 11:19 PM</text>
+<text x="700.4" y="417.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="417.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    +</text>
+<text x="747.2" y="417.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">y retryable                                                       </text>
+<rect x="700.4" y="422" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="422" width="553.8" height="17" fill="#022800"/>
+<text x="700.4" y="434.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="434.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 14 +</text>
+<text x="747.2" y="434.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">const isClientError = (error: unknown) =&gt;                         </text>
+<rect x="700.4" y="439" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="439" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="451.5" fill="#999999" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⏺</text>
+<text x="29.6" y="451.5" fill="#999999" textLength="592.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">wait-ship: Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F </text>
+<text x="700.4" y="451.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="451.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 15 +</text>
+<text x="747.2" y="451.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error instanceof HttpError &amp;&amp;                                   </text>
+<rect x="700.4" y="456" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="456" width="553.8" height="17" fill="#022800"/>
+<text x="29.6" y="468.5" fill="#999999" textLength="257.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">.waitroom/ship/COMMIT_EDITMSG.txt</text>
+<text x="700.4" y="468.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="468.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 16 +</text>
+<text x="747.2" y="468.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error.status &gt;= 400 &amp;&amp;                                          </text>
+<rect x="700.4" y="473" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="473" width="553.8" height="17" fill="#022800"/>
+<text x="700.4" y="485.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="485.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 17 +</text>
+<text x="747.2" y="485.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error.status &lt; 500 &amp;&amp;                                           </text>
+<rect x="700.4" y="490" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="490" width="553.8" height="17" fill="#022800"/>
+<text x="14.0" y="502.5" fill="#999999" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⏺</text>
+<text x="29.6" y="502.5" fill="#999999" textLength="608.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">wait-ship: Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file</text>
+<text x="700.4" y="502.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="502.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 18 +</text>
+<text x="747.2" y="502.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error.status !== 408 &amp;&amp;                                         </text>
+<rect x="700.4" y="507" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="507" width="553.8" height="17" fill="#022800"/>
+<text x="29.6" y="519.5" fill="#999999" textLength="195.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">.waitroom/ship/PR_BODY.md</text>
+<text x="700.4" y="519.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="519.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 19 +</text>
+<text x="747.2" y="519.5" fill="#f8f8f2" textLength="514.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  error.status !== 429                                            </text>
+<rect x="700.4" y="524" width="7.8" height="17" fill="#262626"/>
+<rect x="708.2" y="524" width="553.8" height="17" fill="#022800"/>
+<text x="700.4" y="536.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="536.5" fill="#50c850" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 20 +</text>
+<rect x="700.4" y="541" width="561.6" height="17" fill="#262626"/>
+<text x="14.0" y="553.5" fill="#999999" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⏺</text>
+<text x="29.6" y="553.5" fill="#999999" textLength="530.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">wait-ship: Draft written: .waitroom/ship/CHANGELOG_ENTRY.md — paste </text>
+<text x="700.4" y="553.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="553.5" fill="#999999" textLength="124.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">lines 1–24 of 33</text>
+<text x="1191.8" y="553.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">j</text>
+<text x="1199.6" y="553.5" fill="#d6d9de" textLength="62.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: more ↓</text>
+<rect x="700.4" y="558" width="561.6" height="17" fill="#262626"/>
+<text x="29.6" y="570.5" fill="#999999" textLength="397.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">.waitroom/ship/CHANGELOG_ENTRY.md into CHANGELOG.md</text>
+<text x="700.4" y="570.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="14.0" y="575" width="39.0" height="17" fill="#d77757"/>
+<rect x="700.4" y="575" width="561.6" height="17" fill="#262626"/>
+<text x="14.0" y="587.5" fill="#000000" font-weight="700" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> bet </text>
+<text x="60.8" y="587.5" fill="#d6d9de" font-weight="700" textLength="93.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Did it land?</text>
+<text x="162.2" y="587.5" fill="#999999" textLength="273.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">you said 90% · "Fix what I flagged"</text>
+<text x="669.2" y="587.5" fill="#999999" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[-]</text>
+<text x="700.4" y="587.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="587.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">o</text>
+<text x="716.0" y="587.5" fill="#999999" textLength="101.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Looks right</text>
+<text x="833.0" y="587.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">f</text>
+<text x="840.8" y="587.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Flag</text>
+<text x="903.2" y="587.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">l</text>
+<text x="911.0" y="587.5" fill="#999999" textLength="54.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Later</text>
+<text x="981.2" y="587.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">x</text>
+<text x="989.0" y="587.5" fill="#999999" textLength="85.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Skip file</text>
+<text x="1090.4" y="587.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">u</text>
+<text x="1098.2" y="587.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Undo</text>
+<rect x="700.4" y="592" width="561.6" height="17" fill="#262626"/>
+<text x="14.0" y="604.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1</text>
+<text x="21.8" y="604.5" fill="#d6d9de" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: </text>
+<text x="37.4" y="604.5" fill="#4eba65" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Landed</text>
+<text x="99.8" y="604.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">2</text>
+<text x="107.6" y="604.5" fill="#d6d9de" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: </text>
+<text x="123.2" y="604.5" fill="#ffc107" textLength="101.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Needed fixing</text>
+<text x="240.2" y="604.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0</text>
+<text x="248.0" y="604.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Skip</text>
+<text x="700.4" y="604.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="708.2" y="604.5" fill="#999999" textLength="468.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">/wait-review or ctrl+x tab to use these keys · or click them</text>
+<rect x="700.4" y="609" width="561.6" height="17" fill="#262626"/>
+<text x="700.4" y="621.5" fill="#87888b" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="14.0" y="638.5" fill="#888888" textLength="1248.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────</text>
+<text x="14.0" y="655.5" fill="#d6d9de" textLength="15.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">❯ </text>
+<text x="29.6" y="655.5" fill="#7c7f84" textLength="85.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">commit this</text>
+<text x="14.0" y="672.5" fill="#888888" textLength="1248.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────</text>
+<text x="29.6" y="689.5" fill="#ffc107" textLength="351.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⚠ bet-on-your-agent: did it land? 1 to answer</text>
+<text x="29.6" y="706.5" fill="#ffc107" textLength="187.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⚠ wait-review: 2 to read</text>
+<text x="29.6" y="723.5" fill="#af87ff" textLength="140.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">⏵⏵ accept edits on</text>
+<text x="170.0" y="723.5" fill="#999999" textLength="163.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> (shift+tab to cycle)</text>
+  </svg>
+  <rect x="484" y="104.8" width="740" height="430.3" rx="5" fill="none" stroke="#2a2e35"/>
 </svg>

@@ -912,6 +912,18 @@ export const headline = (found: Report): string => {
   return 'Your forecasts match what happens.'
 }
 
+/**
+ * The headline as the status line says it: a lowercase fragment that ends on
+ * where to read more, like every other status line in the family
+ * (`type 1–5 to call this turn`, wait-review's `3 to read`). The engine puts
+ * the plugin's name in front, so the sentence's capital and full stop go.
+ */
+export const statusHeadline = (found: Report): string => {
+  const said = headline(found).replace(/\.$/, '')
+
+  return `${said.charAt(0).toLowerCase()}${said.slice(1)} · /bet`
+}
+
 /** The column heading the calibration rows line up under. */
 export const CALIBRATION_HEAD = ' said     actual   turns'
 
@@ -972,7 +984,7 @@ export const asText = (found: Report, rankUp?: RankChange, showBadges = true): s
     `Rank: ${found.rank}.`,
   ]
 
-  if (rankUp) lines.push(`Rank up: ${rankUp.from} -> ${rankUp.to}`)
+  if (rankUp) lines.push(`Rank up: ${rankUp.from} → ${rankUp.to}`)
 
   if (found.rows.length > 0) {
     lines.push('', CALIBRATION_HEAD)

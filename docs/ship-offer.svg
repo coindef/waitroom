@@ -1,18 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="847.0" height="130" viewBox="0 0 847.0 130" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" width="714.4" height="79" viewBox="0 0 714.4 79" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
 <rect width="100%" height="100%" rx="8" fill="#0f1115"/>
-<rect x="14" y="14" width="46.8" height="17" fill="#4eba65"/>
-<text x="14" y="26.5" fill="#000000" textLength="46.8" lengthAdjust="spacingAndGlyphs" font-weight="700" xml:space="preserve"> ship </text>
+<rect x="14.0" y="14" width="46.8" height="17" fill="#4eba65"/>
+<text x="14.0" y="26.5" fill="#000000" font-weight="700" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ship </text>
 <text x="60.8" y="26.5" fill="#d6d9de" textLength="117.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Drafts ready: </text>
-<text x="177.8" y="26.5" fill="#d6d9de" textLength="327.6" lengthAdjust="spacingAndGlyphs" font-weight="700" xml:space="preserve">feat(wait-ship): add hooks/ship.ts +2 more</text>
-<text x="505.40000000000003" y="26.5" fill="#999999" textLength="327.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · commit 412B · PR 1.1KB · changelog 180B</text>
-<text x="14" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">a</text>
+<text x="177.8" y="26.5" fill="#d6d9de" font-weight="700" textLength="109.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Update 2 files</text>
+<text x="287.0" y="26.5" fill="#999999" textLength="304.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · commit 61B · PR 180B · changelog 55B</text>
+<text x="669.2" y="26.5" fill="#999999" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[-]</text>
+<text x="14.0" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">a</text>
 <text x="21.8" y="43.5" fill="#d6d9de" textLength="109.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Accept all  </text>
 <text x="131.0" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">m</text>
-<text x="138.8" y="43.5" fill="#999999" textLength="62.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: More  </text>
+<text x="138.8" y="43.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: More</text>
 <text x="201.2" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">s</text>
 <text x="209.0" y="43.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Skip</text>
-<text x="14" y="60.5" fill="#999999" textLength="288.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Drafts — read them before using them.</text>
-<text x="14" y="77.5" fill="#888888" textLength="819.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">─────────────────────────────────────────────────────────────────────────────────────────────────────────</text>
-<text x="14" y="94.5" fill="#d6d9de" textLength="819.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">❯                                                                                                        </text>
-<text x="14" y="111.5" fill="#888888" textLength="819.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">─────────────────────────────────────────────────────────────────────────────────────────────────────────</text>
+<text x="14.0" y="60.5" fill="#999999" textLength="608.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">ctrl+x tab to use these keys · or click them · read each draft before using it</text>
 </svg>

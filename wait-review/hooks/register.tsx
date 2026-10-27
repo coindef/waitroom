@@ -603,12 +603,11 @@ export const register: Register = (on, options) => {
       // closes, where nobody reads it, and shows only on a resume.
       const stats = await read($, session)
       const hasSessionActivity = stats.read > 0 || stats.skipped > 0
+      // Written the way the live controls draw themselves (`o: Looks right`),
+      // so the legend is the row the person meets one turn later, not a gloss.
       const key = (letter: string, does: string) => (
         <Text>
-          <Text color="suggestion" weight="bold">
-            {letter}
-          </Text>{' '}
-          <Text dimColor>{does}</Text>
+          <Text color="suggestion">{letter}:</Text> <Text dimColor>{does}</Text>
         </Text>
       )
 
@@ -626,10 +625,10 @@ export const register: Register = (on, options) => {
                 </Text>
               </Box>
               <Box columnGap={2} flexWrap="wrap">
-                {key('o', 'looks right')}
-                {key('f', 'flag it for Claude')}
-                {key('l', 'later')}
-                {key('x', 'skip the file')}
+                {key('o', 'Looks right')}
+                {key('f', 'Flag')}
+                {key('l', 'Later')}
+                {key('x', 'Skip file')}
               </Box>
             </Box>
           ) : (
@@ -699,8 +698,11 @@ export const register: Register = (on, options) => {
             </Text>
             <Box flexShrink={0}>
               <Text tabular>
-                <Text color="diffAdded">+{current.added}</Text>{' '}
-                <Text color="diffRemoved">−{current.removed}</Text>
+                {/* Text colors, not `diffAdded`/`diffRemoved`: those are the
+                    diff lines' background fills, and as text on the pane they
+                    measured #225c2b and #7a2936 live, all but unreadable. */}
+                <Text color="success">+{current.added}</Text>{' '}
+                <Text color="error">−{current.removed}</Text>
                 {where.ofFiles > 1 && (
                   <Text dimColor>
                     {' '}

@@ -61,6 +61,7 @@ import {
   shortAsk,
   skipVerdict,
   startsIn,
+  statusHeadline,
   undoVerdict,
   VERDICT_CHROME,
   VERDICT_WINDOW_MS,
@@ -406,6 +407,15 @@ test('the headline says the lean in words before any score', async () => {
   expect(headline(report(misses(4)))).toBe('Calibrating: 4 of 5 calls scored.')
 })
 
+test('the status line says the headline as a lowercase fragment ending on /bet, like the others', async () => {
+  const misses = (n: number) => Array.from({ length: n }, () => turn({ saidConfidence: 0.9, landed: false }))
+
+  expect(statusHeadline(report(misses(5)))).toBe('you run 90 points overconfident · /bet')
+  expect(statusHeadline(report(misses(4)))).toBe('calibrating: 4 of 5 calls scored · /bet')
+  // The pane and /bet keep the sentence; only the status line is a fragment.
+  expect(headline(report(misses(4)))).toBe('Calibrating: 4 of 5 calls scored.')
+})
+
 test('an ask is flattened to one line and cut to the room there is', async () => {
   expect(shortAsk('  add   the\n retry logic ')).toBe('add the retry logic')
   expect(shortAsk('a'.repeat(80)).length).toBe(48)
@@ -636,7 +646,7 @@ test('a miss at the end breaks the streak back to zero, whatever came before', a
 test('a rank climb prints one celebratory line in the report', async () => {
   const found = report(Array.from({ length: 5 }, () => turn({ saidConfidence: 0.9, landed: true })))
 
-  expect(asText(found, { from: 'Silver', to: 'Gold' })).toContain('Rank up: Silver -> Gold')
+  expect(asText(found, { from: 'Silver', to: 'Gold' })).toContain('Rank up: Silver → Gold')
   expect(asText(found)).not.toContain('Rank up')
 })
 

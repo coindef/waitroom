@@ -1,5 +1,12 @@
 # wait-review
 
+<img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-review's icon: a magnifying glass over two lines of text">
+
+One of four rooms in [waitroom](../README.md#one-family-four-rooms):
+**wait-review (the diff)** ·
+[bet-on-your-agent](../bet-on-your-agent) (your calibration) ·
+[wait-ship](../wait-ship) (what ships) · [wait-breathe](../wait-breathe) (you).
+
 A Claude Code plugin that turns the wait while Claude works into incremental
 review of the diff it has already written.
 
@@ -177,13 +184,15 @@ it still draws as a diff. Reading to the end is not required before deciding.
 
 ## What the pane looks like
 
-<img src="../docs/paging.svg" width="480" alt="The review pane mid-page through src/retry.ts, lines 1 to 17 of 29, controls lit, one hunk flagged">
+<img src="../docs/paging.svg" width="490" alt="The review pane mid-page through src/retry.ts +20 −6, lines 1–15 of 28, controls lit, one hunk flagged">
 
-A real capture. The header carries the pane's name, a bar that fills as you
-read, and the counts — counts that are zero are left out. Under it, the hunk's
-`path:line` and its `+`/`−` counts, then the diff. Each control carries its own
-key, so there is no legend to learn, and the controls are dim until the pane
-holds the keyboard: lit, `Looks right` is green and `Flag` amber, so a glance
+A real capture (Claude Code 2.1.311), not a mockup. The header carries the
+pane's name, a bar that fills as you read, and the counts — counts that are
+zero are left out. Under it, the hunk's `path:line` and its `+`/`−` counts in
+green and red, then the diff. Each control carries its own key, so there is no
+legend to learn; before anything has landed, the empty pane lists the same
+keys in the same form (`o: Looks right  f: Flag  l: Later  x: Skip file`). The
+controls are dim until the pane holds the keyboard: lit, `Looks right` is green and `Flag` amber, so a glance
 says where a letter will land. Read to the end and it says `✓ All caught up`,
 with the session's one line under it.
 
@@ -233,7 +242,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 84 tests
+claude plugin test .         # 85 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="714.4" height="62" viewBox="0 0 714.4 62" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+<rect width="100%" height="100%" rx="8" fill="#0f1115"/>
+<rect x="14.0" y="14" width="39.0" height="17" fill="#d77757"/>
+<text x="14.0" y="26.5" fill="#000000" font-weight="700" textLength="39.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> bet </text>
+<text x="53.0" y="26.5" fill="#d6d9de" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Will </text>
+<text x="99.8" y="26.5" fill="#999999" textLength="413.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">"In src/retry.ts, rewrite retry to take an options…" </text>
+<text x="513.2" y="26.5" fill="#d6d9de" textLength="156.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">land first try?     </text>
+<text x="669.2" y="26.5" fill="#999999" textLength="23.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[-]</text>
+<text x="14.0" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1</text>
+<text x="21.8" y="43.5" fill="#d6d9de" textLength="54.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: 50%  </text>
+<text x="76.4" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">2</text>
+<text x="84.2" y="43.5" fill="#d6d9de" textLength="54.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: 65%  </text>
+<text x="138.8" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">3</text>
+<text x="146.6" y="43.5" fill="#d6d9de" textLength="54.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: 80%  </text>
+<text x="201.2" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">4</text>
+<text x="209.0" y="43.5" fill="#d6d9de" textLength="54.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: 90%  </text>
+<text x="263.6" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">5</text>
+<text x="271.4" y="43.5" fill="#d6d9de" textLength="54.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: 95%  </text>
+<text x="326.0" y="43.5" fill="#b1b9f9" textLength="7.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0</text>
+<text x="333.8" y="43.5" fill="#999999" textLength="46.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">: Skip</text>
+</svg>

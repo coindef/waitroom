@@ -50,6 +50,7 @@ import {
   setVerdict,
   shortAsk,
   skipVerdict,
+  statusHeadline,
   undoVerdict,
   VERDICT_CHROME,
 } from './bet'
@@ -197,9 +198,7 @@ const showStatus = async ($: EngineInterface) => {
 
       return
     }
-    $.ui.status(
-      found.brier === undefined ? undefined : `${headline(found).replace(/\.$/, '')} · /bet`,
-    )
+    $.ui.status(found.brier === undefined ? undefined : statusHeadline(found))
   } catch {
     // Nothing to do: the record is still kept, only unshown.
   }
@@ -851,12 +850,12 @@ export const register: Register = (on, options) => {
             </Text>
             {found.files && (
               <Text dimColor>
-                files called {found.files.right}/{found.files.of}
+                File count called right {found.files.right}/{found.files.of}.
               </Text>
             )}
             {found.bonus && (
               <Text dimColor>
-                Bonus: {found.bonus.right}/{found.bonus.of} correct
+                Bonus: {found.bonus.right}/{found.bonus.of} correct.
               </Text>
             )}
           </Box>

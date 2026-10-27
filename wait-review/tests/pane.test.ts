@@ -38,6 +38,31 @@ test('the pane draws on every surface, and says so when there is nothing to read
   }
 })
 
+test('the first-run legend is written the way the live controls draw themselves', async $ => {
+  const ui = await $.ui.mount({
+    plugin: 'wait-review',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'wait-review',
+    props: PANE_PROPS,
+    viewport: { columns: 100, rows: 30 },
+  })
+
+  // `k: Label`, the labels the buttons carry one turn later, never a gloss of them.
+  for (const [letter, label] of [
+    ['o', 'Looks right'],
+    ['f', 'Flag'],
+    ['l', 'Later'],
+    ['x', 'Skip file'],
+  ] as const) {
+    expect(await ui.find({ text: `${letter}:` })).toBeDefined()
+    expect(await ui.find({ text: label })).toBeDefined()
+  }
+  expect(await ui.find({ text: /flag it for Claude|skip the file|looks right/ })).toBeUndefined()
+
+  await ui.unmount()
+})
+
 test('the pane asks the engine for no element the surface does not have', async $ => {
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({
