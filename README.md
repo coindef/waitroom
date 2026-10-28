@@ -43,6 +43,15 @@ claude plugin marketplace add coindef/waitroom && claude plugin install waitroom
 ```
 
 That installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe.
+
+Optional — turn-end file list (not in the four-room install):
+
+```sh
+claude plugin install wait-changed@waitroom
+```
+
+After a turn that changed files, lists them above the prompt. Read-only. Skip if you only want the four rooms. [What it shows](./wait-changed).
+
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
 wait-breathe stays off until you send `/breathe`. The installer's `userConfig
@@ -70,14 +79,6 @@ claude plugin install wait-breathe@waitroom
 The marketplace add in the line above still comes first. At the prompt, each
 of those is its own message: `/plugin install wait-review@waitroom`, and the
 same shape for the other three.
-
-### Also: wait-changed
-
-Optional. [What it shows](./wait-changed).
-
-```sh
-claude plugin install wait-changed@waitroom
-```
 
 Every plugin here needs **Claude Code 2.1.291 or later** — `claude --version` says which you
 have, `claude update` moves you on. An older build installs it without

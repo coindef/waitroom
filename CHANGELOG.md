@@ -3,6 +3,7 @@
 ## waitroom 0.1.0
 
 - **One install for the four rooms.** `claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom` installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Each room still installs on its own. wait-changed stays a separate install. wait-breathe stays off until `/breathe`.
+- **Optional wait-changed is named under that one-liner.** `claude plugin install wait-changed@waitroom` lists the files a turn changed. It is not in the four-room install.
 
 ## wait-changed 0.1.0
 

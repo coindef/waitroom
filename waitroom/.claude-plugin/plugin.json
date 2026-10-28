@@ -2,7 +2,7 @@
   "name": "waitroom",
   "displayName": "Four rooms",
   "version": "0.1.0",
-  "description": "Installs the four rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe.",
+  "description": "Installs the four rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Optional — turn-end file list, not in the four-room install: claude plugin install wait-changed@waitroom.",
   "author": {
     "name": "coindef"
   },
