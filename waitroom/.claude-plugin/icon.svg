@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Waitroom C: Terminal blob — mint character + coffee + › badge -->
+  <rect width="512" height="512" rx="96" fill="#0f1115"/>
+
+  <!-- mint blob body -->
+  <ellipse cx="256" cy="275" rx="158" ry="148" fill="#7ee8d0"/>
+  <!-- blush -->
+  <circle cx="188" cy="285" r="18" fill="#ffaab0" opacity="0.85"/>
+  <circle cx="324" cy="285" r="18" fill="#ffaab0" opacity="0.85"/>
+  <!-- eyes -->
+  <circle cx="210" cy="235" r="22" fill="#1e222a"/>
+  <circle cx="302" cy="235" r="22" fill="#1e222a"/>
+  <circle cx="218" cy="228" r="7" fill="#f3f4f6"/>
+  <circle cx="310" cy="228" r="7" fill="#f3f4f6"/>
+  <!-- smile -->
+  <path d="M 220 290 Q 256 318 292 290" fill="none" stroke="#1e222a" stroke-width="12" stroke-linecap="round"/>
+
+  <!-- coffee cup -->
+  <rect x="198" y="310" width="116" height="90" rx="14" fill="#b47846"/>
+  <ellipse cx="256" cy="318" rx="52" ry="22" fill="#f3ecdc"/>
+  <rect x="210" y="330" width="92" height="12" rx="4" fill="#784b28"/>
+  <path d="M 314 340 Q 360 360 314 390" fill="none" stroke="#d77757" stroke-width="14" stroke-linecap="round"/>
+  <!-- steam -->
+  <path d="M 220 290 Q 210 260 224 240" fill="none" stroke="#c8d2d7" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+  <path d="M 256 285 Q 248 250 260 228" fill="none" stroke="#c8d2d7" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+  <path d="M 292 290 Q 302 260 288 240" fill="none" stroke="#c8d2d7" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+
+  <!-- feet -->
+  <ellipse cx="196" cy="430" rx="28" ry="16" fill="#46aa96"/>
+  <ellipse cx="316" cy="430" rx="28" ry="16" fill="#46aa96"/>
+
+  <!-- › terminal badge -->
+  <rect x="48" y="48" width="112" height="112" rx="28" fill="#2a2e3a" stroke="#b1b9f9" stroke-width="8"/>
+  <path d="M 78 78 L 118 104 L 78 130" fill="none" stroke="#b1b9f9" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="128" y="88" width="14" height="32" rx="3" fill="#7ee8d0"/>
+</svg>

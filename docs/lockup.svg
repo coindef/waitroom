@@ -1,5 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="176" viewBox="0 0 760 176" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="220" viewBox="0 0 760 220" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
   <defs>
+    <g id="mark">
+      <rect width="512" height="512" rx="96" fill="#0f1115"/>
+      <ellipse cx="256" cy="275" rx="158" ry="148" fill="#7ee8d0"/>
+      <circle cx="188" cy="285" r="18" fill="#ffaab0" opacity="0.85"/>
+      <circle cx="324" cy="285" r="18" fill="#ffaab0" opacity="0.85"/>
+      <circle cx="210" cy="235" r="22" fill="#1e222a"/>
+      <circle cx="302" cy="235" r="22" fill="#1e222a"/>
+      <circle cx="218" cy="228" r="7" fill="#f3f4f6"/>
+      <circle cx="310" cy="228" r="7" fill="#f3f4f6"/>
+      <path d="M 220 290 Q 256 318 292 290" fill="none" stroke="#1e222a" stroke-width="12" stroke-linecap="round"/>
+      <rect x="198" y="310" width="116" height="90" rx="14" fill="#b47846"/>
+      <ellipse cx="256" cy="318" rx="52" ry="22" fill="#f3ecdc"/>
+      <rect x="210" y="330" width="92" height="12" rx="4" fill="#784b28"/>
+      <path d="M 314 340 Q 360 360 314 390" fill="none" stroke="#d77757" stroke-width="14" stroke-linecap="round"/>
+      <path d="M 220 290 Q 210 260 224 240" fill="none" stroke="#c8d2d7" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+      <path d="M 256 285 Q 248 250 260 228" fill="none" stroke="#c8d2d7" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+      <path d="M 292 290 Q 302 260 288 240" fill="none" stroke="#c8d2d7" stroke-width="8" stroke-linecap="round" opacity="0.85"/>
+      <ellipse cx="196" cy="430" rx="28" ry="16" fill="#46aa96"/>
+      <ellipse cx="316" cy="430" rx="28" ry="16" fill="#46aa96"/>
+      <rect x="48" y="48" width="112" height="112" rx="28" fill="#2a2e3a" stroke="#b1b9f9" stroke-width="8"/>
+      <path d="M 78 78 L 118 104 L 78 130" fill="none" stroke="#b1b9f9" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="128" y="88" width="14" height="32" rx="3" fill="#7ee8d0"/>
+    </g>
     <g id="wait-review">
       <g stroke="#b1b9f9" stroke-width="24" stroke-linecap="round" fill="none">
       <circle cx="216" cy="216" r="104"/>
@@ -31,18 +54,16 @@
       <circle cx="256" cy="256" r="72" fill="none" stroke="#7ee8d0" stroke-width="24" opacity="1"/>
     </g>
   </defs>
-
-  <rect width="760" height="176" rx="8" fill="#0f1115"/>
-  <svg x="63" y="30" width="64" height="64" viewBox="0 0 512 512"><use href="#wait-review"/></svg>
-  <text x="95" y="126" fill="#d6d9de" text-anchor="middle">wait-review</text>
-  <text x="95" y="147" fill="#8b929b" text-anchor="middle">the diff</text>
-  <svg x="253" y="30" width="64" height="64" viewBox="0 0 512 512"><use href="#bet-on-your-agent"/></svg>
-  <text x="285" y="126" fill="#d6d9de" text-anchor="middle">bet-on-your-agent</text>
-  <text x="285" y="147" fill="#8b929b" text-anchor="middle">your calibration</text>
-  <svg x="443" y="30" width="64" height="64" viewBox="0 0 512 512"><use href="#wait-ship"/></svg>
-  <text x="475" y="126" fill="#d6d9de" text-anchor="middle">wait-ship</text>
-  <text x="475" y="147" fill="#8b929b" text-anchor="middle">what ships</text>
-  <svg x="633" y="30" width="64" height="64" viewBox="0 0 512 512"><use href="#wait-breathe"/></svg>
-  <text x="665" y="126" fill="#d6d9de" text-anchor="middle">wait-breathe</text>
-  <text x="665" y="147" fill="#8b929b" text-anchor="middle">you</text>
+  <rect width="760" height="220" rx="8" fill="#0f1115"/>
+  <svg x="28" y="28" width="72" height="72" viewBox="0 0 512 512"><use href="#mark"/></svg>
+  <text x="120" y="72" font-size="36" font-weight="700" fill="#f3f4f6">Waitroom</text>
+  <text x="120" y="96" font-size="14" fill="#8b929b">make the wait worth something</text>
+  <svg x="63" y="120" width="40" height="40" viewBox="0 0 512 512"><use href="#wait-review"/></svg>
+  <text x="83" y="180" font-size="11" fill="#d6d9de" text-anchor="middle">wait-review</text>
+  <svg x="253" y="120" width="40" height="40" viewBox="0 0 512 512"><use href="#bet-on-your-agent"/></svg>
+  <text x="273" y="180" font-size="11" fill="#d6d9de" text-anchor="middle">bet-on-your-agent</text>
+  <svg x="443" y="120" width="40" height="40" viewBox="0 0 512 512"><use href="#wait-ship"/></svg>
+  <text x="463" y="180" font-size="11" fill="#d6d9de" text-anchor="middle">wait-ship</text>
+  <svg x="633" y="120" width="40" height="40" viewBox="0 0 512 512"><use href="#wait-breathe"/></svg>
+  <text x="653" y="180" font-size="11" fill="#d6d9de" text-anchor="middle">wait-breathe</text>
 </svg>

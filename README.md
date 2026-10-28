@@ -19,7 +19,7 @@ flagged" is all the next message needs. [Full-length video](docs/demo.mp4).*
 
 ## One family, four rooms
 
-<img src="docs/lockup.svg" width="560" alt="The four plugin icons, each over its name and its room: wait-review's magnifying glass, the diff; bet-on-your-agent's target, your calibration; wait-ship's outbox, what ships; wait-breathe's breathing rings, you">
+<img src="docs/lockup.svg" width="560" alt="Waitroom mark, a mint terminal blob holding coffee with a prompt badge, beside the Waitroom wordmark, above the four room icons: wait-review, bet-on-your-agent, wait-ship, and wait-breathe">
 
 A magnifying glass for the diff, a target for your calibration, an outbox for
 what ships, and breathing rings for you, always in that order. wait-review
