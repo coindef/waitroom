@@ -34,7 +34,7 @@ export type Baseline = {
 export type DiffCard = {
   turnId: string
   rows: { path: string; hint: string }[]
-  /** Files past the glance cap; the card says `还有 N 个文件…` for this. */
+  /** Files past the glance cap; the card says `N more files…` for this. */
   overflow: number
 }
 

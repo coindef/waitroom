@@ -90,7 +90,7 @@ let enabled = true
 let locallyOff = false
 let prefLoaded = false
 let prefLoading: Promise<void> | null = null
-/** The turn whose card 关闭 already put away, so a second complete cannot bring it back. */
+/** The turn whose card Close already put away, so a second complete cannot bring it back. */
 let dismissedFor: string | null = null
 
 const silenced = (): boolean => !enabled || locallyOff
@@ -163,7 +163,7 @@ export const register: Register = (on, options) => {
   /**
    * One command, on or off: `/wait-changed` flips the same `enabled` setting
    * the install screen and `/plugin` show. Turning off also sticks when that
-   * write is refused, because 不再显示 promised the card would stay gone.
+   * write is refused, because Don't show again promised the card would stay gone.
    * Turning on clears that local preference, which is the way back when the
    * settings screen never moved.
    */
@@ -224,7 +224,7 @@ export const register: Register = (on, options) => {
    *
    * The row shows one mod at a time. A breathe nudge, which is the only thing
    * ahead of this card, keeps the row; a ship offer and the bet's question
-   * wait until 关闭 or 不再显示 clears it. Neither of those is up while a
+   * wait until Close or Don't show again clears it. Neither of those is up while a
    * turn runs, and neither is this card.
    */
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

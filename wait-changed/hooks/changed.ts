@@ -9,11 +9,11 @@ import type { FileKind, FileStat, TreeScan } from '../types'
 /** Glance cap: past this, one overflow line instead of another file row. */
 export const MAX_ROWS = 8
 
-/** Card copy, locked to the UX spec. The title is the whole title — no tag beside it. */
-export const TITLE = '这回合改了啥'
-export const SUBTITLE = '只读本地 git，未上传'
-export const DISMISS_LABEL = '关闭'
-export const DISABLE_LABEL = '不再显示'
+/** Card copy. The title is the whole title — no tag beside it. */
+export const TITLE = 'What changed this turn'
+export const SUBTITLE = 'Read-only local git — nothing uploaded'
+export const DISMISS_LABEL = 'Close'
+export const DISABLE_LABEL = "Don't show again"
 
 /**
  * The only sentence a non-git or failed diff is allowed to say.
@@ -21,12 +21,13 @@ export const DISABLE_LABEL = '不再显示'
  * v1 does not say it. A failed read stays silent, which is what the spec
  * prefers; the sentence is fixed here so a later tip cannot drift from it.
  */
-export const UNAVAILABLE_TIP = '读不到本地改动（不是 git 仓库？）— 仍可关'
+export const UNAVAILABLE_TIP = "Can't read local changes (not a git repo?) — still dismissible"
 
 const MINUS = '−'
 
-/** `还有 N 个文件…`, with the spec's ellipsis. */
-export const overflowLine = (count: number): string => `还有 ${count} 个文件…`
+/** `N more files…`, with the spec's ellipsis. One file is singular. */
+export const overflowLine = (count: number): string =>
+  `${count} more file${count === 1 ? '' : 's'}…`
 
 /**
  * The `/config` row this plugin's `enabled` field answers to: a row's key is

@@ -4,19 +4,20 @@
 
 First release: a read-only card once a Claude Code turn ends.
 
-- **`这回合改了啥`.** Filenames and a one-line hint (`+12 −3`, or `added` /
-  `deleted` / `modified` when there is no line count), at most eight files,
-  then `还有 N 个文件…`. Subtitle `只读本地 git，未上传`. No hunks.
+- **`What changed this turn`.** Filenames and a one-line hint (`+12 −3`, or
+  `added` / `deleted` / `modified` when there is no line count), at most
+  eight files, then `N more files…`. Subtitle `Read-only local git — nothing
+  uploaded`. No hunks.
 - **Only after the turn, and only when this turn changed files.** A clean
   tree, dirt that was already there, a turn still running, and a folder that
   is not a git repository all stay silent. A failed `git` read stays silent
   too.
-- **Two actions.** `关闭` dismisses this turn's card. `不再显示` turns the
+- **Two actions.** `Close` dismisses this turn's card. `Don't show again` turns the
   card off. `/wait-changed` turns it back on, and so does *Show a turn-end
   diff card* under `/plugin` → wait-changed.
 - **The shared row, under the transcript.** It does not cover Claude's reply.
   Between turns it comes ahead of a wait-ship offer and bet-on-your-agent's
-  "Did it land?"; `关闭` is what gives them the row. It is not drawn while a
+  "Did it land?"; `Close` is what gives them the row. It is not drawn while a
   turn runs.
 
 ## wait-ship 0.1.2

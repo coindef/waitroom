@@ -90,10 +90,11 @@ claude plugin install wait-changed@waitroom
 
 (Or `/plugin install wait-changed@waitroom` at the prompt.) After a turn
 ends, and only when that turn changed files, the same row lists them. The
-title is `这回合改了啥`. Each file is a path plus a short hint (`+12 −3`, or
-`modified` when there is no line count). Two actions: `关闭` dismisses this
-turn's card, and `不再显示` leaves it off. Nothing is drawn while a turn is
-still running, and a turn that changed nothing draws nothing. **On until you
+title is `What changed this turn`. Each file is a path plus a short hint
+(`+12 −3`, or `modified` when there is no line count). Two actions: `Close`
+dismisses this turn's card, and `Don't show again` leaves it off. Nothing is
+drawn while a turn is still running, and a turn that changed nothing draws
+nothing. **On until you
 turn it off.** Turn it back on with `/wait-changed`, or under `/plugin` →
 wait-changed → *Show a turn-end diff card*. If the card stays hidden after
 that switch reads as on, send `/wait-changed` once — a local preference is
@@ -282,10 +283,11 @@ breathing nudges* under `/plugin` → wait-breathe.
 ### wait-changed · what this turn changed
 
 wait-changed needs no setup. When a turn ends having changed files, the row
-above the prompt lists them under `这回合改了啥`, with `只读本地 git，未上传`
-under the title. Up to eight files, then `还有 N 个文件…`. No hunks, no
-commit, no PR. `关闭` clears this turn. `不再显示` turns the card off;
-`/wait-changed` turns it back on. A clean turn, a turn still running, and a
+above the prompt lists them under `What changed this turn`, with `Read-only
+local git — nothing uploaded` under the title. Up to eight files, then `N
+more files…`. No hunks, no commit, no PR. `Close` clears this turn. `Don't
+show again` turns the card off; `/wait-changed` turns it back on. A clean
+turn, a turn still running, and a
 folder that is not a git repository all stay silent.
 
 ## How they share the screen
@@ -296,7 +298,7 @@ They compose rather than compete for room. **wait-review** takes the pane, and
 the others share the row just above the prompt, one at a time: a breathe
 nudge first, then — once a turn has ended and it changed files —
 wait-changed's list, then a ship offer, then the bet's question. Two sets of
-buttons never stack there; the one behind waits its turn. `关闭` on the list
+buttons never stack there; the one behind waits its turn. `Close` on the list
 is what gives the ship offer the row. While a turn runs, the bet's forecast
 gives way only to a breathe nudge, since the window to call the turn closes
 when it lands, and the diff card is not drawn yet.
@@ -472,7 +474,7 @@ rather than pick a fresh one:
   neither has a mode where it does nothing; they are always on. Where
   `enabled` exists, default it to whatever keeps the mod's main claim on the
   user modest: `true` for wait-ship (drafting costs nothing until you act on
-  a draft) and for wait-changed (the list is read-only, and `不再显示` turns
+  a draft) and for wait-changed (the list is read-only, and `Don't show again` turns
   it off), `false` for wait-breathe (its claim is on your attention, not your
   screen).
 

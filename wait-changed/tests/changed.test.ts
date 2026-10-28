@@ -45,12 +45,13 @@ const scan = (files: readonly FileStat[]): TreeScan => ({ ok: true, files })
 const failed: TreeScan = { ok: false }
 
 test('the card copy is the spec copy, and nothing longer', () => {
-  expect(TITLE).toBe('这回合改了啥')
-  expect(SUBTITLE).toBe('只读本地 git，未上传')
-  expect(DISMISS_LABEL).toBe('关闭')
-  expect(DISABLE_LABEL).toBe('不再显示')
-  expect(overflowLine(3)).toBe('还有 3 个文件…')
-  expect(UNAVAILABLE_TIP).toBe('读不到本地改动（不是 git 仓库？）— 仍可关')
+  expect(TITLE).toBe('What changed this turn')
+  expect(SUBTITLE).toBe('Read-only local git — nothing uploaded')
+  expect(DISMISS_LABEL).toBe('Close')
+  expect(DISABLE_LABEL).toBe("Don't show again")
+  expect(overflowLine(1)).toBe('1 more file…')
+  expect(overflowLine(3)).toBe('3 more files…')
+  expect(UNAVAILABLE_TIP).toBe("Can't read local changes (not a git repo?) — still dismissible")
   expect(MAX_ROWS).toBe(8)
 })
 
@@ -148,7 +149,7 @@ test('nine files show eight rows and one overflow line, and eight show no overfl
   expect(nine?.rows).toHaveLength(8)
   expect(nine?.rows.map(row => row.path)).not.toContain('src/f8.ts')
   expect(nine?.overflow).toBe(1)
-  expect(overflowLine(nine?.overflow ?? 0)).toBe('还有 1 个文件…')
+  expect(overflowLine(nine?.overflow ?? 0)).toBe('1 more file…')
   expect(eight?.rows).toHaveLength(8)
   expect(eight?.overflow).toBe(0)
 })

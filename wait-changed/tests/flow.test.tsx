@@ -121,14 +121,14 @@ test('a turn that changes nothing leaves no card, and a wait never shows one', a
   await $.turn.start({ text: 'look around', turnId: 'turn-clean' })
 
   const waiting = await mountBand($, true)
-  expect(await waiting.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await waiting.find({ text: 'What changed this turn' })).toBeUndefined()
   expect(await waiting.findAll({ type: 'Button' })).toHaveLength(0)
   await waiting.unmount()
 
   await $.turn.complete(finish('turn-clean'))
   const done = await mountBand($, false)
-  expect(await done.find({ text: '这回合改了啥' })).toBeUndefined()
-  expect(await done.find({ text: '读不到本地改动' })).toBeUndefined()
+  expect(await done.find({ text: 'What changed this turn' })).toBeUndefined()
+  expect(await done.find({ text: "Can't read local changes" })).toBeUndefined()
   expect(await done.findAll({ type: 'Button' })).toHaveLength(0)
   await done.unmount()
 })
@@ -139,7 +139,7 @@ test('dirt that was already there is not this turn', async ($, on) => {
   await $.turn.complete(finish('turn-same'))
 
   const band = await mountBand($, false)
-  expect(await band.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await band.find({ text: 'What changed this turn' })).toBeUndefined()
   await band.unmount()
 })
 
@@ -149,8 +149,8 @@ test('outside a repository the turn ends silent, with no weak tip', async ($, on
   await $.turn.complete(finish('turn-norepo'))
 
   const band = await mountBand($, false)
-  expect(await band.find({ text: '这回合改了啥' })).toBeUndefined()
-  expect(await band.find({ text: '读不到本地改动（不是 git 仓库？）— 仍可关' })).toBeUndefined()
+  expect(await band.find({ text: 'What changed this turn' })).toBeUndefined()
+  expect(await band.find({ text: "Can't read local changes (not a git repo?) — still dismissible" })).toBeUndefined()
   expect(await band.findAll({ type: 'Button' })).toHaveLength(0)
   await band.unmount()
   expect(seen).toHaveLength(2)
@@ -163,7 +163,7 @@ test('a turn that changes files shows the card, and only the two actions', async
 
   // Still waiting: the card is a turn-end fact, even once the snapshot exists.
   const waiting = await mountBand($, true)
-  expect(await waiting.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await waiting.find({ text: 'What changed this turn' })).toBeUndefined()
   await waiting.unmount()
 
   await $.turn.complete(finish('turn-diff'))
@@ -174,20 +174,20 @@ test('a turn that changes files shows the card, and only the two actions', async
   await late.unmount()
 
   const band = await mountBand($, false)
-  expect(await band.find({ text: '这回合改了啥' })).toBeDefined()
-  expect(await band.find({ text: '只读本地 git，未上传' })).toBeDefined()
+  expect(await band.find({ text: 'What changed this turn' })).toBeDefined()
+  expect(await band.find({ text: 'Read-only local git — nothing uploaded' })).toBeDefined()
   expect(await band.find({ text: 'src/retry.ts' })).toBeDefined()
   expect(await band.find({ text: '+12 −3' })).toBeDefined()
-  expect(await band.find({ text: '关闭' })).toBeDefined()
-  expect(await band.find({ text: '不再显示' })).toBeDefined()
+  expect(await band.find({ text: 'Close' })).toBeDefined()
+  expect(await band.find({ text: "Don't show again" })).toBeDefined()
   const buttons = await band.findAll({ type: 'Button' })
   expect(buttons.map(one => one.key).sort()).toEqual(['disable', 'dismiss'])
-  // 未上传 is the spec's own subtitle. What must not appear is a write or a place to send the diff.
-  expect(await band.find({ text: /commit|PR body|复制全部|Accept all|打开 PR/ })).toBeUndefined()
+  // "nothing uploaded" is the subtitle. What must not appear is a write or a place to send the diff.
+  expect(await band.find({ text: /commit|PR body|copy all|Accept all|open a PR/ })).toBeUndefined()
   await band.unmount()
 })
 
-test('关闭 puts this turn’s card away and the next turn can show its own', async ($, on) => {
+test('Close puts this turn’s card away and the next turn can show its own', async ($, on) => {
   const repo: Repo = { root: ROOT, diffs: ['', RETRY, RETRY, `${RETRY}${added('src/next.ts', ['+export const n = 1'])}`] }
   engineBottom(on, repo)
   await $.turn.start({ text: 'rewrite retry', turnId: 'turn-1' })
@@ -195,7 +195,7 @@ test('关闭 puts this turn’s card away and the next turn can show its own', a
 
   const first = await mountBand($, false)
   await first.press({ key: 'dismiss' })
-  expect(await first.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await first.find({ text: 'What changed this turn' })).toBeUndefined()
   await first.unmount()
 
   const stayed = await mountBand($, false)
@@ -204,7 +204,7 @@ test('关闭 puts this turn’s card away and the next turn can show its own', a
 
   await $.turn.start({ text: 'one more file', turnId: 'turn-2' })
   const during = await mountBand($, true)
-  expect(await during.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await during.find({ text: 'What changed this turn' })).toBeUndefined()
   await during.unmount()
   await $.turn.complete(finish('turn-2'))
 
@@ -214,7 +214,7 @@ test('关闭 puts this turn’s card away and the next turn can show its own', a
   await second.unmount()
 })
 
-test('不再显示 turns the card off for later turns', async ($, on) => {
+test("Don't show again turns the card off for later turns", async ($, on) => {
   const settings: Settings = { set: [] }
   engineBottom(on, { root: ROOT, diffs: ['', RETRY, RETRY, RETRY] }, settings)
   await $.turn.start({ text: 'rewrite retry', turnId: 'turn-1' })
@@ -222,14 +222,14 @@ test('不再显示 turns the card off for later turns', async ($, on) => {
 
   const band = await mountBand($, false)
   await band.press({ key: 'disable' })
-  expect(await band.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await band.find({ text: 'What changed this turn' })).toBeUndefined()
   await band.unmount()
   expect(settings.set).toEqual([{ key: 'wait-changed.enabled', value: false }])
 
   await $.turn.start({ text: 'another', turnId: 'turn-2' })
   await $.turn.complete(finish('turn-2'))
   const later = await mountBand($, false)
-  expect(await later.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await later.find({ text: 'What changed this turn' })).toBeUndefined()
   expect(await later.findAll({ type: 'Button' })).toHaveLength(0)
   await later.unmount()
 })
@@ -243,14 +243,14 @@ test('a refused settings write still keeps the card off, and /wait-changed turns
 
   const band = await mountBand($, false)
   await band.press({ key: 'disable' })
-  expect(await band.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await band.find({ text: 'What changed this turn' })).toBeUndefined()
   await band.unmount()
   expect(settings.set).toEqual([])
 
   await $.turn.start({ text: 'still off', turnId: 'turn-2' })
   await $.turn.complete(finish('turn-2'))
   const hidden = await mountBand($, false)
-  expect(await hidden.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await hidden.find({ text: 'What changed this turn' })).toBeUndefined()
   await hidden.unmount()
 
   settings.refuse = undefined
@@ -276,7 +276,7 @@ test('nine files keep eight rows and name the rest in one line', async ($, on) =
   expect(await band.find({ text: 'src/f0.ts' })).toBeDefined()
   expect(await band.find({ text: 'src/f7.ts' })).toBeDefined()
   expect(await band.find({ text: 'src/f8.ts' })).toBeUndefined()
-  expect(await band.find({ text: '还有 1 个文件…' })).toBeDefined()
+  expect(await band.find({ text: '1 more file…' })).toBeDefined()
   await band.unmount()
 })
 
@@ -287,7 +287,7 @@ test('a subagent turn does not raise the card; the main turn’s own end does', 
   await $.turn.complete({ ...finish('sub'), agentId: 'agent-1' } as never)
 
   const mid = await mountBand($, false)
-  expect(await mid.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await mid.find({ text: 'What changed this turn' })).toBeUndefined()
   await mid.unmount()
 
   await $.turn.complete(finish('main'))
@@ -302,7 +302,7 @@ test('enabled off, or a stored disable, never reads git and never draws', { opti
   await $.turn.complete(finish('turn-off'))
 
   const band = await mountBand($, false)
-  expect(await band.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await band.find({ text: 'What changed this turn' })).toBeUndefined()
   await band.unmount()
   expect(seen).toEqual([])
 })
@@ -313,7 +313,7 @@ test('a stored disable keeps a default-on install silent', async ($, on) => {
   await $.turn.complete(finish('turn-stored'))
 
   const band = await mountBand($, false)
-  expect(await band.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await band.find({ text: 'What changed this turn' })).toBeUndefined()
   await band.unmount()
   expect(seen).toEqual([])
 })
@@ -332,7 +332,7 @@ test('/wait-changed turns a running install off, and the next turn stays silent'
   await $.turn.start({ text: 'after', turnId: 'turn-after' })
   await $.turn.complete(finish('turn-after'))
   const band = await mountBand($, false)
-  expect(await band.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await band.find({ text: 'What changed this turn' })).toBeUndefined()
   await band.unmount()
 })
 
@@ -353,7 +353,7 @@ test('a survey already up keeps the row, same as the other mods', async ($, on) 
   await $.turn.complete(finish('turn-row'))
 
   const survey = await mountBand($, false, true)
-  expect(await survey.find({ text: '这回合改了啥' })).toBeUndefined()
+  expect(await survey.find({ text: 'What changed this turn' })).toBeUndefined()
   await survey.unmount()
 })
 
@@ -379,7 +379,7 @@ test(
     await $.turn.start({ text: 'rewrite retry', turnId: 'turn-share' })
 
     const waiting = await mountBand($, true)
-    expect(await waiting.find({ text: '这回合改了啥' })).toBeUndefined()
+    expect(await waiting.find({ text: 'What changed this turn' })).toBeUndefined()
     expect(await waiting.find({ text: /posture check/ })).toBeDefined()
     await waiting.unmount()
 
@@ -387,13 +387,13 @@ test(
     const band = await mountBand($, false)
     // Breathe is ahead of this card, so a nudge that is actually drawn keeps the row.
     expect(await band.find({ text: /posture check/ })).toBeDefined()
-    expect(await band.find({ text: '这回合改了啥' })).toBeUndefined()
+    expect(await band.find({ text: 'What changed this turn' })).toBeUndefined()
     await band.unmount()
   },
 )
 
 test(
-  'between turns the card holds the row ahead of a ship offer until 关闭',
+  'between turns the card holds the row ahead of a ship offer until Close',
   {
     plugins: [
       {
@@ -422,13 +422,13 @@ test(
     await $.turn.complete(finish('turn-ship'))
 
     const band = await mountBand($, false)
-    expect(await band.find({ text: '这回合改了啥' })).toBeDefined()
+    expect(await band.find({ text: 'What changed this turn' })).toBeDefined()
     expect(await band.find({ text: /Drafts ready/ })).toBeUndefined()
     expect(await band.find({ key: 'all' })).toBeUndefined()
 
     await band.press({ key: 'dismiss' })
     expect(await band.find({ text: /Drafts ready/ })).toBeDefined()
-    expect(await band.find({ text: '这回合改了啥' })).toBeUndefined()
+    expect(await band.find({ text: 'What changed this turn' })).toBeUndefined()
     await band.unmount()
   },
 )
