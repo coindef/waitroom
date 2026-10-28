@@ -172,6 +172,8 @@ asks for the keyboard, and when that does not arrive its reply says:
 Claude’s /diff is covering this side — send /diff once to show wait-review
 ```
 
+The first time a turn writes a diff while that panel is covering the pane, one transcript line says `Claude's Diff is covering Waitroom. Send /diff once to show wait-review — Claude remembers.` It is said once.
+
 ## Giving it the keys
 
 The pane's letters only work while it holds the keyboard. Press `o` without that
@@ -261,7 +263,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 94 tests
+claude plugin test .         # 101 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

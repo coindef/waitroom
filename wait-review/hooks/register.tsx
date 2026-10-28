@@ -6,9 +6,12 @@ import type { Slice } from './diff'
 import {
   DEFAULT_IGNORE,
   DIFF_COVER_HINT,
+  DIFF_COVER_TIP,
+  DIFF_COVER_TIP_KEY,
   EMPTY_SESSION,
   FOCUS_HINT,
   filledCells,
+  diffCoverTipAction,
   isIgnored,
   isNarrowPlacement,
   linesThatFit,
@@ -382,6 +385,61 @@ const dismissFocusHint = async ($: EngineInterface) => {
 }
 
 /**
+ * Hands the keys back after a cover check that found the pane free.
+ *
+ * Asking for focus is what tells a covered pane from one that is merely
+ * unfocused. When the keys arrive, close this pane and open it again without
+ * focus, so the prompt keeps them and the first-run focus line is unchanged.
+ * Claude's own diff panel is not closed.
+ */
+const releaseProbeFocus = async ($: EngineInterface) => {
+  await $.ui.close({ id: PANE }).catch(() => undefined)
+  const opened = await $.ui.open({ id: PANE, title: 'Wait review' }).catch(() => undefined)
+  notePlacement(opened)
+}
+
+/**
+ * The first turn that writes hunks while Claude's Diff covers the pane says
+ * so once, in the transcript.
+ *
+ * The pane list cannot tell that cover from a pane that is simply unfocused,
+ * which is the same check `/wait-review` already makes. The store spends the
+ * once-key when the line is written, and also when focus lands, so a later
+ * turn does not ask for the keys again. A pane that is not up yet does not
+ * spend it. Nothing here closes Claude's diff panel.
+ */
+const maybeDiffCoverTip = async ($: EngineInterface, producedHunks: boolean) => {
+  try {
+    if (!producedHunks) return
+    const stored = await $.store.get(DIFF_COVER_TIP_KEY).catch(() => undefined)
+    if (stored === true) return
+
+    const ours = (await $.ui.panes().catch(() => [])).find(pane => pane.id === PANE)
+    // Not placed, not shown, or missing: `/diff` is not covering a pane that
+    // is up. Leave the key unset so a later turn can still be the first one.
+    if (ours === undefined || !ours.isPlaced || !ours.isShown) return
+
+    let focus: boolean | undefined = ours.isFocused ? true : undefined
+    if (focus !== true) {
+      const opened = await $.ui
+        .open({ id: PANE, title: 'Wait review', focus: true })
+        .catch(() => undefined)
+      if (opened === undefined || opened.isPlaced === false) return
+      focus = await focusArrives($)
+      // The ask took the keys. Give them back; the pane was not covered.
+      if (focus === true) await releaseProbeFocus($)
+    }
+
+    const action = diffCoverTipAction(true, focus, stored)
+    if (action === 'skip') return
+    await $.store.set(DIFF_COVER_TIP_KEY, true).catch(() => undefined)
+    if (action === 'show') await Promise.resolve($.ui.log(DIFF_COVER_TIP)).catch(() => undefined)
+  } catch {
+    // The queue is already updated. A missed line must not fail the turn.
+  }
+}
+
+/**
  * Places the pane because the person asked, at any width, and gives it the keys.
  *
  * This is the one action the narrow-terminal status line names. Auto-open at
@@ -501,8 +559,11 @@ export const register: Register = (on, options) => {
     // would only spend git processes.
     if (e.agentId !== undefined) return done
     await update($, busy, () => false)
+    const before = new Set((await read($, hunks)).map(one => one.id))
     await scan($, config)
     await showStatus($)
+    const produced = (await read($, hunks)).some(one => !before.has(one.id))
+    await maybeDiffCoverTip($, produced)
 
     return done
   }).catch(($, e, next) => next(e))

@@ -213,7 +213,8 @@ wait-review's pane. Send `/diff` once to hide it. Claude Code remembers that,
 so the side is wait-review's from then on, in later sessions too; `/diff` again
 brings the built-in panel back whenever you want it. If you run `/wait-review`
 and see nothing, its reply says `Claude’s /diff is covering this side — send
-/diff once to show wait-review`.
+/diff once to show wait-review`. The first time a turn writes a diff while that
+panel is covering the pane, the transcript says once: `Claude's Diff is covering Waitroom. Send /diff once to show wait-review — Claude remembers.`
 
 ### bet-on-your-agent · forecast agent turns
 
@@ -389,7 +390,7 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 94 tests
+claude plugin test     ./wait-review          # 101 tests
 
 claude plugin validate ./bet-on-your-agent
 claude plugin test     ./bet-on-your-agent    # 130 tests

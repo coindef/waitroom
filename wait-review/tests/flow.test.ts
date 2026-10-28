@@ -2,6 +2,8 @@ import type { On, RenderSurface } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 
+import { DIFF_COVER_TIP, DIFF_COVER_TIP_KEY } from '../hooks/diff'
+
 /**
  * The whole loop, with git answered by the test.
  *
@@ -587,6 +589,37 @@ const queueOne = async (
   return clock
 }
 
+/**
+ * Like `queueOne`, but the clock moves while the turn finishes.
+ *
+ * A covered pane makes the turn ask for focus and wait for it. The wait is
+ * the mock clock, so it has to move while that turn is still running.
+ */
+const queueOneLive = async (
+  $: Engine,
+  on: On,
+  diff: string,
+  turnId: string,
+) => {
+  const repo: Repo = { vsBase: '', vsHead: '', revParses: 0 }
+  const clock = engineBottom(on, repo)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  repo.vsBase = diff
+  repo.vsHead = diff
+  await $.turn.start({ text: 'write it', turnId })
+  const completing = $.turn.complete({
+    turnId,
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  await clock.advance(1000)
+  await completing
+
+  return clock
+}
+
 test('a new file longer than the pane is read page by page, to its end', async ($, on) => {
   await queueOne($, on, NEW_FILE_DIFF, 'turn-p1')
   const ui = await mountPane($, 'terminal')
@@ -835,7 +868,7 @@ test('a pane covered by the diff panel says how to uncover it', async ($, on) =>
     value: [{ id: 'wait-review', title: 'Wait review', isPlaced: true, isShown: true, isFocused: false }],
   }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  const clock = await queueOne($, on, AUTH_DIFF, 'turn-c1')
+  const clock = await queueOneLive($, on, AUTH_DIFF, 'turn-c1')
 
   const replying = $.command.run({ command: 'wait-review', args: '' } as never)
   await clock.advance(1000)
@@ -855,13 +888,163 @@ test('focus that arrives a moment late is not mistaken for a covered pane', asyn
     return { value: [{ id: 'wait-review', title: 'Wait review', isPlaced: true, isShown: true, isFocused: looks >= 3 }] }
   })
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  const clock = await queueOne($, on, AUTH_DIFF, 'turn-c2')
+  const clock = await queueOneLive($, on, AUTH_DIFF, 'turn-c2')
 
   const replying = $.command.run({ command: 'wait-review', args: '' } as never)
   await clock.advance(1000)
   const reply = JSON.stringify(await replying)
   expect(reply).toContain('Review pane open.')
   expect(reply).not.toContain('/diff')
+})
+
+/** The store and the transcript lines, so a test can read both back. */
+const remembered = (on: On, saved = new Map<string, unknown>()) => {
+  const logged: string[] = []
+  on('store.get', ($, e) => ({ value: saved.get(e.key) }))
+  on('store.set', ($, e) => {
+    saved.set(e.key, e.value)
+
+    return { value: undefined }
+  })
+  on('ui.log', ($, e) => {
+    logged.push(e.text)
+
+    return { value: undefined }
+  })
+
+  return { saved, logged }
+}
+
+const coveredPane = (focused: boolean) => ({
+  value: [{ id: 'wait-review', title: 'Wait review', isPlaced: true, isShown: true, isFocused: focused }],
+})
+
+const finishTurn = (
+  $: Engine,
+  turnId: string,
+) =>
+  $.turn.complete({
+    turnId,
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+test('the first covered turn that writes a diff logs the tip once, and the focus line stays', async ($, on) => {
+  const { saved, logged } = remembered(on)
+  on('ui.panes', () => coveredPane(false))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const repo: Repo = { vsBase: '', vsHead: '', revParses: 0 }
+  const clock = engineBottom(on, repo)
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  repo.vsBase = AUTH_DIFF
+  repo.vsHead = AUTH_DIFF
+  await $.turn.start({ text: 'write it', turnId: 'turn-tip-1' })
+  const first = finishTurn($, 'turn-tip-1')
+  await clock.advance(1000)
+  await first
+
+  expect(logged).toEqual([DIFF_COVER_TIP])
+  expect(saved.get(DIFF_COVER_TIP_KEY)).toBe(true)
+
+  // The first-run focus line is a different hint and still shows.
+  const away = await mountUnfocused($)
+  expect(await away.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeDefined()
+  await away.unmount()
+
+  // A later covered turn that writes another hunk does not say it again.
+  const more = AUTH_DIFF.replaceAll('src/auth.ts', 'src/pay.ts')
+  repo.vsBase = `${AUTH_DIFF}\n${more}`
+  repo.vsHead = repo.vsBase
+  await $.turn.start({ text: 'write more', turnId: 'turn-tip-2' })
+  await finishTurn($, 'turn-tip-2')
+
+  expect(logged).toEqual([DIFF_COVER_TIP])
+})
+
+test('a later session, the cover tip already stored, logs nothing', async ($, on) => {
+  const saved = new Map<string, unknown>([[DIFF_COVER_TIP_KEY, true]])
+  const { logged } = remembered(on, saved)
+  on('ui.panes', () => coveredPane(false))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+
+  await queueOne($, on, AUTH_DIFF, 'turn-tip-stored')
+
+  expect(logged).toEqual([])
+  expect(saved.get(DIFF_COVER_TIP_KEY)).toBe(true)
+})
+
+test('focus that has already landed never logs the diff-cover tip', async ($, on) => {
+  const { saved, logged } = remembered(on)
+  let focused = true
+  on('ui.panes', () => coveredPane(focused))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const repo: Repo = { vsBase: '', vsHead: '', revParses: 0 }
+  engineBottom(on, repo)
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  repo.vsBase = AUTH_DIFF
+  repo.vsHead = AUTH_DIFF
+  await $.turn.start({ text: 'write it', turnId: 'turn-tip-focus' })
+  await finishTurn($, 'turn-tip-focus')
+
+  expect(logged).toEqual([])
+  expect(saved.get(DIFF_COVER_TIP_KEY)).toBe(true)
+
+  // Covered on a later turn: the key is already spent, so the line stays unsaid.
+  focused = false
+  const more = AUTH_DIFF.replaceAll('src/auth.ts', 'src/pay.ts')
+  repo.vsBase = `${AUTH_DIFF}\n${more}`
+  repo.vsHead = repo.vsBase
+  await $.turn.start({ text: 'write more', turnId: 'turn-tip-focus-2' })
+  await finishTurn($, 'turn-tip-focus-2')
+
+  expect(logged).toEqual([])
+})
+
+test('a pane that is not shown does not spend the diff-cover tip', async ($, on) => {
+  const { saved, logged } = remembered(on)
+  let shown = false
+  on('ui.panes', () => ({
+    value: [{ id: 'wait-review', title: 'Wait review', isPlaced: true, isShown: shown, isFocused: false }],
+  }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const repo: Repo = { vsBase: '', vsHead: '', revParses: 0 }
+  const clock = engineBottom(on, repo)
+
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  repo.vsBase = AUTH_DIFF
+  repo.vsHead = AUTH_DIFF
+  await $.turn.start({ text: 'write it', turnId: 'turn-tip-hidden' })
+  await finishTurn($, 'turn-tip-hidden')
+
+  expect(logged).toEqual([])
+  expect(saved.has(DIFF_COVER_TIP_KEY)).toBe(false)
+
+  shown = true
+  const more = AUTH_DIFF.replaceAll('src/auth.ts', 'src/pay.ts')
+  repo.vsBase = `${AUTH_DIFF}\n${more}`
+  repo.vsHead = repo.vsBase
+  await $.turn.start({ text: 'write more', turnId: 'turn-tip-hidden-2' })
+  const covered = finishTurn($, 'turn-tip-hidden-2')
+  await clock.advance(1000)
+  await covered
+
+  expect(logged).toEqual([DIFF_COVER_TIP])
+  expect(saved.get(DIFF_COVER_TIP_KEY)).toBe(true)
+})
+
+test('a covered turn that writes no hunks stays quiet and does not spend the tip', async ($, on) => {
+  const { saved, logged } = remembered(on)
+  on('ui.panes', () => coveredPane(false))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+
+  await queueOne($, on, '', 'turn-tip-empty')
+
+  expect(logged).toEqual([])
+  expect(saved.has(DIFF_COVER_TIP_KEY)).toBe(false)
 })
 
 test('a long changed line reaches the drawing whole, wrapped rather than cut', async ($, on) => {
