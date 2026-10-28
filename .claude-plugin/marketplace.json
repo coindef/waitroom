@@ -6,6 +6,17 @@
   "description": "Mods that make the wait on a coding agent worth something.",
   "plugins": [
     {
+      "name": "waitroom",
+      "source": "./waitroom",
+      "description": "Installs the four rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe.",
+      "dependencies": [
+        "wait-review",
+        "bet-on-your-agent",
+        "wait-ship",
+        "wait-breathe"
+      ]
+    },
+    {
       "name": "wait-review",
       "source": "./wait-review",
       "description": "Turns the wait while Claude works into incremental review of the diff it already wrote."

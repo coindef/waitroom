@@ -38,81 +38,61 @@ changed.
 
 ## Install
 
-Two steps. Start with the two that make the core loop — read the diff as it
-lands, call how the turn will go — and add the other two once those feel at
-home.
-
-### Step 1: wait-review and bet-on-your-agent
-
-One paste, in a terminal:
-
 ```sh
-claude plugin marketplace add coindef/waitroom
-claude plugin install wait-review@waitroom
-claude plugin install bet-on-your-agent@waitroom
+claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
 ```
 
-Then start Claude Code (restart it, if it was already running). Both run on
-their defaults — no key, no service, nothing written to your repository. The
-installer's `userConfig options not yet set` lines are fine: every option has
-a working default ([more](#what-the-installer-says-on-the-way-in)).
+That installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe.
+Then start Claude Code (restart it, if it was already running). Each room runs
+on its defaults — no key, no service, nothing written to your repository.
+wait-breathe stays off until you send `/breathe`. The installer's `userConfig
+options not yet set` lines are fine: every option has a working default
+([more](#what-the-installer-says-on-the-way-in)).
 
-Already at the Claude Code prompt? Send the same three as slash commands
-instead, each as its own message — `/plugin marketplace add coindef/waitroom`,
-then `/plugin install wait-review@waitroom`, then `/plugin install
-bet-on-your-agent@waitroom` — and save each install screen as it is. That
-answers `Installed and configured wait-review. Plugin is now active.`, active
-in that session straight away.
+Already at the Claude Code prompt? Send two slash commands, each as its own
+message — `/plugin marketplace add coindef/waitroom`, then `/plugin install
+waitroom@waitroom` — and save the install screen as it is.
 
-### Step 2, when you want them: wait-ship and wait-breathe
+Both halves are safe to run again: adding a marketplace that is already there,
+or installing a plugin that already is, changes nothing. With the four rooms
+in, `/plugin` reads `4 mods active · wait-review, bet-on-your-agent,
+wait-ship, wait-breathe`.
+
+### Or install one room
 
 ```sh
+claude plugin install wait-review@waitroom
+claude plugin install bet-on-your-agent@waitroom
 claude plugin install wait-ship@waitroom
 claude plugin install wait-breathe@waitroom
 ```
 
-(Or `/plugin install wait-ship@waitroom` and `/plugin install
-wait-breathe@waitroom` at the prompt.) wait-ship drafts the commit message, PR
-description and changelog entry once a turn has changed files. **wait-breathe
-starts off**: installed, it stays silent until you send `/breathe`, which turns
-it on — and off again, the next time you send it.
-
-Every line in both steps is safe to run again: adding a marketplace that is
-already there, or installing a plugin that already is, changes nothing. With
-all four in, `/plugin` reads `4 mods active · wait-review, bet-on-your-agent,
-wait-ship, wait-breathe`.
+The marketplace add in the line above still comes first. At the prompt, each
+of those is its own message: `/plugin install wait-review@waitroom`, and the
+same shape for the other three.
 
 ### Also: wait-changed
+
+Optional. [What it shows](./wait-changed).
 
 ```sh
 claude plugin install wait-changed@waitroom
 ```
-
-(Or `/plugin install wait-changed@waitroom` at the prompt.) After a turn
-ends, and only when that turn changed files, the same row lists them. The
-title is `What changed this turn`. Each file is a path plus a short hint
-(`+12 −3`, or `modified` when there is no line count). Two actions: `Close`
-dismisses this turn's card, and `Don't show again` leaves it off. Nothing is
-drawn while a turn is still running, and a turn that changed nothing draws
-nothing. **On until you
-turn it off.** Turn it back on with `/wait-changed`, or under `/plugin` →
-wait-changed → *Show a turn-end diff card*. If the card stays hidden after
-that switch reads as on, send `/wait-changed` once — a local preference is
-holding it off.
 
 Every plugin here needs **Claude Code 2.1.291 or later** — `claude --version` says which you
 have, `claude update` moves you on. An older build installs it without
 complaint and then shows it as `failed to load`; see
 [If a plugin shows an error](#if-a-plugin-shows-an-error).
 
-The first line adds the marketplace from its repository path,
-`coindef/waitroom`. From then on it goes by its name, **`waitroom`** — the part
-after the `@`.
+The one-liner adds the marketplace from its repository path,
+`coindef/waitroom`. From then on the marketplace goes by its name,
+**`waitroom`**, the part after the `@`. `waitroom@waitroom` is this four-room
+install.
 
-You may also see the one-line form, `/plugin install wait-review --marketplace
-coindef/waitroom`. It works once. Sent again, it answers `Plugin "wait-review"
-not found in any marketplace`, because by then `--marketplace` wants the name
-`waitroom`, not the repository path. The lines above have no such trap.
+You may also see `/plugin install waitroom --marketplace coindef/waitroom`.
+It works once. Sent again, it answers `Plugin "waitroom" not found in any
+marketplace`, because by then `--marketplace` wants the name `waitroom`, not
+the repository path. The one-liner above has no such trap.
 
 ### Updating
 
@@ -121,6 +101,7 @@ disk straight away but only loaded by the next session:
 
 ```
 /plugin marketplace update waitroom
+/plugin update waitroom@waitroom
 /plugin update wait-review@waitroom
 /plugin update bet-on-your-agent@waitroom
 /plugin update wait-ship@waitroom
@@ -128,11 +109,13 @@ disk straight away but only loaded by the next session:
 /plugin update wait-changed@waitroom
 ```
 
-Each reports `updated from` the old version `to` the new one, or `already at
-the latest version` for a mod that has not changed. What changed, and in which
-mod, is in [CHANGELOG.md](./CHANGELOG.md); if one it lists as changed still
-says it is at the latest version, the marketplace was not refreshed yet, so run
-the first line again.
+`/plugin update waitroom@waitroom` picks up a room newly added to that install.
+Each room still updates on its own line. Each reports `updated from` the old
+version `to` the new one, or `already at the latest version` for a mod that
+has not changed. What changed, and in which mod, is in
+[CHANGELOG.md](./CHANGELOG.md); if one it lists as changed still says it is at
+the latest version, the marketplace was not refreshed yet, so run the first
+line again.
 
 ### Coming from the old name
 
@@ -146,8 +129,7 @@ then install again:
 ```
 /plugin marketplace remove wait-mods
 /plugin marketplace add coindef/waitroom
-/plugin install wait-review@waitroom
-/plugin install bet-on-your-agent@waitroom
+/plugin install waitroom@waitroom
 ```
 
 (From the first release, the first line is `/plugin marketplace remove
@@ -419,6 +401,8 @@ claude plugin test     ./wait-breathe         # 28 tests
 
 claude plugin validate ./wait-changed
 claude plugin test     ./wait-changed         # 32 tests
+
+claude plugin validate ./waitroom             # four-room install
 ```
 
 Neither of those runs a real type checker, so also run `tsc` from each mod's

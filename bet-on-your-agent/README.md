@@ -18,6 +18,8 @@ how calibrated you were.
 /plugin install bet-on-your-agent@waitroom
 ```
 
+All four rooms at once: `/plugin install waitroom@waitroom`.
+
 (Each as its own message; both are safe to send again. Needs Claude Code
 2.1.291 or later; `claude update` if `claude --version` says otherwise.)
 
