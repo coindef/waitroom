@@ -287,8 +287,8 @@ above the prompt lists them under `What changed this turn`, with `Read-only
 local git — nothing uploaded` under the title. Up to eight files, then `N
 more files…`. No hunks, no commit, no PR. `Close` clears this turn. `Don't
 show again` turns the card off; `/wait-changed` turns it back on. A clean
-turn, a turn still running, and a
-folder that is not a git repository all stay silent.
+turn, a turn still running, and a folder that is not a git repository all
+stay silent.
 
 ## How they share the screen
 
