@@ -17,6 +17,8 @@ during a long turn. Off by default.
 /plugin install wait-breathe@waitroom
 ```
 
+All four rooms at once: `/plugin install waitroom@waitroom`.
+
 (Each as its own message; both are safe to send again. Needs Claude Code
 2.1.291 or later; `claude update` if `claude --version` says otherwise.)
 

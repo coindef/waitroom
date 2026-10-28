@@ -1,5 +1,9 @@
 # Changelog
 
+## waitroom 0.1.0
+
+- **One install for the four rooms.** `claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom` installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Each room still installs on its own. wait-changed stays a separate install. wait-breathe stays off until `/breathe`.
+
 ## wait-changed 0.1.0
 
 First release: a read-only card once a Claude Code turn ends.
