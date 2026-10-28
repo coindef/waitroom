@@ -21,12 +21,12 @@ flagged" is all the next message needs. [Full-length video](docs/demo.mp4).*
 
 <img src="docs/lockup.svg" width="560" alt="Waitroom brand mark: a mint terminal blob, a prompt caret, a coffee cup that reads still waiting, and the word Waitroom">
 
-A magnifying glass for the diff, a target for your calibration, an outbox for
-what ships, and breathing rings for you, always in that order. wait-review
-keeps a pane beside the transcript. The others take turns in the one row
-above the prompt. wait-changed is not a fifth way to spend the wait: it uses
-that same row only after a turn ends, and only to list the files that turn
-changed.
+A mint terminal blob, a prompt caret, a coffee cup that reads still waiting,
+and the word Waitroom. The four rooms are the table under the mark.
+wait-review keeps a pane beside the transcript. The others take turns in the
+one row above the prompt. wait-changed is not a fifth way to spend the wait:
+it uses that same row only after a turn ends, and only to list the files that
+turn changed.
 
 | | Plugin | Spends the wait on | Where | Starts |
 | --- | --- | --- | --- | --- |
