@@ -8,11 +8,19 @@ its own. Installing it installs:
 - [wait-ship](../wait-ship)
 - [wait-breathe](../wait-breathe)
 
-[wait-changed](../wait-changed) stays a separate install.
-
 ```sh
 claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
 ```
+
+That installs the four rooms above.
+
+Optional — turn-end file list (not in the four-room install):
+
+```sh
+claude plugin install wait-changed@waitroom
+```
+
+After a turn that changed files, lists them above the prompt. Read-only. Skip if you only want the four rooms. [What it shows](../wait-changed).
 
 At the Claude Code prompt, send these as two messages:
 
