@@ -1148,15 +1148,16 @@ export const recapCard = (recap: Recap, columns = Number.POSITIVE_INFINITY): str
 
 /**
  * The waitroom mods that draw into the row above the prompt, the one with
- * precedence first: wait-breathe, then wait-ship, then bet-on-your-agent.
+ * precedence first: wait-breathe, then wait-changed, then wait-ship, then
+ * bet-on-your-agent. Kept in lockstep with the same list in those mods.
  *
  * The row shows one of them at a time. Hooks of different plugins nest in an
- * order the person's installs decide, not this code, so each of the three
+ * order the person's installs decide, not this code, so each of the four
  * draws only after asking what is already beneath it (`next(e)`), and hands
  * the row to a mod ahead of it here: whatever the load order, the mod with
  * precedence is the one row on screen, and the others wait for it.
  */
-export const BAND_PRECEDENCE = ['wait-breathe', 'wait-ship', 'bet-on-your-agent'] as const
+export const BAND_PRECEDENCE = ['wait-breathe', 'wait-changed', 'wait-ship', 'bet-on-your-agent'] as const
 
 export type BandMod = (typeof BAND_PRECEDENCE)[number]
 
@@ -1180,10 +1181,11 @@ export const yieldsBand = (mine: BandMod, beneath: string | undefined): boolean 
 
 /**
  * Whether the bet's own row gives way to the one beneath it. Between turns
- * that is `yieldsBand`: a ship offer, then "Did it land?". While a turn runs
- * the forecast is now or never — the window closes when the turn lands — and
- * a ship offer belongs between turns (wait-ship drops its kit the moment one
- * starts), so only a breathe nudge holds the forecast back.
+ * that is `yieldsBand`: a turn-end diff card, then a ship offer, then "Did it
+ * land?". While a turn runs the forecast is now or never — the window closes
+ * when the turn lands — and both the diff card and a ship offer belong between
+ * turns (neither is drawn while a turn runs), so only a breathe nudge holds
+ * the forecast back.
  */
 export const betYields = (beneath: string | undefined, isWorking: boolean): boolean =>
   isWorking ? beneath === 'wait-breathe' : yieldsBand('bet-on-your-agent', beneath)

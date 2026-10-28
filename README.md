@@ -23,8 +23,10 @@ flagged" is all the next message needs. [Full-length video](docs/demo.mp4).*
 
 A magnifying glass for the diff, a target for your calibration, an outbox for
 what ships, and breathing rings for you, always in that order. wait-review
-keeps a pane beside the transcript. The other three take turns in the one row
-above the prompt.
+keeps a pane beside the transcript. The others take turns in the one row
+above the prompt. wait-changed is not a fifth way to spend the wait: it uses
+that same row only after a turn ends, and only to list the files that turn
+changed.
 
 | | Plugin | Spends the wait on | Where | Starts |
 | --- | --- | --- | --- | --- |
@@ -32,6 +34,7 @@ above the prompt.
 | <img src="bet-on-your-agent/.claude-plugin/icon.svg" width="24" alt=""> | [**bet-on-your-agent**](./bet-on-your-agent) | Your call on how the turn will go, scored afterwards: a Brier score, and a calibration table that shows where your confidence runs hot or cold. | The row | On |
 | <img src="wait-ship/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-ship**](./wait-ship) | The words that ship the change: a drafted commit message, PR description and changelog entry, to review the way wait-review lets you review the code. | The row | On |
 | <img src="wait-breathe/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-breathe**](./wait-breathe) | You. One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. | The row | **Off** until `/breathe` |
+| <img src="wait-changed/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-changed**](./wait-changed) | The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. | The row | On |
 
 ## Install
 
@@ -79,7 +82,24 @@ already there, or installing a plugin that already is, changes nothing. With
 all four in, `/plugin` reads `4 mods active · wait-review, bet-on-your-agent,
 wait-ship, wait-breathe`.
 
-It needs **Claude Code 2.1.291 or later** — `claude --version` says which you
+### Also: wait-changed
+
+```sh
+claude plugin install wait-changed@waitroom
+```
+
+(Or `/plugin install wait-changed@waitroom` at the prompt.) After a turn
+ends, and only when that turn changed files, the same row lists them. The
+title is `这回合改了啥`. Each file is a path plus a short hint (`+12 −3`, or
+`modified` when there is no line count). Two actions: `关闭` dismisses this
+turn's card, and `不再显示` leaves it off. Nothing is drawn while a turn is
+still running, and a turn that changed nothing draws nothing. **On until you
+turn it off.** Turn it back on with `/wait-changed`, or under `/plugin` →
+wait-changed → *Show a turn-end diff card*. If the card stays hidden after
+that switch reads as on, send `/wait-changed` once — a local preference is
+holding it off.
+
+Every plugin here needs **Claude Code 2.1.291 or later** — `claude --version` says which you
 have, `claude update` moves you on. An older build installs it without
 complaint and then shows it as `failed to load`; see
 [If a plugin shows an error](#if-a-plugin-shows-an-error).
@@ -104,6 +124,7 @@ disk straight away but only loaded by the next session:
 /plugin update bet-on-your-agent@waitroom
 /plugin update wait-ship@waitroom
 /plugin update wait-breathe@waitroom
+/plugin update wait-changed@waitroom
 ```
 
 Each reports `updated from` the old version `to` the new one, or `already at
@@ -258,17 +279,27 @@ the same one twice running. Its tag stays grey, the quietest thing on the
 screen. `/breathe` turns it on, and off again; the same switch is *Enable the
 breathing nudges* under `/plugin` → wait-breathe.
 
+### wait-changed · what this turn changed
+
+wait-changed needs no setup. When a turn ends having changed files, the row
+above the prompt lists them under `这回合改了啥`, with `只读本地 git，未上传`
+under the title. Up to eight files, then `还有 N 个文件…`. No hunks, no
+commit, no PR. `关闭` clears this turn. `不再显示` turns the card off;
+`/wait-changed` turns it back on. A clean turn, a turn still running, and a
+folder that is not a git repository all stay silent.
+
 ## How they share the screen
 
 <img src="docs/waitroom.svg" alt="One real Claude Code screen with all of it at once: on the left, Claude's fix for the hunk flagged in the last turn, wait-ship's three Draft written lines, and below them the bet row asking Did it land? you said 90% · &quot;Fix what I flagged&quot; with 1: Landed  2: Needed fixing  0: Skip; on the right, the wait-review pane on src/client.ts +26 −4 · file 1 of 2; at the bottom, the status lines bet-on-your-agent: did it land? 1 to answer and wait-review: 2 to read">
 
 They compose rather than compete for room. **wait-review** takes the pane, and
-the other three share the row just above the prompt, one at a time: a breathe
-nudge first, then a ship offer, then the bet's question. Two sets of buttons
-never stack there; the one behind waits its turn. Above, the ship offer was
-answered a moment ago, its receipts are in the transcript, and the bet's "Did
-it land?" has the row. While a turn runs, the bet's forecast gives way only to
-a breathe nudge, since the window to call the turn closes when it lands.
+the others share the row just above the prompt, one at a time: a breathe
+nudge first, then — once a turn has ended and it changed files —
+wait-changed's list, then a ship offer, then the bet's question. Two sets of
+buttons never stack there; the one behind waits its turn. `关闭` on the list
+is what gives the ship offer the row. While a turn runs, the bet's forecast
+gives way only to a breathe nudge, since the window to call the turn closes
+when it lands, and the diff card is not drawn yet.
 
 ## The idea behind all four
 
@@ -383,6 +414,9 @@ claude plugin test     ./wait-ship            # 70 tests
 
 claude plugin validate ./wait-breathe
 claude plugin test     ./wait-breathe         # 28 tests
+
+claude plugin validate ./wait-changed
+claude plugin test     ./wait-changed         # 32 tests
 ```
 
 Neither of those runs a real type checker, so also run `tsc` from each mod's
@@ -411,7 +445,8 @@ claude plugin marketplace add .     # then /plugin install <mod>@waitroom
 ```
 
 Each mod keeps the logic that needs no engine in one plain module
-(`hooks/diff.ts`, `hooks/bet.ts`, `hooks/ship.ts`, `hooks/breathe.ts`) so it
+(`hooks/diff.ts`, `hooks/bet.ts`, `hooks/ship.ts`, `hooks/breathe.ts`,
+`hooks/changed.ts`) so it
 can be tested directly, with the hooks module beside it and a
 `types/index.d.ts` state contract that `claude plugin validate` holds it to.
 Each mod's own `tests/flow.test.*` or `tests/band.test.tsx` drives the real
@@ -432,12 +467,14 @@ rather than pick a fresh one:
   bet-on-your-agent, whose main surface is the row above the prompt, so the
   pane is only worth the screen space once you ask for it with `/bet`.
 - **`enabled`** is a master switch, present only on mods with a core behavior
-  worth turning off entirely — wait-ship and wait-breathe. wait-review and
-  bet-on-your-agent have no `enabled` key at all, because neither has a mode
-  where it does nothing; they are always on. Where `enabled` exists, default
-  it to whatever keeps the mod's main claim on the user modest: `true` for
-  wait-ship (drafting costs nothing until you act on a draft), `false` for
-  wait-breathe (its claim is on your attention, not your screen).
+  worth turning off entirely — wait-ship, wait-breathe, and wait-changed.
+  wait-review and bet-on-your-agent have no `enabled` key at all, because
+  neither has a mode where it does nothing; they are always on. Where
+  `enabled` exists, default it to whatever keeps the mod's main claim on the
+  user modest: `true` for wait-ship (drafting costs nothing until you act on
+  a draft) and for wait-changed (the list is read-only, and `不再显示` turns
+  it off), `false` for wait-breathe (its claim is on your attention, not your
+  screen).
 
 ### OpenCode prototypes
 

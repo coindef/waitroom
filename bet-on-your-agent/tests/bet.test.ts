@@ -1075,9 +1075,10 @@ test('a first-week day fixed by a clock running ahead holds nothing back once th
   expect(extrasIn('2026-11-02', '2026-10-25')).toBe(0)
 })
 
-test('the row goes to breathe, then ship, then the bet: one waitroom mod at a time', () => {
-  expect(BAND_PRECEDENCE).toEqual(['wait-breathe', 'wait-ship', 'bet-on-your-agent'])
+test('the row goes to breathe, then the turn-end card, then ship, then the bet', () => {
+  expect(BAND_PRECEDENCE).toEqual(['wait-breathe', 'wait-changed', 'wait-ship', 'bet-on-your-agent'])
   expect(yieldsBand('bet-on-your-agent', 'wait-breathe')).toBe(true)
+  expect(yieldsBand('bet-on-your-agent', 'wait-changed')).toBe(true)
   expect(yieldsBand('bet-on-your-agent', 'wait-ship')).toBe(true)
   expect(yieldsBand('wait-ship', 'bet-on-your-agent')).toBe(false)
   expect(yieldsBand('bet-on-your-agent', undefined)).toBe(false)
@@ -1089,11 +1090,13 @@ test('the row goes to breathe, then ship, then the bet: one waitroom mod at a ti
 test('while a turn runs only a breathe nudge holds the forecast back; between turns a ship offer does too', () => {
   // The forecast can only be placed while the turn runs, and a ship offer belongs between turns.
   expect(betYields('wait-breathe', true)).toBe(true)
+  expect(betYields('wait-changed', true)).toBe(false)
   expect(betYields('wait-ship', true)).toBe(false)
   expect(betYields(undefined, true)).toBe(false)
   expect(betYields('some-other-plugin', true)).toBe(false)
-  // Between turns the precedence stands: the offer first, "Did it land?" after.
+  // Between turns the precedence stands: the diff card, then the offer, then "Did it land?".
   expect(betYields('wait-breathe', false)).toBe(true)
+  expect(betYields('wait-changed', false)).toBe(true)
   expect(betYields('wait-ship', false)).toBe(true)
   expect(betYields(undefined, false)).toBe(false)
   expect(betYields('some-other-plugin', false)).toBe(false)

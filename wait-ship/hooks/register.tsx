@@ -215,7 +215,8 @@ export const register: Register = (on, options) => {
    * The kit rides the row above the prompt, the one `bet-on-your-agent` asks
    * about the turn that just landed from: no pane, no required answer, gone
    * on its own once the next turn starts. The row shows one mod at a time,
-   * and a kit comes ahead of the bet's question and behind a breathe nudge.
+   * and a kit comes ahead of the bet's question and behind a breathe nudge
+   * and, between turns, behind wait-changed's diff card.
    */
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (!config.enabled || e.props.hasSurvey) return next(e)

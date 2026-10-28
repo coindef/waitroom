@@ -78,11 +78,12 @@ never the question:
 1: Landed  2: Needed fixing  0: Skip
 ```
 
-The row is shared with `wait-ship` and `wait-breathe`, and shows one of them
-at a time. Between turns a ship offer comes first, and "Did it land?" takes
-the row the moment the offer is answered. While a turn runs, only a breathe
-nudge holds the forecast back, since the window to call the turn closes when
-it lands.
+The row is shared with `wait-changed`, `wait-ship`, and `wait-breathe`, and
+shows one of them at a time. Between turns a `wait-changed` summary comes
+first when that mod is installed and the turn changed files, then a ship
+offer, and "Did it land?" takes the row once those are dismissed. While a
+turn runs, only a breathe nudge holds the forecast back, since the window to
+call the turn closes when it lands.
 
 - **Will it land first try?** Resolved by your own verdict, which it asks for
   once the turn lands — with a `skip` if you would rather not say. Answered it
