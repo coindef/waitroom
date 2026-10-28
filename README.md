@@ -1,6 +1,7 @@
-# waitroom
+# Waitroom — Claude Code plugins for dead time while your agent works
 
-Four Claude Code plugins for the dead time while a coding agent works. The
+Claude Code plugins for the dead time while your coding agent works — four
+rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe. The
 wait is the one moment you are already holding the problem in your head and
 have nothing to do with it; these spend it on the diff the agent just wrote,
 on how well you called the turn, on the commit message and PR description
@@ -157,7 +158,7 @@ Each room shows up by itself the first time it has something to say. Every
 image below is a real capture of this build: Claude Code 2.1.311 in a scratch
 repository, cut from the terminal as it was, never redrawn.
 
-### wait-review · the diff
+### wait-review · diff review hunk by hunk
 
 wait-review needs no setup. Ask Claude for a change. When the turn ends, the
 pane starts offering the diff a hunk at a time. Here it is paging through a
@@ -209,7 +210,7 @@ brings the built-in panel back whenever you want it. If you run `/wait-review`
 and see nothing, its reply says `Claude’s /diff is covering this side — send
 /diff once to show wait-review`.
 
-### bet-on-your-agent · your calibration
+### bet-on-your-agent · forecast agent turns
 
 bet-on-your-agent scores your calibration, not a wager. It keeps no currency
 and no winnings, just whether you called it. While a turn runs, it puts a
@@ -224,7 +225,7 @@ on 2.1.311), so give the row the keys first with `ctrl+x tab`, or click it.
 and the file count are all it asks. The extras (a bonus question, a daily
 challenge, a badge wall) wait in `/bet-recap` until then.
 
-### wait-ship · what ships
+### wait-ship · draft ship artifacts
 
 wait-ship needs no setup either. When a turn ends having changed anything, the
 same row offers the kit it drafted: a commit message, a PR description, and,
@@ -242,7 +243,7 @@ to run printed in the transcript — nothing here ever runs on your behalf.
 **A turn that changed nothing gets no row**, even with earlier changes still
 uncommitted.
 
-### wait-breathe · you
+### wait-breathe · long-turn wait
 
 wait-breathe is the one plugin that starts off. Send `/breathe` to turn it on
 (see [Install](#install) above); it answers `wait-breathe: on · one quiet nudge
