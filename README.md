@@ -1,28 +1,77 @@
-# Waitroom — Claude Code plugins for dead time while your agent works
+<p align="center">
+  <img src="ads/assets/readme-logo-pixel.svg" width="96" alt="PIXEL LOGO PENDING. Centered pixel-logo stand-in. Design replaces this with ads/assets/readme-logo-pixel.png. Not the Waitroom product mark.">
+  <br>
+  <sub>PIXEL LOGO PENDING — stand-in, not the product mark. Drop <code>ads/assets/readme-logo-pixel.png</code>.</sub>
+</p>
 
-Claude Code plugins for the dead time while your coding agent works — four
-rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe. The
-wait is the one moment you are already holding the problem in your head and
-have nothing to do with it; these spend it on the diff the agent just wrote,
-on how well you called the turn, on the commit message and PR description
-that will ship it, and — quietly, off by default — on a long turn's toll on
-you.
+<h1 align="center">Waitroom</h1>
 
-![A Claude Code session: a one-keystroke bet on the running turn above the prompt, the diff reviewed a hunk at a time in a pane on the right, one hunk flagged with a reason, and Claude fixing exactly that from "Fix what I flagged"](docs/demo.gif)
+<p align="center">Claude Code plugins for the dead time while your agent works.</p>
 
-*A real session, not a mockup — Claude Code 2.1.304 with both plugins, sped up
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
+  &nbsp;
+  <a href="https://github.com/coindef/waitroom/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/coindef/waitroom?style=flat-square"></a>
+  &nbsp;
+  <img alt="Requires Claude Code 2.1.291 or later" src="https://img.shields.io/badge/Claude_Code-2.1.291%2B-blue?style=flat-square">
+  &nbsp;
+  <img src="ads/assets/badges/pixel-badge-pending.svg" width="148" height="20" alt="PIXEL BADGE PENDING. Design drops shields-style or pixel badges in ads/assets/badges/.">
+</p>
+
+<p align="center">
+  <a href="#features"><strong>Features</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#install"><strong>Install</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#demo"><strong>Demo</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#contributing"><strong>Contributing</strong></a>
+</p>
+
+## Demo
+
+<!--
+  Hero GIF slot. Wired to the real session capture until Visual Design ships
+  a pixel loop at ads/assets/readme-hero-pixel.gif (5–12s, ≤2MB).
+  Labeled stand-in (not final art): ads/assets/readme-hero-pixel.svg
+  Temporary style reference, not the hero and not the product mark:
+  ads/assets/readme-hero-pixel-ref.jpg
+  When the pixel GIF lands, point the img below at that path.
+-->
+
+<p align="center">
+  <img src="docs/demo.gif" width="880" alt="A Claude Code session: a one-keystroke bet on the running turn above the prompt, the diff reviewed a hunk at a time in a pane on the right, one hunk flagged with a reason, and Claude fixing exactly that from &quot;Fix what I flagged&quot;">
+</p>
+
+<p align="center"><em>A real session, not a mockup — Claude Code 2.1.304 with both plugins, sped up
 only while Claude works; this is a 15-second cut of it. Bet on the turn while
 it runs, read the diff as it lands, flag a hunk with a reason, and "Fix what I
-flagged" is all the next message needs. [Full-length video](docs/demo.mp4).*
+flagged" is all the next message needs. <a href="docs/demo.mp4">Full-length video</a>.</em></p>
+
+<p align="center">
+  <img src="ads/assets/readme-hero-pixel.svg" width="640" alt="PIXEL HERO PENDING. Labeled stand-in for the future pixel hero GIF at ads/assets/readme-hero-pixel.gif. Not final art and not the product mark.">
+  <br>
+  <sub>PIXEL HERO PENDING — Design drops the pixel loop at <code>ads/assets/readme-hero-pixel.gif</code> (5–12s, ≤2MB). The capture above stays until then. Style reference slot: <code>ads/assets/readme-hero-pixel-ref.jpg</code>.</sub>
+</p>
 
 <a id="what-they-are"></a>
 
-## One family, four rooms
+## Features
 
-<img src="docs/lockup.svg" width="560" alt="Waitroom brand mark: a mint terminal blob, a prompt caret, a coffee cup that reads still waiting, and the word Waitroom">
+The wait is the one moment you are already holding the problem in your head
+and have nothing to do with it. The rooms spend it on the diff the agent just
+wrote, on how well you called the turn, on the commit message and PR
+description that will ship it, and — quietly, off by default — on a long
+turn's toll on you.
 
-A mint terminal blob, a prompt caret, a coffee cup that reads still waiting,
-and the word Waitroom. The four rooms are the table under the mark.
+- 🔍 **[wait-review](./wait-review)** — The diff Claude already wrote, a hunk at a time. What you flag goes back with your next message, with your reason. A pane. On.
+- 🎯 **[bet-on-your-agent](./bet-on-your-agent)** — Your call on how the turn will go, scored afterwards: a Brier score, and a calibration table that shows where your confidence runs hot or cold. No currency and no winnings. The row. On.
+- 🚢 **[wait-ship](./wait-ship)** — A drafted commit message, PR description, and changelog entry, to review the way wait-review lets you review the code. The row. On.
+- 🌬️ **[wait-breathe](./wait-breathe)** — One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. The row. **Off** until `/breathe`.
+- 📋 **[wait-changed](./wait-changed)** — The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. Not in the four-room install. The row. On.
+
+### One family, four rooms
+
 wait-review keeps a pane beside the transcript. The others take turns in the
 one row above the prompt. wait-changed is not a fifth way to spend the wait:
 it uses that same row only after a turn ends, and only to list the files that
@@ -35,6 +84,23 @@ turn changed.
 | <img src="wait-ship/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-ship**](./wait-ship) | The words that ship the change: a drafted commit message, PR description and changelog entry, to review the way wait-review lets you review the code. | The row | On |
 | <img src="wait-breathe/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-breathe**](./wait-breathe) | You. One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. | The row | **Off** until `/breathe` |
 | <img src="wait-changed/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-changed**](./wait-changed) | The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. | The row | On |
+
+### Repository
+
+```text
+wait-review/                  pane
+bet-on-your-agent/            row above the prompt
+wait-ship/                    row above the prompt
+wait-breathe/                 row above the prompt · off until /breathe
+wait-changed/                 same row, after the turn · separate install
+waitroom/                     four-room install
+docs/demo.gif                 session capture used as the README demo
+docs/demo.mp4                 full-length cut of that session
+docs/lockup.svg               product mark (mint terminal blob)
+ads/assets/                   pixel promo placeholders
+wait-review-opencode/         unpublished OpenCode prototype
+bet-on-your-agent-opencode/   unpublished OpenCode prototype
+```
 
 ## Install
 
@@ -140,6 +206,25 @@ reports `holds the same plugin name and comes first` — see
 
 bet-on-your-agent's record does not come with it: each install keeps its own,
 so your calibration starts fresh under the new name.
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/paging.svg" width="220" alt="The wait-review pane paging a colored diff, with one hunk already flagged">
+  <img src="docs/bet-forecast.svg" width="220" alt="The bet-on-your-agent row: a forecast and the keys 1 through 5, plus skip">
+  <img src="docs/ship-offer.svg" width="220" alt="The wait-ship row: drafted commit, PR, and changelog, with accept, more, and skip">
+  <img src="docs/breathe-nudge.svg" width="220" alt="The wait-breathe row: one quiet posture check and the key b">
+</p>
+
+<p align="center"><em>Real captures from this build, not pixel mockups. The walkthrough is in <a href="#the-first-minute">The first minute</a>.</em></p>
+
+<!--
+  Optional pixel screenshot strip, when Design ships stills:
+  ads/assets/screenshots/readme-shot-review.png
+  ads/assets/screenshots/readme-shot-bet.png
+  ads/assets/screenshots/readme-shot-ship.png
+  ads/assets/screenshots/readme-shot-breathe.png
+-->
 
 ## Requirements
 
@@ -384,7 +469,9 @@ every installed plugin that carries a hooks module, whoever made it.
 working default and the plugin runs on them — the debug log puts it as `every
 option is its default`. Configure them to change something, not to get started.
 
-## Developing
+<a id="contributing"></a>
+
+## Contributing
 
 Each mod is a self-contained plugin folder. From the repository root:
 
@@ -488,3 +575,14 @@ verified" section for the full detail.
 
 MIT — see [LICENSE](./LICENSE). What changed in each release is in
 [CHANGELOG.md](./CHANGELOG.md).
+
+## Brand
+
+The product mark is the mint terminal blob. Pixel art under
+[`ads/assets/`](ads/assets/README.md) is README promo only. It does not
+replace this mark, the plugin icons, or the marketplace listing.
+
+<img src="docs/lockup.svg" width="560" alt="Waitroom brand mark: a mint terminal blob, a prompt caret, a coffee cup that reads still waiting, and the word Waitroom">
+
+A mint terminal blob, a prompt caret, a coffee cup that reads still waiting,
+and the word Waitroom. The four rooms are the table under the mark.

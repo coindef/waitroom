@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-label="PIXEL HERO PENDING">
+  <title>PIXEL HERO PENDING</title>
+  <rect width="1200" height="280" fill="#0b1220"/>
+  <g fill="#e8f6ff">
+    <rect x="48" y="36" width="3" height="3"/>
+    <rect x="140" y="72" width="2" height="2"/>
+    <rect x="260" y="28" width="2" height="2"/>
+    <rect x="420" y="48" width="3" height="3"/>
+    <rect x="980" y="40" width="2" height="2"/>
+    <rect x="1100" y="70" width="3" height="3"/>
+    <rect x="80" y="220" width="2" height="2"/>
+    <rect x="1120" y="210" width="2" height="2"/>
+    <rect x="700" y="24" width="2" height="2"/>
+  </g>
+  <g fill="#f0c14a">
+    <rect x="200" y="200" width="3" height="3"/>
+    <rect x="900" y="180" width="2" height="2"/>
+    <rect x="1040" y="120" width="3" height="3"/>
+    <rect x="320" y="240" width="2" height="2"/>
+  </g>
+  <text x="600" y="124" text-anchor="middle" fill="#5ee7f2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="42" font-weight="700">PIXEL HERO PENDING</text>
+  <text x="600" y="168" text-anchor="middle" fill="#f0c14a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18">ads/assets/readme-hero-pixel.gif</text>
+  <text x="600" y="204" text-anchor="middle" fill="#9fb3c8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">Labeled stand-in. Not final art. Not the product mark.</text>
+</svg>
