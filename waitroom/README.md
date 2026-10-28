@@ -12,7 +12,7 @@ its own. Installing it installs:
 claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
 ```
 
-That installs the four rooms above.
+That installs the four rooms above. The first interactive session logs one short tip in the transcript — the four rooms, that wait-breathe stays off until `/breathe`, and the optional wait-changed install — and does not log it again; there is no pane or row for it.
 
 Optional — turn-end file list (not in the four-room install):
 
