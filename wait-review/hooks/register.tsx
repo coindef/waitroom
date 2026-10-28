@@ -10,6 +10,7 @@ import {
   FOCUS_HINT,
   filledCells,
   isIgnored,
+  isNarrowPlacement,
   linesThatFit,
   mergeHunks,
   nextHunk,
@@ -108,12 +109,13 @@ const showStatus = async ($: EngineInterface) => {
 
       return
     }
-    // Below 144 columns a pane nobody asked for is never placed, and a placed
-    // one can be a tab behind another, so without this the count is the only
-    // sign the mod is there. The tail is the one action that places it anyway:
-    // `/wait-review`, which opens at any width.
-    const panes = await $.ui.panes().catch(() => [])
-    $.ui.status(`${parts.join(' · ')}${paneHint(panes.find(pane => pane.id === PANE))}`)
+    // A placed pane can sit behind another tab, and an unasked open below the
+    // column floor stays unplaced. A missing pane is not that: it was closed,
+    // never opened, or the list could not be read. Only a confirmed column
+    // refusal says the terminal is too narrow. `/wait-review` places it anyway.
+    const panes = await $.ui.panes().catch(() => undefined)
+    const ours = panes?.find(pane => pane.id === PANE)
+    $.ui.status(`${parts.join(' · ')}${paneHint(ours, panes !== undefined && waitingNarrow)}`)
   } catch {
     // Nothing to do: the counts are still right, only unshown.
   }
@@ -359,6 +361,19 @@ const loadFocusHint = async ($: EngineInterface) => {
   if (saved === true) await update($, focusHintDismissed, () => true)
 }
 
+/**
+ * The last open is waiting on a wider terminal.
+ *
+ * Set from `$.ui.open`'s reason, which is the only place the engine says why
+ * a pane was not placed. `$.ui.panes()` reports `isPlaced` and nothing else,
+ * so a closed pane and a narrow wait are not the same fact.
+ */
+let waitingNarrow = false
+
+const notePlacement = (opened: { isPlaced: boolean; reason?: string } | undefined) => {
+  waitingNarrow = opened !== undefined && opened.isPlaced === false && isNarrowPlacement(opened.reason)
+}
+
 /** The hint has done its job: `/wait-review`, or `o` / `f` while the pane held the keys. */
 const dismissFocusHint = async ($: EngineInterface) => {
   if (await read($, focusHintDismissed)) return
@@ -381,6 +396,7 @@ const openAsked = async ($: EngineInterface) => {
   // transcript while it is up, and the pane list still calls this pane
   // shown. What gives it away is the focus just asked for never arriving.
   const focused = opened.isPlaced ? await focusArrives($) : undefined
+  notePlacement(opened)
 
   return { opened, focused }
 }
@@ -411,13 +427,23 @@ export const register: Register = (on, options) => {
     })
     // No `focus` here. A pane that opens by itself must not take the keys
     // before a first prompt has been sent; `/wait-review` does that.
-    if (config.autoOpen) void $.ui.open({ id: PANE, title: 'Wait review' }).catch(() => undefined)
+    // Awaited so the status line knows, before the first turn, whether this
+    // open is waiting on width.
+    if (config.autoOpen) {
+      const opened = await $.ui
+        .open({ id: PANE, title: 'Wait review' })
+        .catch(() => undefined)
+      notePlacement(opened)
+    }
 
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // `/clear`, `/resume` and `/branch` reset `$.state` and do not fire
-  // `session.start`, so the hint would otherwise introduce itself again.
+  // These reset `$.state`, and `session.start` does not run again, so the
+  // dismissed hint is read back from the store. `source` is the string Claude
+  // Code sends: `clear`, `resume`, or `fork` (`/branch` arrives as `fork`).
+  // The full set is `startup | resume | clear | compact | fork`; `compact`
+  // does not reset state, so it is not reloaded here.
   on('classic.SessionStart', async ($, e, next) => {
     if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') await loadFocusHint($)
 

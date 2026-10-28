@@ -703,6 +703,36 @@ test('a focus hint dismissed in an earlier session stays dismissed', async ($, o
   await away.unmount()
 })
 
+test('a reset session reloads the dismissed focus hint when source is fork', async ($, on) => {
+  const saved = new Map<string, unknown>()
+  on('store.get', ($$, e) => ({ value: saved.get(e.key) }))
+  on('store.set', ($$, e) => {
+    saved.set(e.key, e.value)
+
+    return { value: undefined }
+  })
+  on('classic.SessionStart', ($$, e) => e)
+  await queueOne($, on, AUTH_DIFF, 'turn-fork')
+
+  const before = await mountUnfocused($)
+  expect(await before.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeDefined()
+  await before.unmount()
+
+  // State was reset to "show the hint"; the store still says it was dismissed.
+  // `branch` is not a source Claude Code sends. `/branch` arrives as `fork`.
+  saved.set('focus-hint-dismissed', true)
+  await $.classic.SessionStart({ source: 'branch' })
+  const branched = await mountUnfocused($)
+  expect(await branched.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeDefined()
+  await branched.unmount()
+
+  await $.classic.SessionStart({ source: 'fork' })
+  const after = await mountUnfocused($)
+  expect(await after.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeUndefined()
+  expect(await after.find({ text: /\/wait-review or ctrl\+x tab to use these keys/ })).toBeDefined()
+  await after.unmount()
+})
+
 test('pressing o while the pane does not hold the keys leaves the focus hint up', async ($, on) => {
   await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-focus-2')
 
@@ -744,13 +774,56 @@ test('the status line names the count and the way in, not the plugin again', asy
 
     return { value: undefined }
   })
-  // No pane is placed in a test, as on a terminal under 144 columns.
+  // Nothing in the pane list: not opened, closed, or the list could not be read.
+  // That is not evidence the terminal is narrow.
   await queueOne($, on, AUTH_DIFF, 'turn-s1', registered)
 
-  expect(said.at(-1)).toBe('1 to read · terminal too narrow — /wait-review opens anyway')
+  expect(said.at(-1)).toBe('1 to read · open with /wait-review')
+  expect(said.at(-1)).not.toContain('too narrow')
   expect(said.every(text => text === undefined || !text.startsWith('review'))).toBe(true)
   // One action, the same command, and it runs during a turn rather than after it.
   expect(registered.some(command => command.name === 'wait-review' && command.immediate === true)).toBe(true)
+})
+
+test('a pane held back for width says the terminal is too narrow', async ($, on) => {
+  const said: (string | undefined)[] = []
+  on('ui.status', ($$, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+  // The reason `$.ui.open` returns when an unasked pane waits under 144 columns.
+  on('ui.open', () => ({
+    value: {
+      isPlaced: false,
+      reason:
+        'unasked below 144 columns (80 now): placed when the person opens it, or when the terminal is widened to 144 columns',
+    },
+  }))
+  on('ui.panes', () => ({
+    value: [{ id: 'wait-review', title: 'Wait review', isPlaced: false, isShown: false, isFocused: false }],
+  }))
+  await queueOne($, on, AUTH_DIFF, 'turn-narrow')
+
+  expect(said.at(-1)).toBe('1 to read · terminal too narrow — /wait-review opens anyway')
+})
+
+test('a closed pane is not called a narrow terminal', async ($, on) => {
+  const said: (string | undefined)[] = []
+  on('ui.status', ($$, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+  // Open was refused because nothing is drawing panes, and the list is empty
+  // the way a hand-closed pane is: gone, not waiting.
+  on('ui.open', () => ({
+    value: { isPlaced: false, reason: 'no attached surface places panes (headless)' },
+  }))
+  on('ui.panes', () => ({ value: [] }))
+  await queueOne($, on, AUTH_DIFF, 'turn-closed')
+
+  expect(said.at(-1)).toBe('1 to read · open with /wait-review')
 })
 
 test('a pane covered by the diff panel says how to uncover it', async ($, on) => {

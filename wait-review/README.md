@@ -141,6 +141,10 @@ and names the one action that places it anyway:
 wait-review: 3 to read · terminal too narrow — /wait-review opens anyway
 ```
 
+That line is only for a pane the engine is holding back because the terminal
+is too narrow. A pane you closed, or one that was never opened, says
+`3 to read · open with /wait-review` instead.
+
 Running `/wait-review` places it at any width, including while a turn is still
 going, and it takes the keyboard too — the hotkeys answer right away, no click
 or `ctrl+x tab` needed first. Once you've opened it that way and not closed it
@@ -255,7 +259,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 90 tests
+claude plugin test .         # 94 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

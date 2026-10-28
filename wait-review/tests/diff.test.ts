@@ -9,6 +9,7 @@ import {
   gradeOf,
   isIgnored,
   mergeHunks,
+  isNarrowPlacement,
   paneHint,
   progressOf,
   reviewable,
@@ -536,13 +537,34 @@ test('a line too long for the whole pane is still shown, alone', async () => {
 })
 
 test('the status hint says how to reach the pane, and nothing once it is in view', async () => {
-  // Unplaced: a terminal under 144 columns, or a pane that was never opened.
-  // The engine draws this after `wait-review: ` and the count.
-  expect(paneHint(undefined)).toBe(' · terminal too narrow — /wait-review opens anyway')
-  expect(paneHint({ isPlaced: false, isShown: false })).toBe(' · terminal too narrow — /wait-review opens anyway')
+  // Missing (closed, never opened, or the list could not be read) is not a
+  // narrow terminal, even if some earlier open was.
+  expect(paneHint(undefined)).toBe(' · open with /wait-review')
+  expect(paneHint(undefined, true)).toBe(' · open with /wait-review')
+  // Unplaced for some other reason: no surface, say.
+  expect(paneHint({ isPlaced: false, isShown: false })).toBe(' · open with /wait-review')
+  // The engine refused an unasked open for width, and the pane is still waiting.
+  expect(paneHint({ isPlaced: false, isShown: false }, true)).toBe(
+    ' · terminal too narrow — /wait-review opens anyway',
+  )
   // Placed, but another pane's tab is in front of it.
-  expect(paneHint({ isPlaced: true, isShown: false })).toBe(' · open with /wait-review')
-  expect(paneHint({ isPlaced: true, isShown: true })).toBe('')
+  expect(paneHint({ isPlaced: true, isShown: false }, true)).toBe(' · open with /wait-review')
+  expect(paneHint({ isPlaced: true, isShown: true }, true)).toBe('')
+})
+
+test('only the engine’s column refusal counts as a narrow terminal', async () => {
+  expect(
+    isNarrowPlacement(
+      'unasked below 144 columns (80 now): placed when the person opens it, or when the terminal is widened to 144 columns',
+    ),
+  ).toBe(true)
+  expect(
+    isNarrowPlacement(
+      'unasked below 110 columns (90 now, an id the person opened before): placed when the person opens it, or when the terminal is widened to 110 columns',
+    ),
+  ).toBe(true)
+  expect(isNarrowPlacement('no attached surface places panes (headless)')).toBe(false)
+  expect(isNarrowPlacement(undefined)).toBe(false)
 })
 
 test('the progress bar is full only when all is read, and empty only before any is', async () => {

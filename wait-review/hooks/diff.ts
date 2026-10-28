@@ -452,10 +452,23 @@ const NOTE_BUDGET = 12000
  * this mod sets, so the narrow-terminal tail below does not repeat the name.
  */
 export const FOCUS_HINT = 'Focus this pane: /wait-review · then o / f work'
-/** Status-line tail when the pane was not placed (a terminal under 144 columns). */
+/**
+ * Status-line tail when an unasked open is waiting because the terminal is
+ * under the column floor. The engine's reason starts `unasked below N columns`.
+ */
 export const NARROW_PANE_HINT = ' · terminal too narrow — /wait-review opens anyway'
-/** Status-line tail when the pane is placed but another tab is in front of it. */
-export const HIDDEN_PANE_HINT = ' · open with /wait-review'
+/** Status-line tail when the pane is missing, closed, or behind another tab. */
+export const OPEN_PANE_HINT = ' · open with /wait-review'
+
+/**
+ * Whether `$.ui.open` refused to place a pane because the terminal is too
+ * narrow for one nobody asked for.
+ *
+ * Other refusals share `isPlaced: false` — no surface is attached, say — and
+ * a closed pane is simply absent from `$.ui.panes()`. Neither is a narrow terminal.
+ */
+export const isNarrowPlacement = (reason: string | undefined): boolean =>
+  reason !== undefined && reason.startsWith('unasked below ') && reason.includes(' columns')
 /**
  * What `/wait-review` says when the focus it just asked for never arrives:
  * Claude Code's own diff panel is covering this pane.
@@ -467,15 +480,21 @@ export const DIFF_COVER_HINT =
  * What the status line adds about the pane, so a count never points at a pane
  * the person cannot see.
  *
- * Unplaced, the terminal is too narrow for a pane nobody asked for, and the
- * tail names the one action that places it anyway. Placed but not shown,
- * another pane's tab is in front of it. In view, the count stands alone.
+ * In view, the count stands alone. Placed but not shown, another tab is in
+ * front. Unplaced and `narrow` — the open was refused with the engine's
+ * column reason — the terminal is too narrow and `/wait-review` still places
+ * it. Anything else (closed, never opened, a panes lookup that failed, some
+ * other refusal) gets the plain way in, and does not claim the terminal is narrow.
  */
-export const paneHint = (pane: { isPlaced: boolean; isShown: boolean } | undefined): string => {
+export const paneHint = (
+  pane: { isPlaced: boolean; isShown: boolean } | undefined,
+  narrow = false,
+): string => {
   if (pane !== undefined && pane.isPlaced && pane.isShown) return ''
-  if (pane !== undefined && pane.isPlaced) return HIDDEN_PANE_HINT
+  if (pane !== undefined && pane.isPlaced) return OPEN_PANE_HINT
+  if (pane !== undefined && !pane.isPlaced && narrow) return NARROW_PANE_HINT
 
-  return NARROW_PANE_HINT
+  return OPEN_PANE_HINT
 }
 
 /**
