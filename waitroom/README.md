@@ -22,6 +22,14 @@ claude plugin install wait-changed@waitroom
 
 After a turn that changed files, lists them above the prompt. Read-only. Skip if you only want the four rooms. [What it shows](../wait-changed).
 
+Optional — local notification when a long turn ends (not in the four-room install):
+
+```sh
+claude plugin install wait-ping@waitroom
+```
+
+A turn under 30 seconds ends quietly. Sound stays off until you turn it on. [What it sends](../wait-ping).
+
 At the Claude Code prompt, send these as two messages:
 
 ```

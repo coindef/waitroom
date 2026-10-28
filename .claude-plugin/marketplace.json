@@ -8,7 +8,7 @@
     {
       "name": "waitroom",
       "source": "./waitroom",
-      "description": "Installs the four rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Optional — turn-end file list, not in the four-room install: claude plugin install wait-changed@waitroom.",
+      "description": "Installs the four rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Optional — not in the four-room install: claude plugin install wait-changed@waitroom (turn-end file list), claude plugin install wait-ping@waitroom (local OS notification when a long turn ends or a permission confirm is waiting).",
       "dependencies": [
         "wait-review",
         "bet-on-your-agent",
@@ -40,6 +40,11 @@
       "name": "wait-changed",
       "source": "./wait-changed",
       "description": "After a Claude Code turn ends, shows a read-only list of the files that turn changed. On until you turn it off."
+    },
+    {
+      "name": "wait-ping",
+      "source": "./wait-ping",
+      "description": "Sends a local OS notification when a long turn ends or a permission confirm is waiting. Sound stays off until you turn it on."
     }
   ]
 }
