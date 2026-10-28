@@ -477,6 +477,40 @@ export const DIFF_COVER_HINT =
   'Claude’s /diff is covering this side — send /diff once to show wait-review'
 
 /**
+ * Transcript line the first time a turn writes hunks while Claude's Diff
+ * covers the pane. Locked copy.
+ */
+export const DIFF_COVER_TIP =
+  "Claude's Diff is covering Waitroom. Send /diff once to show wait-review — Claude remembers."
+
+/** `$.store` key. Set once the cover tip has been decided, and then forever. */
+export const DIFF_COVER_TIP_KEY = 'diff-cover-tip-shown'
+
+/**
+ * What to do with the cover tip on a turn that might be the covered one.
+ *
+ * `show` — this turn produced hunks, the focus we asked for never arrived
+ * (Claude's Diff is covering the pane), and the once-key is unset: write the
+ * line and spend the key. `settle` — focus landed, so `/diff` is not covering
+ * the pane: spend the key without a line, so a later turn does not ask for
+ * the keys again. `skip` — nothing to decide (no new hunks, the pane is not
+ * in that check, or the key is already set).
+ */
+export type DiffCoverTipAction = 'show' | 'settle' | 'skip'
+
+export const diffCoverTipAction = (
+  producedHunks: boolean,
+  focus: boolean | undefined,
+  stored: unknown,
+): DiffCoverTipAction => {
+  if (!producedHunks || stored === true) return 'skip'
+  if (focus === false) return 'show'
+  if (focus === true) return 'settle'
+
+  return 'skip'
+}
+
+/**
  * What the status line adds about the pane, so a count never points at a pane
  * the person cannot see.
  *

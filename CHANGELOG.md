@@ -1,5 +1,9 @@
 # Changelog
 
+## wait-review 0.4.3
+
+- **One quiet tip the first time Claude's Diff covers the pane.** The first turn that writes a diff while focus never lands logs `Claude's Diff is covering Waitroom. Send /diff once to show wait-review — Claude remembers.` Once, then not again. It does not close Claude's panel.
+
 ## waitroom 0.1.1
 
 - **One quiet tip on the first session.** After `waitroom@waitroom` loads, the first interactive session logs three lines in the transcript: the four rooms are in, wait-breathe stays off until `/breathe`, and the optional `claude plugin install wait-changed@waitroom`. It does not return. No pane and no row.

@@ -3,7 +3,11 @@ import { expect, test } from 'claude-code/testing'
 import type { Hunk, SessionStats } from '../types'
 import {
   DEFAULT_IGNORE,
+  DIFF_COVER_HINT,
+  DIFF_COVER_TIP,
+  DIFF_COVER_TIP_KEY,
   EMPTY_SESSION,
+  diffCoverTipAction,
   filledCells,
   globToRegExp,
   gradeOf,
@@ -608,4 +612,30 @@ test('the session summary line names every stat and the grade', async () => {
   expect(line).toContain('1 skipped')
   expect(line).toContain('longest combo 5')
   expect(line).toContain('grade S')
+})
+
+test('the diff-cover tip is the locked line, and the /wait-review reply stays the one it was', () => {
+  expect(DIFF_COVER_TIP).toBe(
+    "Claude's Diff is covering Waitroom. Send /diff once to show wait-review — Claude remembers.",
+  )
+  expect(DIFF_COVER_HINT).toBe(
+    'Claude’s /diff is covering this side — send /diff once to show wait-review',
+  )
+  expect(DIFF_COVER_TIP_KEY).toBe('diff-cover-tip-shown')
+})
+
+test('the diff-cover tip is shown once, only when a turn wrote hunks and focus never arrived', () => {
+  // The first covered turn writes the line.
+  expect(diffCoverTipAction(true, false, undefined)).toBe('show')
+  // The key is spent: a later covered turn, this session or the next, does not.
+  expect(diffCoverTipAction(true, false, true)).toBe('skip')
+  // Focus landed, or `/diff` is not covering the pane: no line. Spending the
+  // key is `settle`, so the check does not ask for the keys again.
+  expect(diffCoverTipAction(true, true, undefined)).toBe('settle')
+  // The pane was not in the check (closed, hidden, not opened): do not spend it.
+  expect(diffCoverTipAction(true, undefined, undefined)).toBe('skip')
+  // A turn that wrote nothing is not the turn.
+  expect(diffCoverTipAction(false, false, undefined)).toBe('skip')
+  // Only a real `true` in the store has spent the key.
+  expect(diffCoverTipAction(true, false, false)).toBe('show')
 })
