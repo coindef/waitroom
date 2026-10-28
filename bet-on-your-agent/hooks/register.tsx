@@ -785,8 +785,8 @@ export const register: Register = (on, options) => {
     const mine = await draw()
     if (mine === undefined) return next(e)
     // The row is shared and shows one mod at a time: a breathe nudge already
-    // beneath keeps it, and so does a ship offer between turns; the bet waits
-    // its turn there.
+    // beneath keeps it, and so does a turn-end diff card or a ship offer
+    // between turns; the bet waits its turn there.
     const beneath = await next(e).catch(() => undefined)
 
     return beneath !== undefined && betYields(drawnBy(beneath), e.props.isWorking) ? beneath : mine

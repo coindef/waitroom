@@ -1,0 +1,21 @@
+{
+  "name": "wait-changed",
+  "version": "0.1.0",
+  "description": "After a Claude Code turn ends, shows a read-only list of the files that turn changed. On until you turn it off.",
+  "author": {
+    "name": "coindef"
+  },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/wait-changed",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
+  "icon": "./.claude-plugin/icon.png",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "title": "Show a turn-end diff card",
+      "description": "On by default. When a turn ends having changed files, show a read-only local summary. Off leaves every turn silent."
+    }
+  }
+}

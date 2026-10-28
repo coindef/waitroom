@@ -1,5 +1,36 @@
 # Changelog
 
+## wait-changed 0.1.0
+
+First release: a read-only card once a Claude Code turn ends.
+
+- **`What changed this turn`.** Filenames and a one-line hint (`+12 −3`, or
+  `added` / `deleted` / `modified` when there is no line count), at most
+  eight files, then `N more files…`. Subtitle `Read-only local git — nothing
+  uploaded`. No hunks.
+- **Only after the turn, and only when this turn changed files.** A clean
+  tree, dirt that was already there, a turn still running, and a folder that
+  is not a git repository all stay silent. A failed `git` read stays silent
+  too.
+- **Two actions.** `Close` dismisses this turn's card. `Don't show again` turns the
+  card off. `/wait-changed` turns it back on, and so does *Show a turn-end
+  diff card* under `/plugin` → wait-changed.
+- **The shared row, under the transcript.** It does not cover Claude's reply.
+  Between turns it comes ahead of a wait-ship offer and bet-on-your-agent's
+  "Did it land?"; `Close` is what gives them the row. It is not drawn while a
+  turn runs.
+
+## wait-ship 0.1.2
+
+- **The shared row yields to wait-changed between turns** when that mod is
+  installed and showing its card. While a turn runs, nothing here changes.
+
+## bet-on-your-agent 0.6.1
+
+- **Between turns, the row yields to a wait-changed card** ahead of a ship
+  offer. While a turn runs, only a breathe nudge still holds the forecast
+  back.
+
 ## wait-review 0.4.2
 
 - **A first-run line when the pane opens by itself.** It does not take the

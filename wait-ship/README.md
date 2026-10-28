@@ -82,8 +82,10 @@ the session began). **Outside a git repository**, same thing — there is no
 diff to draft from.
 
 The row is shared, and shows one mod at a time: a `wait-breathe` nudge comes
-first, then this kit, then `bet-on-your-agent`'s "Did it land?", which takes
-the row the moment the kit is answered.
+first, then — between turns, when that mod is installed and the turn changed
+files — `wait-changed`'s read-only list, then this kit, then
+`bet-on-your-agent`'s "Did it land?", which takes the row the moment the kit
+is answered.
 
 ## What goes into each draft
 

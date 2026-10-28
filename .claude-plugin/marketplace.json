@@ -24,6 +24,11 @@
       "name": "wait-breathe",
       "source": "./wait-breathe",
       "description": "Shows one quiet nudge in the row above the prompt once a turn runs long — off by default until you turn it on."
+    },
+    {
+      "name": "wait-changed",
+      "source": "./wait-changed",
+      "description": "After a Claude Code turn ends, shows a read-only list of the files that turn changed. On until you turn it off."
     }
   ]
 }

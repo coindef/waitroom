@@ -370,10 +370,12 @@ test('receiptLines names each draft written and the command that uses it, one li
 // The row above the prompt
 // ---------------------------------------------------------------------------
 
-test('the row goes to breathe first, then ship, then bet: one mod at a time', () => {
-  expect(BAND_PRECEDENCE).toEqual(['wait-breathe', 'wait-ship', 'bet-on-your-agent'])
+test('the row goes to breathe, then the turn-end card, then ship, then bet', () => {
+  expect(BAND_PRECEDENCE).toEqual(['wait-breathe', 'wait-changed', 'wait-ship', 'bet-on-your-agent'])
   // A breathe nudge beneath keeps the row ahead of a kit...
   expect(yieldsBand('wait-ship', 'wait-breathe')).toBe(true)
+  // ...and so does the turn-end diff card, which is only up between turns.
+  expect(yieldsBand('wait-ship', 'wait-changed')).toBe(true)
   // ...a bet question beneath gives it up to one...
   expect(yieldsBand('wait-ship', 'bet-on-your-agent')).toBe(false)
   // ...and the same holds across the other pairs, whichever mod asks.
