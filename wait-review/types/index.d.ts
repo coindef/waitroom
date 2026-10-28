@@ -138,6 +138,16 @@ declare module 'claude-code' {
        * fresh install gets one.
        */
       session: SessionStats
+      /**
+       * Whether the first-run focus hint has been dismissed for good.
+       *
+       * The pane that opens by itself does not take the keys. Until the person
+       * runs `/wait-review`, or presses `o` or `f` while the pane holds them,
+       * the pane says how. Absent in a state file written before this existed;
+       * `atom`'s own default shows the hint, and the store is what keeps it
+       * dismissed across sessions.
+       */
+      focusHintDismissed: boolean
     }
   }
 }

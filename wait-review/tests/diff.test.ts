@@ -536,8 +536,10 @@ test('a line too long for the whole pane is still shown, alone', async () => {
 })
 
 test('the status hint says how to reach the pane, and nothing once it is in view', async () => {
-  expect(paneHint(undefined)).toBe(' · open with /wait-review')
-  expect(paneHint({ isPlaced: false, isShown: false })).toBe(' · open with /wait-review')
+  // Unplaced: a terminal under 144 columns, or a pane that was never opened.
+  // The engine draws this after `wait-review: ` and the count.
+  expect(paneHint(undefined)).toBe(' · terminal too narrow — /wait-review opens anyway')
+  expect(paneHint({ isPlaced: false, isShown: false })).toBe(' · terminal too narrow — /wait-review opens anyway')
   // Placed, but another pane's tab is in front of it.
   expect(paneHint({ isPlaced: true, isShown: false })).toBe(' · open with /wait-review')
   expect(paneHint({ isPlaced: true, isShown: true })).toBe('')

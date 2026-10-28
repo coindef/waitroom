@@ -188,14 +188,17 @@ looks: the pane shows `lines 1–30 of 200` and pages through the rest.
 Running `/wait-review` opens the pane already holding the keyboard, so the
 letters answer at once. The pane that opens by itself at the start of a session
 deliberately does not take the keys: it would eat the first keystrokes of a
-prompt you have not sent yet.
+prompt you have not sent yet. The first time that happens it says so, in bold,
+`Focus this pane: /wait-review · then o / f work`, and that line does not come
+back after you have run `/wait-review` or pressed `o` or `f` with the pane
+focused.
 
 If the pane never appears, your terminal is under 144 columns — a pane nobody
-asked for needs that much room. Run `/wait-review` and it opens at any width.
-The status line tells you so:
+asked for needs that much room. Run `/wait-review` and it opens at any width,
+even while a turn is still going. The status line tells you so:
 
 ```
-wait-review: 3 to read · open with /wait-review
+wait-review: 3 to read · terminal too narrow — /wait-review opens anyway
 ```
 
 **On Claude Code 2.1.304 or later**, Claude Code has a diff panel of its own,
@@ -203,7 +206,8 @@ and it opens beside the transcript the first time Claude edits — in front of
 wait-review's pane. Send `/diff` once to hide it. Claude Code remembers that,
 so the side is wait-review's from then on, in later sessions too; `/diff` again
 brings the built-in panel back whenever you want it. If you run `/wait-review`
-and see nothing, its reply says when this is why.
+and see nothing, its reply says `Claude’s /diff is covering this side — send
+/diff once to show wait-review`.
 
 ### bet-on-your-agent · your calibration
 
@@ -368,7 +372,7 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./wait-review
-claude plugin test     ./wait-review          # 85 tests
+claude plugin test     ./wait-review          # 90 tests
 
 claude plugin validate ./bet-on-your-agent
 claude plugin test     ./bet-on-your-agent    # 130 tests

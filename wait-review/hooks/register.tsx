@@ -5,7 +5,9 @@ import type { Decision, Hunk, HunkStatus, Page, SessionStats } from '../types'
 import type { Slice } from './diff'
 import {
   DEFAULT_IGNORE,
+  DIFF_COVER_HINT,
   EMPTY_SESSION,
+  FOCUS_HINT,
   filledCells,
   isIgnored,
   linesThatFit,
@@ -45,6 +47,13 @@ const noting = atom({ plugin: 'wait-review', key: 'noting' } as const, null as s
 const page = atom({ plugin: 'wait-review', key: 'page' } as const, null as Page | null)
 /** This session's combo and grade inputs; reset once per true session start. */
 const session = atom({ plugin: 'wait-review', key: 'session' } as const, EMPTY_SESSION as SessionStats)
+/**
+ * The first-run focus hint, dismissed for good. The store of the same fact
+ * survives a new session; this atom is what a drawing reads.
+ */
+const focusHintDismissed = atom({ plugin: 'wait-review', key: 'focusHintDismissed' } as const, false)
+/** `$.store` key for `focusHintDismissed`, so a new install sees the hint once. */
+const FOCUS_HINT_KEY = 'focus-hint-dismissed'
 
 /**
  * Rows the review card always spends around the diff: the header, the path
@@ -101,7 +110,8 @@ const showStatus = async ($: EngineInterface) => {
     }
     // Below 144 columns a pane nobody asked for is never placed, and a placed
     // one can be a tab behind another, so without this the count is the only
-    // sign the mod is there, and no way in.
+    // sign the mod is there. The tail is the one action that places it anyway:
+    // `/wait-review`, which opens at any width.
     const panes = await $.ui.panes().catch(() => [])
     $.ui.status(`${parts.join(' · ')}${paneHint(panes.find(pane => pane.id === PANE))}`)
   } catch {
@@ -338,6 +348,43 @@ const dropFile = async ($: EngineInterface, path: string) => {
   await showStatus($)
 }
 
+/**
+ * Copies the dismissed focus hint out of the store.
+ *
+ * A drawing reads the atom; the store is what makes "once" survive a new
+ * session, `/clear`, and a resume. A missing store leaves the hint up.
+ */
+const loadFocusHint = async ($: EngineInterface) => {
+  const saved = await $.store.get(FOCUS_HINT_KEY).catch(() => undefined)
+  if (saved === true) await update($, focusHintDismissed, () => true)
+}
+
+/** The hint has done its job: `/wait-review`, or `o` / `f` while the pane held the keys. */
+const dismissFocusHint = async ($: EngineInterface) => {
+  if (await read($, focusHintDismissed)) return
+  await update($, focusHintDismissed, () => true)
+  await $.store.set(FOCUS_HINT_KEY, true).catch(() => undefined)
+}
+
+/**
+ * Places the pane because the person asked, at any width, and gives it the keys.
+ *
+ * This is the one action the narrow-terminal status line names. Auto-open at
+ * session start does not use it: that open leaves the keys with the composer.
+ */
+const openAsked = async ($: EngineInterface) => {
+  await dismissFocusHint($)
+  const opened = await $.ui
+    .open({ id: PANE, title: 'Wait review', focus: true })
+    .catch(() => ({ isPlaced: false, reason: 'the engine would not place it' }) as const)
+  // Claude Code's own diff panel (2.1.304 on) holds the side of the
+  // transcript while it is up, and the pane list still calls this pane
+  // shown. What gives it away is the focus just asked for never arriving.
+  const focused = opened.isPlaced ? await focusArrives($) : undefined
+
+  return { opened, focused }
+}
+
 export const register: Register = (on, options) => {
   const config: Config = {
     contextLines: whole(options.contextLines, 3),
@@ -354,11 +401,25 @@ export const register: Register = (on, options) => {
     // Taken before anything else here: the review is wrong without the anchor
     // and the snapshot, and neither is worth losing to a command registration.
     await beginSession($, config)
+    await loadFocusHint($)
+    // `immediate` so the status line's one action opens the pane during the
+    // wait, not after the turn that wrote the diff has already ended.
     await $.command.register({
       name: 'wait-review',
       description: 'Open the wait-review pane and re-read the diff Claude has written so far',
+      immediate: true,
     })
+    // No `focus` here. A pane that opens by itself must not take the keys
+    // before a first prompt has been sent; `/wait-review` does that.
     if (config.autoOpen) void $.ui.open({ id: PANE, title: 'Wait review' }).catch(() => undefined)
+
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // `/clear`, `/resume` and `/branch` reset `$.state` and do not fire
+  // `session.start`, so the hint would otherwise introduce itself again.
+  on('classic.SessionStart', async ($, e, next) => {
+    if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') await loadFocusHint($)
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -383,17 +444,13 @@ export const register: Register = (on, options) => {
     // Focused only here, not on the autoOpen at session.start: typing `/wait-review`
     // is asking to use it now, where auto-opening at the start of a session is not -
     // stealing the composer's focus before a first prompt would eat its keystrokes.
-    const opened = await $.ui
-      .open({ id: PANE, title: 'Wait review', focus: true })
-      .catch(() => ({ isPlaced: false, reason: 'the engine would not place it' }) as const)
-    // Claude Code's own diff panel (2.1.304 on) holds the side of the
-    // transcript while it is up, and the pane list still calls this pane
-    // shown. What gives it away is the focus just asked for never arriving.
-    const focused = opened.isPlaced ? await focusArrives($) : undefined
+    // The same open places the pane at any width, which is what a narrow
+    // terminal's status line is promising.
+    const { opened, focused } = await openAsked($)
     const where = !opened.isPlaced
       ? `Review pane waiting (${opened.reason}).`
       : focused === false
-        ? "Review pane open. If you can't see it, Claude Code's diff panel is in front: /diff hides that."
+        ? DIFF_COVER_HINT
         : 'Review pane open.'
     const truncatedCount = await read($, truncatedFiles)
     const truncatedNote = truncatedCount > 0 ? ` +${truncatedCount} more files not shown.` : ''
@@ -596,6 +653,17 @@ export const register: Register = (on, options) => {
       )
     }
 
+    // The auto-opened pane does not take the keys. Until the person has run
+    // `/wait-review`, or pressed `o` or `f` while this pane held them, say so
+    // once — bold, and only while it does not have the keys.
+    const isFocused = e.props.isFocused
+    const showFocusHint = !isFocused && !(await read($, focusHintDismissed))
+    const focusHintLine = showFocusHint && (
+      <Text weight="bold" wrap="truncate-end">
+        {FOCUS_HINT}
+      </Text>
+    )
+
     if (!current) {
       const isFresh = counts.reviewed === 0 && counts.dropped === 0 && counts.flagged === 0
       // The reading is done for now, so its one line is said here: the line
@@ -630,6 +698,7 @@ export const register: Register = (on, options) => {
                 {key('l', 'Later')}
                 {key('x', 'Skip file')}
               </Box>
+              {focusHintLine}
             </Box>
           ) : (
             <Box flexDirection="column">
@@ -642,6 +711,7 @@ export const register: Register = (on, options) => {
                 makes them.
               </Text>
               {hasSessionActivity && <Text dimColor>{sessionSummaryLine(stats)}</Text>}
+              {focusHintLine}
             </Box>
           )}
           {flagCallout}
@@ -653,13 +723,22 @@ export const register: Register = (on, options) => {
     const where = progressOf(list, current)
     // Hotkeys only land while the pane holds the keyboard; say how to give it
     // the keys, since pressing `o` without that types an o into the prompt.
-    // /wait-review comes first because it always works: while a band above the
-    // prompt has buttons up - bet-on-your-agent asking "Did it land?" - ctrl+x
-    // tab gives the keys to that band instead of this pane.
-    const isFocused = e.props.isFocused
+    // The first time, one bold line: `/wait-review`, then `o` and `f`. After
+    // that, the fuller reminder. `/wait-review` comes first because it always
+    // works: while a band above the prompt has buttons up - bet-on-your-agent
+    // asking "Did it land?" - ctrl+x tab gives the keys to that band instead.
     const keysHint = isFocused
       ? 'esc hands the keys back to the prompt'
-      : '/wait-review or ctrl+x tab to use these keys · or click them'
+      : showFocusHint
+        ? FOCUS_HINT
+        : '/wait-review or ctrl+x tab to use these keys · or click them'
+    // `o` and `f` while the pane already holds the keys are the other way the
+    // first-run line is dismissed. A click while it does not still decides the
+    // hunk, and leaves the line up.
+    const markRead = async (status: 'ok' | 'flagged') => {
+      if (isFocused) await dismissFocusHint($)
+      await mark($, current.id, status)
+    }
     // The pane's own body, not the terminal: the prompt and status rows sit
     // below it, and sizing pages to the whole screen pushed the controls off
     // the bottom of a long hunk's first page.
@@ -753,10 +832,10 @@ export const register: Register = (on, options) => {
           {/* Dim until the pane holds the keyboard, so a glance says whether a
               letter will land here or in the prompt. */}
           <Box columnGap={2} flexWrap="wrap">
-            <Button key="ok" hotkey="o" plain dimColor={!isFocused} onPress={() => mark($, current.id, 'ok')}>
+            <Button key="ok" hotkey="o" plain dimColor={!isFocused} onPress={() => markRead('ok')}>
               <Text color={isFocused ? 'success' : undefined}>Looks right</Text>
             </Button>
-            <Button key="flag" hotkey="f" plain dimColor={!isFocused} onPress={() => mark($, current.id, 'flagged')}>
+            <Button key="flag" hotkey="f" plain dimColor={!isFocused} onPress={() => markRead('flagged')}>
               <Text color={isFocused ? 'warning' : undefined}>Flag</Text>
             </Button>
             <Button key="later" hotkey="l" plain dimColor onPress={() => mark($, current.id, 'later')}>
@@ -767,8 +846,13 @@ export const register: Register = (on, options) => {
             </Button>
             {undoButton}
           </Box>
-          <Text dimColor={!isFocused} color={isFocused ? 'suggestion' : undefined} wrap="truncate-end">
-            {isFocused ? '● ' : ''}
+          <Text
+            weight={showFocusHint ? 'bold' : undefined}
+            dimColor={!isFocused && !showFocusHint}
+            color={isFocused ? 'suggestion' : undefined}
+            wrap="truncate-end"
+          >
+            {isFocused ? '● ' : null}
             {keysHint}
           </Text>
         </Box>
