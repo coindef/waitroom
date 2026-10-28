@@ -4,10 +4,10 @@
 
 First release: a local OS notification when a Claude Code turn ends, or when a permission confirm is waiting.
 
-- **Stop.** When a main-loop turn ends after at least `thresholdSeconds` (30 by default), one notification: `Turn finished · 45s`. A shorter turn, a turn you interrupted, and a subagent's turn stay quiet.
-- **Permission.** Claude Code's Notification hook, type `permission_prompt`, notifies even if the turn is still under the threshold: `Waiting on a permission confirm.` Other notification types do not.
+- **Stop.** When a main-loop turn ends after at least `thresholdSeconds` (30 by default), one notification titled `Waitroom`: `You were away 45s`, `You were away 1m`, or `You were away 1m 30s`. That time is how long the turn ran. A shorter turn, a turn you interrupted, and a subagent's turn stay quiet.
+- **Permission.** Claude Code's Notification hook, type `permission_prompt`, notifies even if the turn is still under the threshold: `Needs your OK`. Other notification types do not.
 - **Sound off unless you turn it on.** macOS runs `osascript` (and adds `sound name "Ping"` only when sound is on). Linux runs `notify-send` (and adds a sound hint only when sound is on).
-- **No network, and no away-time line.** `uname` chooses the desktop. Then `osascript` or `notify-send` runs, and nothing else. Nothing here records how long you were away.
+- **No network.** `uname` chooses the desktop. Then `osascript` or `notify-send` runs, and nothing else. "You were away" is the turn's own clock, not a separate tracker.
 
 ## wait-review 0.4.3
 

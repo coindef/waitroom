@@ -24,15 +24,18 @@ Two moments, and nothing else:
 
 - **A turn ends** (`turn.complete`, the same turn-end hook the other mods
   use). If it ran at least `thresholdSeconds` — 30 by default — a notification
-  says `Turn finished · 45s` (how long the turn ran). A shorter turn sends
-  nothing. A turn you interrupted, and a subagent's turn, send nothing.
+  says `You were away 45s`. That time is how long the turn ran. Under a
+  minute it stays in seconds (`45s`). An exact minute is `1m`. A minute and
+  a half is `1m 30s`. A shorter turn sends nothing. A turn you interrupted,
+  and a subagent's turn, send nothing.
 - **A permission confirm is waiting** (Claude Code's Notification hook, type
   `permission_prompt`). That type is sent once the confirm has been waiting,
   and it is not sent if you answer first. It notifies even when the turn is
-  still under the threshold: `Waiting on a permission confirm.` Other
-  notification types, including `idle_prompt`, do not.
+  still under the threshold: `Needs your OK`. Other notification types,
+  including `idle_prompt`, do not.
 
-The notification does not say how long you were away. Nothing here records that.
+The title is `Waitroom`. "You were away" is the turn's own clock. Nothing
+here tracks a separate away time, and nothing is sent anywhere.
 
 `/wait-ping` turns notifications off, and the next `/wait-ping` turns them
 back on. It is the same switch as *Notify when a turn ends or needs
@@ -60,14 +63,14 @@ turn does not run `uname`.
 **macOS** — `osascript`, silent unless sound is on:
 
 ```sh
-osascript -e 'display notification "Turn finished · 45s" with title "wait-ping"'
+osascript -e 'display notification "You were away 45s" with title "Waitroom"'
 ```
 
 With sound on, the same call adds `sound name "Ping"` (`Ping` is a built-in
 macOS sound):
 
 ```sh
-osascript -e 'display notification "Turn finished · 45s" with title "wait-ping" sound name "Ping"'
+osascript -e 'display notification "You were away 45s" with title "Waitroom" sound name "Ping"'
 ```
 
 If nothing appears, run `osascript -e 'display notification "test"'` once in
@@ -77,14 +80,14 @@ notifications. Script Editor is what `osascript` notifies through.
 **Linux** — `notify-send`, silent unless sound is on:
 
 ```sh
-notify-send "wait-ping" "Turn finished · 45s"
+notify-send "Waitroom" "You were away 45s"
 ```
 
 With sound on, the same call adds a hint and still does not start a second
 program:
 
 ```sh
-notify-send --hint=string:sound-name:message-new-instant "wait-ping" "Turn finished · 45s"
+notify-send --hint=string:sound-name:message-new-instant "Waitroom" "You were away 45s"
 ```
 
 `notify-send` comes from `libnotify` (`libnotify-bin` on Debian and Ubuntu).
@@ -108,7 +111,8 @@ The notification itself still does not ask for a sound unless sound is on.
 - **No sound unless you turn sound on.**
 - **No notification for a short turn** that is not waiting on a permission
   confirm.
-- **No away-time line.**
+- **No separate away tracker.** `You were away 45s` is the turn's own
+  duration.
 - **Nothing here blocks a turn.** A failure passes the hook through.
 
 ## Developing

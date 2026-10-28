@@ -7,14 +7,14 @@
 /** How long a turn runs before a stop notification. A permission confirm does not wait for this. */
 export const DEFAULT_THRESHOLD_SECONDS = 30
 
-/** The notification's title. The body says which kind it is. */
-export const NOTIFY_TITLE = 'wait-ping'
+/** The notification's title. Locked copy. */
+export const NOTIFY_TITLE = 'Waitroom'
 
 /** A permission confirm that has been waiting. Claude Code's own Notification type. */
 export const PERMISSION_NOTIFICATION = 'permission_prompt'
 
-/** Fixed copy. There is no away-time record in this marketplace, so v1 does not invent one. */
-export const PERMISSION_BODY = 'Waiting on a permission confirm.'
+/** Locked copy for a permission confirm that has been waiting. */
+export const PERMISSION_BODY = 'Needs your OK'
 
 /**
  * Built-in macOS sound, played only when sound is on.
@@ -111,8 +111,14 @@ export const formatDuration = (durationMs: number): string => {
   return `${minutes}m ${seconds}s`
 }
 
-/** The stop notification's body. The duration is how long the turn ran, not how long you were away. */
-export const stopBody = (durationMs: number): string => `Turn finished · ${formatDuration(durationMs)}`
+/**
+ * Locked copy for a turn that ended.
+ *
+ * "Away" here is the turn's own wall-clock (`durationMs`), not a separate
+ * tracker and not a network call. Under a minute it is `45s`. An exact
+ * minute is `1m`. Anything between is `1m 30s`.
+ */
+export const stopBody = (durationMs: number): string => `You were away ${formatDuration(durationMs)}`
 
 /** One AppleScript string literal. Quotes and backslashes stay inside it. */
 export const appleString = (text: string): string =>

@@ -69,15 +69,17 @@ test('only the permission_prompt notification type is a permission wait', () => 
   expect(notificationTypeOf({})).toBeUndefined()
 })
 
-test('duration text is whole seconds, then minutes, and never an away-time claim', () => {
+test('the stop line is the turn wall-clock, under a minute, an exact minute, or both', () => {
   expect(formatDuration(0)).toBe('0s')
   expect(formatDuration(45_000)).toBe('45s')
   expect(formatDuration(59_999)).toBe('59s')
   expect(formatDuration(60_000)).toBe('1m')
   expect(formatDuration(90_000)).toBe('1m 30s')
-  expect(stopBody(90_000)).toBe('Turn finished · 1m 30s')
-  expect(stopBody(90_000)).not.toMatch(/away/i)
-  expect(PERMISSION_BODY).toBe('Waiting on a permission confirm.')
+  expect(stopBody(45_000)).toBe('You were away 45s')
+  expect(stopBody(60_000)).toBe('You were away 1m')
+  expect(stopBody(90_000)).toBe('You were away 1m 30s')
+  expect(PERMISSION_BODY).toBe('Needs your OK')
+  expect(NOTIFY_TITLE).toBe('Waitroom')
 })
 
 test('an unusable threshold falls back to 30 seconds', () => {
@@ -97,7 +99,7 @@ test('darwin is silent unless sound is on, and the command is osascript alone', 
   expect(silent).toEqual([
     'osascript',
     '-e',
-    'display notification "Turn finished · 30s" with title "wait-ping"',
+    'display notification "You were away 30s" with title "Waitroom"',
   ])
   expect(silent?.join('\n')).not.toContain('sound name')
   expect(silent?.join('\n')).not.toContain(MAC_SOUND)
@@ -105,14 +107,14 @@ test('darwin is silent unless sound is on, and the command is osascript alone', 
   expect(pingPlan({ ...gate, sound: true, platform: 'darwin' })).toEqual([
     'osascript',
     '-e',
-    'display notification "Turn finished · 30s" with title "wait-ping" sound name "Ping"',
+    'display notification "You were away 30s" with title "Waitroom" sound name "Ping"',
   ])
 })
 
 test('linux is silent unless sound is on, and the command is notify-send alone', () => {
   const silent = pingPlan({ ...gate, sound: false, platform: 'linux' })
 
-  expect(silent).toEqual(['notify-send', NOTIFY_TITLE, 'Turn finished · 30s'])
+  expect(silent).toEqual(['notify-send', 'Waitroom', 'You were away 30s'])
   expect(silent?.join('\n')).not.toContain('hint')
   expect(silent?.join('\n')).not.toContain(LINUX_SOUND)
 
