@@ -134,18 +134,23 @@ session-start snapshot is for.
 ## Where the pane goes
 
 A pane nobody asked for is only placed from 144 columns, so on a narrower
-terminal it waits until you ask. When that happens the status line says so:
+terminal it waits until you ask. When that happens the status line says so,
+and names the one action that places it anyway:
 
 ```
-wait-review: 3 to read · open with /wait-review
+wait-review: 3 to read · terminal too narrow — /wait-review opens anyway
 ```
 
-Running `/wait-review` places it at any width, and it takes the keyboard too —
-the hotkeys answer right away, no click or `ctrl+x tab` needed first. Once
-you've opened it that way and not closed it by hand, the floor for the
-unasked, auto-opened-at-start pane drops from 144 columns to 110 for the rest
-of this session and any after — the terminal does not need to be as wide once
-you've shown you want it.
+That line is only for a pane the engine is holding back because the terminal
+is too narrow. A pane you closed, or one that was never opened, says
+`3 to read · open with /wait-review` instead.
+
+Running `/wait-review` places it at any width, including while a turn is still
+going, and it takes the keyboard too — the hotkeys answer right away, no click
+or `ctrl+x tab` needed first. Once you've opened it that way and not closed it
+by hand, the floor for the unasked, auto-opened-at-start pane drops from 144
+columns to 110 for the rest of this session and any after — the terminal does
+not need to be as wide once you've shown you want it.
 
 ### Claude Code's own diff panel
 
@@ -159,20 +164,32 @@ sends what you flag back to Claude.
 
 The pane list Claude Code gives plugins still calls this pane shown while the
 diff panel covers it, so the status line cannot tell. `/wait-review` can: it
-asks for the keyboard, and when that does not arrive its reply says the diff
-panel is in front.
+asks for the keyboard, and when that does not arrive its reply says:
+
+```
+Claude’s /diff is covering this side — send /diff once to show wait-review
+```
 
 ## Giving it the keys
 
 The pane's letters only work while it holds the keyboard. Press `o` without that
-and an `o` goes into your prompt instead, so the pane says which it is at the
-bottom: `/wait-review or ctrl+x tab to use these keys · or click them` while it
-does not have them, and `esc hands the keys back to the prompt` while it does.
+and an `o` goes into your prompt instead. The first time the pane is up without
+the keys it says so in bold, once:
 
-`/wait-review` always gives it the keys. `ctrl+x tab` does too, except while a
-row above the prompt has buttons up — bet-on-your-agent asking "Did it land?",
-say — when it gives the keys to that row instead. Answer the row, or use
-`/wait-review`.
+```
+Focus this pane: /wait-review · then o / f work
+```
+
+That line is gone for good after you run `/wait-review`, or after you press `o`
+or `f` while the pane holds the keys. From then on the bottom of the pane says
+`/wait-review or ctrl+x tab to use these keys · or click them` while it does
+not have them, and `esc hands the keys back to the prompt` while it does.
+
+`/wait-review` always gives it the keys. The pane that opens by itself at the
+start of a session deliberately does not. `ctrl+x tab` gives it the keys too,
+except while a row above the prompt has buttons up — bet-on-your-agent asking
+"Did it land?", say — when it gives the keys to that row instead. Answer the
+row, or use `/wait-review`.
 
 ## Long hunks
 
@@ -242,7 +259,7 @@ into your message is the fallback.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 85 tests
+claude plugin test .         # 94 tests
 ```
 
 The logic that does not need the engine lives in `hooks/diff.ts` (diff parsing,

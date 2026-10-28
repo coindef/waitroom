@@ -52,10 +52,14 @@ const ran = (stdout: string) => ({
 type Repo = { vsBase: string; vsHead: string; revParses: number }
 
 /** Stands in for the engine, and for git. */
-const engineBottom = (on: On, repo: Repo) => {
+const engineBottom = (on: On, repo: Repo, commands?: { name?: string; immediate?: boolean }[]) => {
   const clock = mock.clock(on)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('command.register', ($, e) => {
+    commands?.push(e)
+
+    return { value: { command: e.name } }
+  })
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', ($, e) => ({ text: e.answer }))
   on('process.run', ($, e) => {
@@ -565,9 +569,15 @@ const NEW_FILE_DIFF = [
   '',
 ].join('\n')
 
-const queueOne = async ($: Engine, on: On, diff: string, turnId: string) => {
+const queueOne = async (
+  $: Engine,
+  on: On,
+  diff: string,
+  turnId: string,
+  commands?: { name?: string; immediate?: boolean }[],
+) => {
   const repo: Repo = { vsBase: '', vsHead: '', revParses: 0 }
-  const clock = engineBottom(on, repo)
+  const clock = engineBottom(on, repo, commands)
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   repo.vsBase = diff
   repo.vsHead = diff
@@ -620,7 +630,8 @@ test('a short hunk shows no paging at all', async ($, on) => {
 test('the pane says how to give it the keys, and how to hand them back', async ($, on) => {
   await queueOne($, on, AUTH_DIFF, 'turn-p3')
 
-  // Unfocused, `o` would type into the prompt, so the pane says what to do.
+  // Auto-open does not take the keys. The first time, one bold line says so,
+  // in place of the fuller reminder the person meets after they have used it.
   const away = await $.ui.mount({
     plugin: 'wait-review',
     surface: 'terminal',
@@ -629,27 +640,190 @@ test('the pane says how to give it the keys, and how to hand them back', async (
     props: { ...PANE_PROPS, isFocused: false },
     viewport: { columns: 100, rows: 30 },
   })
-  expect(await away.find({ text: /\/wait-review or ctrl\+x tab to use these keys/ })).toBeDefined()
+  const hint = await away.find({ type: 'Text', text: 'Focus this pane: /wait-review · then o / f work' })
+  expect(hint?.props.weight).toBe('bold')
+  expect(hint?.props.dimColor).not.toBe(true)
+  expect(await away.find({ text: /ctrl\+x tab/ })).toBeUndefined()
   await away.unmount()
 
   const here = await mountPane($, 'terminal')
   expect(await here.find({ text: /esc hands the keys back/ })).toBeDefined()
+  expect(await here.find({ text: /Focus this pane/ })).toBeUndefined()
   expect(await here.find({ text: /ctrl\+x tab/ })).toBeUndefined()
   await here.unmount()
 })
 
+const mountUnfocused = ($: Engine) =>
+  $.ui.mount({
+    plugin: 'wait-review',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'wait-review',
+    props: { ...PANE_PROPS, isFocused: false },
+    viewport: { columns: 100, rows: 30 },
+  })
+
+/** `o` and `f` while the pane holds the keys each dismiss the first-run line. */
+const hintGoesAfter = async ($: Engine, on: On, key: 'ok' | 'flag', turnId: string) => {
+  await queueOne($, on, FOUR_HUNKS_DIFF, turnId)
+
+  const here = await mountPane($, 'terminal')
+  await here.press({ key })
+  await here.unmount()
+
+  // The next card, unfocused, uses the ordinary reminder. The first-run line
+  // does not come back. `l` and `x` are not this path.
+  const away = await mountUnfocused($)
+  expect(await away.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeUndefined()
+  expect(await away.find({ text: /\/wait-review or ctrl\+x tab to use these keys/ })).toBeDefined()
+  await away.unmount()
+}
+
+test('the focus hint goes for good after o while the pane holds the keys', async ($, on) => {
+  await hintGoesAfter($, on, 'ok', 'turn-focus-o')
+})
+
+test('the focus hint goes for good after f while the pane holds the keys', async ($, on) => {
+  await hintGoesAfter($, on, 'flag', 'turn-focus-f')
+})
+
+test('a focus hint dismissed in an earlier session stays dismissed', async ($, on) => {
+  const saved = new Map<string, unknown>([['focus-hint-dismissed', true]])
+  on('store.get', ($$, e) => ({ value: saved.get(e.key) }))
+  on('store.set', ($$, e) => {
+    saved.set(e.key, e.value)
+
+    return { value: undefined }
+  })
+  await queueOne($, on, AUTH_DIFF, 'turn-focus-stored')
+
+  const away = await mountUnfocused($)
+  expect(await away.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeUndefined()
+  expect(await away.find({ text: /\/wait-review or ctrl\+x tab to use these keys/ })).toBeDefined()
+  await away.unmount()
+})
+
+test('a reset session reloads the dismissed focus hint when source is fork', async ($, on) => {
+  const saved = new Map<string, unknown>()
+  on('store.get', ($$, e) => ({ value: saved.get(e.key) }))
+  on('store.set', ($$, e) => {
+    saved.set(e.key, e.value)
+
+    return { value: undefined }
+  })
+  on('classic.SessionStart', ($$, e) => e)
+  await queueOne($, on, AUTH_DIFF, 'turn-fork')
+
+  const before = await mountUnfocused($)
+  expect(await before.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeDefined()
+  await before.unmount()
+
+  // State was reset to "show the hint"; the store still says it was dismissed.
+  // `branch` is not a source Claude Code sends. `/branch` arrives as `fork`.
+  saved.set('focus-hint-dismissed', true)
+  await $.classic.SessionStart({ source: 'branch' })
+  const branched = await mountUnfocused($)
+  expect(await branched.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeDefined()
+  await branched.unmount()
+
+  await $.classic.SessionStart({ source: 'fork' })
+  const after = await mountUnfocused($)
+  expect(await after.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeUndefined()
+  expect(await after.find({ text: /\/wait-review or ctrl\+x tab to use these keys/ })).toBeDefined()
+  await after.unmount()
+})
+
+test('pressing o while the pane does not hold the keys leaves the focus hint up', async ($, on) => {
+  await queueOne($, on, FOUR_HUNKS_DIFF, 'turn-focus-2')
+
+  const away = await mountUnfocused($)
+  await away.press({ key: 'ok' })
+  await away.unmount()
+
+  const still = await mountUnfocused($)
+  expect(await still.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeDefined()
+  await still.unmount()
+})
+
+test('running /wait-review dismisses the focus hint, and takes the keys at any width', async ($, on) => {
+  const opened: { focus?: boolean; id?: string }[] = []
+  on('ui.open', ($$, e) => {
+    opened.push(e)
+    return { value: { isPlaced: true } }
+  })
+  await queueOne($, on, AUTH_DIFF, 'turn-focus-3')
+
+  // The open at session start is unasked, so it does not take the keys.
+  expect(opened[0]).toMatchObject({ id: 'wait-review' })
+  expect(opened[0]?.focus).toBeUndefined()
+
+  await $.command.run({ command: 'wait-review', args: '' } as never)
+  expect(opened.at(-1)?.focus).toBe(true)
+
+  const away = await mountUnfocused($)
+  expect(await away.find({ text: 'Focus this pane: /wait-review · then o / f work' })).toBeUndefined()
+  expect(await away.find({ text: /\/wait-review or ctrl\+x tab to use these keys/ })).toBeDefined()
+  await away.unmount()
+})
+
 test('the status line names the count and the way in, not the plugin again', async ($, on) => {
+  const said: (string | undefined)[] = []
+  const registered: { name?: string; immediate?: boolean }[] = []
+  on('ui.status', ($$, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+  // Nothing in the pane list: not opened, closed, or the list could not be read.
+  // That is not evidence the terminal is narrow.
+  await queueOne($, on, AUTH_DIFF, 'turn-s1', registered)
+
+  expect(said.at(-1)).toBe('1 to read · open with /wait-review')
+  expect(said.at(-1)).not.toContain('too narrow')
+  expect(said.every(text => text === undefined || !text.startsWith('review'))).toBe(true)
+  // One action, the same command, and it runs during a turn rather than after it.
+  expect(registered.some(command => command.name === 'wait-review' && command.immediate === true)).toBe(true)
+})
+
+test('a pane held back for width says the terminal is too narrow', async ($, on) => {
   const said: (string | undefined)[] = []
   on('ui.status', ($$, e) => {
     said.push(e.text)
 
     return { value: undefined }
   })
-  // No pane is placed in a test, as on a terminal under 144 columns.
-  await queueOne($, on, AUTH_DIFF, 'turn-s1')
+  // The reason `$.ui.open` returns when an unasked pane waits under 144 columns.
+  on('ui.open', () => ({
+    value: {
+      isPlaced: false,
+      reason:
+        'unasked below 144 columns (80 now): placed when the person opens it, or when the terminal is widened to 144 columns',
+    },
+  }))
+  on('ui.panes', () => ({
+    value: [{ id: 'wait-review', title: 'Wait review', isPlaced: false, isShown: false, isFocused: false }],
+  }))
+  await queueOne($, on, AUTH_DIFF, 'turn-narrow')
+
+  expect(said.at(-1)).toBe('1 to read · terminal too narrow — /wait-review opens anyway')
+})
+
+test('a closed pane is not called a narrow terminal', async ($, on) => {
+  const said: (string | undefined)[] = []
+  on('ui.status', ($$, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+  // Open was refused because nothing is drawing panes, and the list is empty
+  // the way a hand-closed pane is: gone, not waiting.
+  on('ui.open', () => ({
+    value: { isPlaced: false, reason: 'no attached surface places panes (headless)' },
+  }))
+  on('ui.panes', () => ({ value: [] }))
+  await queueOne($, on, AUTH_DIFF, 'turn-closed')
 
   expect(said.at(-1)).toBe('1 to read · open with /wait-review')
-  expect(said.every(text => text === undefined || !text.startsWith('review'))).toBe(true)
 })
 
 test('a pane covered by the diff panel says how to uncover it', async ($, on) => {
@@ -665,7 +839,9 @@ test('a pane covered by the diff panel says how to uncover it', async ($, on) =>
 
   const replying = $.command.run({ command: 'wait-review', args: '' } as never)
   await clock.advance(1000)
-  expect(JSON.stringify(await replying)).toContain('/diff hides that')
+  expect(JSON.stringify(await replying)).toContain(
+    'Claude’s /diff is covering this side — send /diff once to show wait-review',
+  )
 })
 
 test('focus that arrives a moment late is not mistaken for a covered pane', async ($, on) => {

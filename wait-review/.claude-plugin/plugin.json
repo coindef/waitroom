@@ -1,6 +1,6 @@
 {
   "name": "wait-review",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Turns the wait while Claude works into incremental review of the diff it already wrote.",
   "author": {
     "name": "coindef"

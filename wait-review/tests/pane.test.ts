@@ -31,6 +31,9 @@ test('the pane draws on every surface, and says so when there is nothing to read
 
     expect(await ui.find({ text: /Nothing to read yet/ })).toBeDefined()
     expect(await ui.find({ text: /lands here, a hunk at a time, to read while it works/ })).toBeDefined()
+    // The pane that opens by itself has no keys yet. The first-run line says so.
+    const focus = await ui.find({ type: 'Text', text: 'Focus this pane: /wait-review · then o / f work' })
+    expect(focus?.props.weight).toBe('bold')
     // Nothing waiting means nothing to act on.
     expect(await ui.findAll({ type: 'Button' })).toHaveLength(0)
 

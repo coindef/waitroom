@@ -1,5 +1,21 @@
 # Changelog
 
+## wait-review 0.4.2
+
+- **A first-run line when the pane opens by itself.** It does not take the
+  keys, so the first time it is up without them it says, in bold, `Focus this
+  pane: /wait-review · then o / f work`. That line shows once: it is gone for
+  good after `/wait-review`, or after `o` or `f` while the pane holds the keys.
+  Opening by itself still leaves the keys with the prompt. `/wait-review`
+  still takes them.
+- **A narrow terminal says so, and one command opens the pane anyway.** Under
+  144 columns the status line reads `3 to read · terminal too narrow —
+  /wait-review opens anyway`. `/wait-review` places the pane at any width and
+  now runs while a turn is still going, which is when that line is on screen.
+- **Claude's own diff panel.** When `/wait-review` asks for the keys and they
+  never arrive, its reply says `Claude’s /diff is covering this side — send
+  /diff once to show wait-review`.
+
 ## bet-on-your-agent 0.6.0
 
 - **The badge wall moved into `/bet`'s own report**, not just `/bet-recap`.
