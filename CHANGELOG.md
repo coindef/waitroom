@@ -1,5 +1,9 @@
 # Changelog
 
+## waitroom 0.1.1
+
+- **One quiet tip on the first session.** After `waitroom@waitroom` loads, the first interactive session logs three lines in the transcript: the four rooms are in, wait-breathe stays off until `/breathe`, and the optional `claude plugin install wait-changed@waitroom`. It does not return. No pane and no row.
+
 ## waitroom 0.1.0
 
 - **One install for the four rooms.** `claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom` installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Each room still installs on its own. wait-changed stays a separate install. wait-breathe stays off until `/breathe`.

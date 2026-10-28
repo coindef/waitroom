@@ -403,7 +403,8 @@ claude plugin test     ./wait-breathe         # 28 tests
 claude plugin validate ./wait-changed
 claude plugin test     ./wait-changed         # 32 tests
 
-claude plugin validate ./waitroom             # four-room install
+claude plugin validate ./waitroom
+claude plugin test     ./waitroom             # 6 tests
 ```
 
 Neither of those runs a real type checker, so also run `tsc` from each mod's
@@ -433,7 +434,7 @@ claude plugin marketplace add .     # then /plugin install <mod>@waitroom
 
 Each mod keeps the logic that needs no engine in one plain module
 (`hooks/diff.ts`, `hooks/bet.ts`, `hooks/ship.ts`, `hooks/breathe.ts`,
-`hooks/changed.ts`) so it
+`hooks/changed.ts`, `hooks/tip.ts`) so it
 can be tested directly, with the hooks module beside it and a
 `types/index.d.ts` state contract that `claude plugin validate` holds it to.
 Each mod's own `tests/flow.test.*` or `tests/band.test.tsx` drives the real
