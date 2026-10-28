@@ -1,0 +1,32 @@
+{
+  "name": "wait-ping",
+  "version": "0.1.0",
+  "description": "Sends a local OS notification when a long turn ends or a permission confirm is waiting. Sound stays off until you turn it on.",
+  "author": {
+    "name": "coindef"
+  },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/wait-ping",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
+  "icon": "./.claude-plugin/icon.png",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "title": "Notify when a turn ends or needs permission",
+      "description": "On by default. A local notification when a turn runs at least the threshold, or when a permission confirm is waiting. Off leaves every turn silent."
+    },
+    "sound": {
+      "type": "boolean",
+      "default": false,
+      "title": "Play a sound with the notification",
+      "description": "Off by default. The notification stays silent unless this is on."
+    },
+    "thresholdSeconds": {
+      "type": "number",
+      "default": 30,
+      "title": "Turn length before a stop notification, in seconds",
+      "description": "A turn shorter than this does not notify when it ends. A permission confirm still notifies."
+    }
+  }
+}
