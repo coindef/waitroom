@@ -9,7 +9,6 @@
   "homepage": "https://github.com/coindef/waitroom/tree/master/waitroom",
   "repository": "https://github.com/coindef/waitroom",
   "license": "MIT",
-  "icon": "./.claude-plugin/icon.png",
   "dependencies": [
     "wait-review",
     "bet-on-your-agent",
