@@ -41,6 +41,10 @@ Bet while your agent thinks → <strong>LANDED</strong> → review the diff. Fou
 -->
 
 <p align="center">
+  <img src="ads/assets/readme-hero-pixel.png" srcset="ads/assets/readme-hero-pixel.png 1x, ads/assets/readme-hero-pixel@2x.png 2x" width="1200" alt="Waitroom pixel hero: four rooms for the wait while your agent works">
+</p>
+
+<p align="center">
   <img src="docs/demo.gif" width="880" alt="A Claude Code session: a one-keystroke bet on the running turn above the prompt, the diff reviewed a hunk at a time in a pane on the right, one hunk flagged with a reason, and Claude fixing exactly that from &quot;Fix what I flagged&quot;">
 </p>
 
