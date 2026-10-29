@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-lockup-dark.png">
+    <img src="docs/brand/readme-lockup-light.png" alt="Waitroom" width="720">
+  </picture>
+</p>
+
 # Waitroom — Claude Code plugins for dead time while your agent works
 
 Claude Code plugins for the dead time while your coding agent works — four
