@@ -49,6 +49,8 @@ only while Claude works; this is a 15-second cut of it. Bet on the turn while
 it runs, read the diff as it lands, flag a hunk with a reason, and "Fix what I
 flagged" is all the next message needs. <a href="docs/demo.mp4">Full-length video</a>.</em></p>
 
+<p align="center"><em>Don't fill the wait with your phone — spend it on the diff and your call on the turn (local Claude Code plugins, no telemetry).</em></p>
+
 <a id="what-they-are"></a>
 
 ## Features
