@@ -1,12 +1,14 @@
 <p align="center">
-  <img src="ads/assets/readme-logo-pixel.svg" width="96" alt="PIXEL LOGO PENDING. Centered pixel-logo stand-in. Design replaces this with ads/assets/readme-logo-pixel.png. Not the Waitroom product mark.">
-  <br>
-  <sub>PIXEL LOGO PENDING — stand-in, not the product mark. Drop <code>ads/assets/readme-logo-pixel.png</code>.</sub>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-lockup-dark.png">
+    <img src="docs/brand/readme-lockup-light.png" alt="Waitroom" width="720">
+  </picture>
 </p>
 
 <h1 align="center">Waitroom</h1>
 
-<p align="center">Claude Code plugins for the dead time while your agent works.</p>
+<p align="center"><strong>STILL GUESSING?</strong><br>
+Bet while your agent thinks → <strong>LANDED</strong> → review the diff. Four Claude Code rooms for dead time.</p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
@@ -69,13 +71,16 @@ turn's toll on you.
 - 🚢 **[wait-ship](./wait-ship)** — A drafted commit message, PR description, and changelog entry, to review the way wait-review lets you review the code. The row. On.
 - 🌬️ **[wait-breathe](./wait-breathe)** — One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. The row. **Off** until `/breathe`.
 - 📋 **[wait-changed](./wait-changed)** — The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. Not in the four-room install. The row. On.
+- 🔔 **[wait-ping](./wait-ping)** — The handoff. A local notification when a long turn has ended, or when a permission confirm is waiting. The OS. On. Not in the four-room install.
 
 ### One family, four rooms
 
 wait-review keeps a pane beside the transcript. The others take turns in the
 one row above the prompt. wait-changed is not a fifth way to spend the wait:
 it uses that same row only after a turn ends, and only to list the files that
-turn changed.
+turn changed. wait-ping draws nothing in the session. When a turn runs long,
+or a permission confirm is waiting, it sends a notification through the
+operating system on this machine.
 
 | | Plugin | Spends the wait on | Where | Starts |
 | --- | --- | --- | --- | --- |
@@ -84,6 +89,7 @@ turn changed.
 | <img src="wait-ship/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-ship**](./wait-ship) | The words that ship the change: a drafted commit message, PR description and changelog entry, to review the way wait-review lets you review the code. | The row | On |
 | <img src="wait-breathe/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-breathe**](./wait-breathe) | You. One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. | The row | **Off** until `/breathe` |
 | <img src="wait-changed/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-changed**](./wait-changed) | The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. | The row | On |
+| <img src="wait-ping/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-ping**](./wait-ping) | The handoff. A local notification when a long turn has ended, or when a permission confirm is waiting. | The OS | On |
 
 ### Repository
 
@@ -96,8 +102,9 @@ wait-changed/                 same row, after the turn · separate install
 waitroom/                     four-room install
 docs/demo.gif                 session capture used as the README demo
 docs/demo.mp4                 full-length cut of that session
-docs/lockup.svg               product mark (mint terminal blob)
+docs/brand/                   pixel README lockup
 ads/assets/                   pixel promo placeholders
+wait-ping/                    local notification · separate install
 wait-review-opencode/         unpublished OpenCode prototype
 bet-on-your-agent-opencode/   unpublished OpenCode prototype
 ```
@@ -108,6 +115,8 @@ bet-on-your-agent-opencode/   unpublished OpenCode prototype
 claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
 ```
 
+Star it on GitHub if it earned it.
+
 That installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe.
 
 Optional — turn-end file list (not in the four-room install):
@@ -117,6 +126,14 @@ claude plugin install wait-changed@waitroom
 ```
 
 After a turn that changed files, lists them above the prompt. Read-only. Skip if you only want the four rooms. [What it shows](./wait-changed).
+
+Optional — local notification when a long turn ends (not in the four-room install):
+
+```sh
+claude plugin install wait-ping@waitroom
+```
+
+A turn under 30 seconds ends quietly. Sound stays off until you turn it on. [What it sends](./wait-ping).
 
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
@@ -174,6 +191,7 @@ disk straight away but only loaded by the next session:
 /plugin update wait-ship@waitroom
 /plugin update wait-breathe@waitroom
 /plugin update wait-changed@waitroom
+/plugin update wait-ping@waitroom
 ```
 
 `/plugin update waitroom@waitroom` picks up a room newly added to that install.
@@ -491,6 +509,9 @@ claude plugin test     ./wait-breathe         # 28 tests
 claude plugin validate ./wait-changed
 claude plugin test     ./wait-changed         # 32 tests
 
+claude plugin validate ./wait-ping
+claude plugin test     ./wait-ping            # 31 tests
+
 claude plugin validate ./waitroom
 claude plugin test     ./waitroom             # 6 tests
 ```
@@ -522,7 +543,7 @@ claude plugin marketplace add .     # then /plugin install <mod>@waitroom
 
 Each mod keeps the logic that needs no engine in one plain module
 (`hooks/diff.ts`, `hooks/bet.ts`, `hooks/ship.ts`, `hooks/breathe.ts`,
-`hooks/changed.ts`, `hooks/tip.ts`) so it
+`hooks/changed.ts`, `hooks/ping.ts`, `hooks/tip.ts`) so it
 can be tested directly, with the hooks module beside it and a
 `types/index.d.ts` state contract that `claude plugin validate` holds it to.
 Each mod's own `tests/flow.test.*` or `tests/band.test.tsx` drives the real
@@ -543,14 +564,17 @@ rather than pick a fresh one:
   bet-on-your-agent, whose main surface is the row above the prompt, so the
   pane is only worth the screen space once you ask for it with `/bet`.
 - **`enabled`** is a master switch, present only on mods with a core behavior
-  worth turning off entirely — wait-ship, wait-breathe, and wait-changed.
+  worth turning off entirely — wait-ship, wait-breathe, wait-changed, and wait-ping.
   wait-review and bet-on-your-agent have no `enabled` key at all, because
   neither has a mode where it does nothing; they are always on. Where
   `enabled` exists, default it to whatever keeps the mod's main claim on the
   user modest: `true` for wait-ship (drafting costs nothing until you act on
   a draft) and for wait-changed (the list is read-only, and `Don't show again` turns
   it off), `false` for wait-breathe (its claim is on your attention, not your
-  screen).
+  screen). wait-ping's `enabled` defaults to `true` for the same reason as
+  wait-changed: it is its own install, not part of the four rooms. Its `sound`
+  defaults to `false`, and `thresholdSeconds` defaults to 30, so a shorter
+  turn does not notify when it ends.
 
 ### OpenCode prototypes
 
@@ -575,14 +599,3 @@ verified" section for the full detail.
 
 MIT — see [LICENSE](./LICENSE). What changed in each release is in
 [CHANGELOG.md](./CHANGELOG.md).
-
-## Brand
-
-The product mark is the mint terminal blob. Pixel art under
-[`ads/assets/`](ads/assets/README.md) is README promo only. It does not
-replace this mark, the plugin icons, or the marketplace listing.
-
-<img src="docs/lockup.svg" width="560" alt="Waitroom brand mark: a mint terminal blob, a prompt caret, a coffee cup that reads still waiting, and the word Waitroom">
-
-A mint terminal blob, a prompt caret, a coffee cup that reads still waiting,
-and the word Waitroom. The four rooms are the table under the mark.
