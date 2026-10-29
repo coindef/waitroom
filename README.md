@@ -5,26 +5,70 @@
   </picture>
 </p>
 
-# Waitroom — Claude Code plugins for dead time while your agent works
+<h1 align="center">Waitroom</h1>
 
-Claude Code plugins for the dead time while your coding agent works — four
-rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe. The
-wait is the one moment you are already holding the problem in your head and
-have nothing to do with it; these spend it on the diff the agent just wrote,
-on how well you called the turn, on the commit message and PR description
-that will ship it, and — quietly, off by default — on a long turn's toll on
-you.
+<p align="center"><strong>STILL GUESSING?</strong><br>
+Bet while your agent thinks → <strong>LANDED</strong> → review the diff. Four Claude Code rooms for dead time.</p>
 
-![A Claude Code session: a one-keystroke bet on the running turn above the prompt, the diff reviewed a hunk at a time in a pane on the right, one hunk flagged with a reason, and Claude fixing exactly that from "Fix what I flagged"](docs/demo.gif)
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
+  &nbsp;
+  <a href="https://github.com/coindef/waitroom/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/coindef/waitroom?style=flat-square"></a>
+  &nbsp;
+  <img alt="Requires Claude Code 2.1.291 or later" src="https://img.shields.io/badge/Claude_Code-2.1.291%2B-blue?style=flat-square">
+</p>
+<!-- Design badge drop path, not rendered: ads/assets/badges/ -->
 
-*A real session, not a mockup — Claude Code 2.1.304 with both plugins, sped up
+<p align="center">
+  <a href="#features"><strong>Features</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#install"><strong>Install</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#demo"><strong>Demo</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#contributing"><strong>Contributing</strong></a>
+</p>
+
+## Demo
+
+<!--
+  Design drop paths, not rendered:
+  ads/assets/readme-hero-pixel.gif (5–12s, ≤2MB)
+  ads/assets/readme-hero-pixel.svg
+  ads/assets/readme-hero-pixel-ref.jpg
+  ads/assets/badges/
+  Demo below stays docs/demo.gif until a pixel loop replaces it.
+-->
+
+<p align="center">
+  <img src="docs/demo.gif" width="880" alt="A Claude Code session: a one-keystroke bet on the running turn above the prompt, the diff reviewed a hunk at a time in a pane on the right, one hunk flagged with a reason, and Claude fixing exactly that from &quot;Fix what I flagged&quot;">
+</p>
+
+<p align="center"><em>A real session, not a mockup — Claude Code 2.1.304 with both plugins, sped up
 only while Claude works; this is a 15-second cut of it. Bet on the turn while
 it runs, read the diff as it lands, flag a hunk with a reason, and "Fix what I
-flagged" is all the next message needs. [Full-length video](docs/demo.mp4).*
+flagged" is all the next message needs. <a href="docs/demo.mp4">Full-length video</a>.</em></p>
+
+<p align="center"><em>Don't fill the wait with your phone — spend it on the diff and your call on the turn (local Claude Code plugins, no telemetry).</em></p>
 
 <a id="what-they-are"></a>
 
-## One family, four rooms
+## Features
+
+The wait is the one moment you are already holding the problem in your head
+and have nothing to do with it. The rooms spend it on the diff the agent just
+wrote, on how well you called the turn, on the commit message and PR
+description that will ship it, and — quietly, off by default — on a long
+turn's toll on you.
+
+- 🔍 **[wait-review](./wait-review)** — The diff Claude already wrote, a hunk at a time. What you flag goes back with your next message, with your reason. A pane. On.
+- 🎯 **[bet-on-your-agent](./bet-on-your-agent)** — Your call on how the turn will go, scored afterwards: a Brier score, and a calibration table that shows where your confidence runs hot or cold. No currency and no winnings. The row. On.
+- 🚢 **[wait-ship](./wait-ship)** — A drafted commit message, PR description, and changelog entry, to review the way wait-review lets you review the code. The row. On.
+- 🌬️ **[wait-breathe](./wait-breathe)** — One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. The row. **Off** until `/breathe`.
+- 📋 **[wait-changed](./wait-changed)** — The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. Not in the four-room install. The row. On.
+- 🔔 **[wait-ping](./wait-ping)** — The handoff. A local notification when a long turn has ended, or when a permission confirm is waiting. The OS. On. Not in the four-room install.
+
+### One family, four rooms
 
 wait-review keeps a pane beside the transcript. The others take turns in the
 one row above the prompt. wait-changed is not a fifth way to spend the wait:
@@ -42,11 +86,31 @@ operating system on this machine.
 | <img src="wait-changed/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-changed**](./wait-changed) | The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. | The row | On |
 | <img src="wait-ping/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-ping**](./wait-ping) | The handoff. A local notification when a long turn has ended, or when a permission confirm is waiting. | The OS | On |
 
+### Repository
+
+```text
+wait-review/                  pane
+bet-on-your-agent/            row above the prompt
+wait-ship/                    row above the prompt
+wait-breathe/                 row above the prompt · off until /breathe
+wait-changed/                 same row, after the turn · separate install
+waitroom/                     four-room install
+docs/demo.gif                 session capture used as the README demo
+docs/demo.mp4                 full-length cut of that session
+docs/brand/                   pixel README lockup
+ads/assets/                   pixel promo placeholders
+wait-ping/                    local notification · separate install
+wait-review-opencode/         unpublished OpenCode prototype
+bet-on-your-agent-opencode/   unpublished OpenCode prototype
+```
+
 ## Install
 
 ```sh
 claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
 ```
+
+Star it on GitHub if it earned it.
 
 That installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe.
 
@@ -155,6 +219,25 @@ reports `holds the same plugin name and comes first` — see
 
 bet-on-your-agent's record does not come with it: each install keeps its own,
 so your calibration starts fresh under the new name.
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/paging.svg" width="220" alt="The wait-review pane paging a colored diff, with one hunk already flagged">
+  <img src="docs/bet-forecast.svg" width="220" alt="The bet-on-your-agent row: a forecast and the keys 1 through 5, plus skip">
+  <img src="docs/ship-offer.svg" width="220" alt="The wait-ship row: drafted commit, PR, and changelog, with accept, more, and skip">
+  <img src="docs/breathe-nudge.svg" width="220" alt="The wait-breathe row: one quiet posture check and the key b">
+</p>
+
+<p align="center"><em>Real captures from this build, not pixel mockups. The walkthrough is in <a href="#the-first-minute">The first minute</a>.</em></p>
+
+<!--
+  Optional pixel screenshot strip, when Design ships stills:
+  ads/assets/screenshots/readme-shot-review.png
+  ads/assets/screenshots/readme-shot-bet.png
+  ads/assets/screenshots/readme-shot-ship.png
+  ads/assets/screenshots/readme-shot-breathe.png
+-->
 
 ## Requirements
 
@@ -399,7 +482,9 @@ every installed plugin that carries a hooks module, whoever made it.
 working default and the plugin runs on them — the debug log puts it as `every
 option is its default`. Configure them to change something, not to get started.
 
-## Developing
+<a id="contributing"></a>
+
+## Contributing
 
 Each mod is a self-contained plugin folder. From the repository root:
 
