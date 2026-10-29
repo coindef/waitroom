@@ -16,9 +16,8 @@ Bet while your agent thinks → <strong>LANDED</strong> → review the diff. Fou
   <a href="https://github.com/coindef/waitroom/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/coindef/waitroom?style=flat-square"></a>
   &nbsp;
   <img alt="Requires Claude Code 2.1.291 or later" src="https://img.shields.io/badge/Claude_Code-2.1.291%2B-blue?style=flat-square">
-  &nbsp;
-  <img src="ads/assets/badges/pixel-badge-pending.svg" width="148" height="20" alt="PIXEL BADGE PENDING. Design drops shields-style or pixel badges in ads/assets/badges/.">
 </p>
+<!-- Design badge drop path, not rendered: ads/assets/badges/ -->
 
 <p align="center">
   <a href="#features"><strong>Features</strong></a>
@@ -33,12 +32,12 @@ Bet while your agent thinks → <strong>LANDED</strong> → review the diff. Fou
 ## Demo
 
 <!--
-  Hero GIF slot. Wired to the real session capture until Visual Design ships
-  a pixel loop at ads/assets/readme-hero-pixel.gif (5–12s, ≤2MB).
-  Labeled stand-in (not final art): ads/assets/readme-hero-pixel.svg
-  Temporary style reference, not the hero and not the product mark:
+  Design drop paths, not rendered:
+  ads/assets/readme-hero-pixel.gif (5–12s, ≤2MB)
+  ads/assets/readme-hero-pixel.svg
   ads/assets/readme-hero-pixel-ref.jpg
-  When the pixel GIF lands, point the img below at that path.
+  ads/assets/badges/
+  Demo below stays docs/demo.gif until a pixel loop replaces it.
 -->
 
 <p align="center">
@@ -49,12 +48,6 @@ Bet while your agent thinks → <strong>LANDED</strong> → review the diff. Fou
 only while Claude works; this is a 15-second cut of it. Bet on the turn while
 it runs, read the diff as it lands, flag a hunk with a reason, and "Fix what I
 flagged" is all the next message needs. <a href="docs/demo.mp4">Full-length video</a>.</em></p>
-
-<p align="center">
-  <img src="ads/assets/readme-hero-pixel.svg" width="640" alt="PIXEL HERO PENDING. Labeled stand-in for the future pixel hero GIF at ads/assets/readme-hero-pixel.gif. Not final art and not the product mark.">
-  <br>
-  <sub>PIXEL HERO PENDING — Design drops the pixel loop at <code>ads/assets/readme-hero-pixel.gif</code> (5–12s, ≤2MB). The capture above stays until then. Style reference slot: <code>ads/assets/readme-hero-pixel-ref.jpg</code>.</sub>
-</p>
 
 <a id="what-they-are"></a>
 
