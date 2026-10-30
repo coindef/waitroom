@@ -409,3 +409,14 @@ test('the row goes to every other waitroom mod first, as their own lists already
   expect(drawnBy({ type: 'Box', part: { plugin: 'wait-changed' } })).toBe('wait-changed')
   expect(drawnBy({ type: 'Box' })).toBeUndefined()
 })
+
+test('a root and a path that differ only by drive-letter case, path case on Windows, or /private on macOS are one tree', () => {
+  expect(projectPath('C:\\repo', 'c:\\repo\\src\\a.ts')).toBe('src/a.ts')
+  expect(projectPath('c:/repo', 'C:/repo/src/a.ts')).toBe('src/a.ts')
+  expect(projectPath('C:/Repo', 'C:/repo/Src/a.ts')).toBe('Src/a.ts')
+  expect(projectPath('C:/repo', 'D:/repo/a.ts')).toBe('D:/repo/a.ts')
+  expect(projectPath('/var/folders/x/repo', '/private/var/folders/x/repo/a.ts')).toBe('a.ts')
+  expect(projectPath('/private/tmp/repo', '/tmp/repo/a.ts')).toBe('a.ts')
+  // POSIX stays case-sensitive: another folder is another folder.
+  expect(projectPath('/repo', '/Repo/a.ts')).toBe('/Repo/a.ts')
+})

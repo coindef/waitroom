@@ -37,6 +37,8 @@ const engineBottom = (
   project: Project = { root: ROOT },
   settings: Settings = { set: [] },
   store: Record<string, unknown> = {},
+  /** When it answers true, every write to the turn's record throws, as a full disk would. */
+  storeFails?: () => boolean,
 ) => {
   /** Every status line the plugin set, `undefined` for a clear. */
   const said: (string | undefined)[] = []
@@ -44,7 +46,16 @@ const engineBottom = (
   const touched: string[] = []
   const ran: string[][] = []
   const fetched: string[] = []
+  /** How many times each tool call and turn end reached the bottom. */
+  const reached = { tools: 0, completes: 0 }
   mock.store(on, store)
+  if (storeFails !== undefined) {
+    on('state.set', ($, e, next) => {
+      if (storeFails()) throw new Error('disk full')
+
+      return next(e)
+    })
+  }
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.root', () => {
     if (project.root === undefined) throw new Error('no project root here')
@@ -54,8 +65,13 @@ const engineBottom = (
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('prompt.submit', ($, e) => ({ text: e.text }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
-  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('turn.complete', ($, e) => {
+    reached.completes += 1
+
+    return { text: e.answer }
+  })
   on('tool.call', ($, e) => {
+    reached.tools += 1
     const path = pathOf(e)
     if (project.denied?.includes(path)) return { deny: 'not here' }
     if (project.failing?.includes(path)) return { isError: true, result: 'boom', text: 'boom' }
@@ -110,7 +126,7 @@ const engineBottom = (
     return { value: e.value }
   })
 
-  return { said, touched, ran, fetched }
+  return { said, touched, ran, fetched, reached }
 }
 
 /** Only the status lines that showed something. */
@@ -624,3 +640,18 @@ test(
     await after.unmount()
   },
 )
+
+test('a store write that throws after an edit never runs the tool twice, and its answer comes back untouched', async ($, on) => {
+  let armed = false
+  const { reached } = engineBottom(on, { root: ROOT, scopeFile: 'src/auth/**\n' }, { set: [] }, {}, () => armed)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.prompt.submit(typed('fix the login redirect'))
+  await $.turn.start({ text: 'fix the login redirect', turnId: 'turn-1' })
+  armed = true
+  const answer = await edit($, `${ROOT}/package.json`)
+  expect(answer.result).toEqual({ ok: true })
+  expect(reached.tools).toBe(1)
+  const done = await $.turn.complete(finish('turn-1'))
+  expect(done.text).toBe('done')
+  expect(reached.completes).toBe(1)
+})

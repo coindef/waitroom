@@ -117,6 +117,19 @@ const noteEdit = async ($: EngineInterface, path: string | undefined, ran: objec
   await showStatus($)
 }
 
+/**
+ * `noteEdit` after the tool has run. It never throws. The hook's `.catch`
+ * would be safe anyway (a caught `next` replays the settled answer, nothing
+ * beneath runs again), but a count is not worth a failed hook.
+ */
+const noteEditSafely = async ($: EngineInterface, path: string | undefined, ran: object) => {
+  try {
+    await noteEdit($, path, ran)
+  } catch {
+    // The edit landed and its answer goes back untouched; only the count is missed.
+  }
+}
+
 /** The scope `/wait-scope` reports: read now, the way the next turn start reads it. */
 const currentScope = async ($: EngineInterface): Promise<Scope> => {
   const root = await projectRoot($)
@@ -205,6 +218,8 @@ export const register: Register = (on, options) => {
    * joins that turn's hints, and is kept for a turn of its own as well.
    * Never refused, never rewritten.
    */
+  // Pre-`next` hooks: anything thrown before `next` falls to `.catch -> next(e)`,
+  // which runs what is beneath once; a caught `next` replays, never reruns.
   on('prompt.submit', async ($, e, next) => {
     const isTyped = isPersonsPrompt(e)
     if (isTyped) pendingPrompt = e.text
@@ -253,21 +268,21 @@ export const register: Register = (on, options) => {
    */
   on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
     const ran = await next(e)
-    await noteEdit($, e.file_path, ran)
+    await noteEditSafely($, e.file_path, ran)
 
     return ran
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'Write' }, async ($, e, next) => {
     const ran = await next(e)
-    await noteEdit($, e.file_path, ran)
+    await noteEditSafely($, e.file_path, ran)
 
     return ran
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'NotebookEdit' }, async ($, e, next) => {
     const ran = await next(e)
-    await noteEdit($, e.notebook_path, ran)
+    await noteEditSafely($, e.notebook_path, ran)
 
     return ran
   }).catch(($, e, next) => next(e))
@@ -276,19 +291,25 @@ export const register: Register = (on, options) => {
   // and its path read the way any edit's is.
   on('tool.call', { tool: /^MultiEdit$/ }, async ($, e, next) => {
     const ran = await next(e)
-    await noteEdit($, editedPathOf('MultiEdit', e), ran)
+    await noteEditSafely($, editedPathOf('MultiEdit', e), ran)
 
     return ran
   }).catch(($, e, next) => next(e))
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    if (e.agentId !== undefined) return done
-    await ensurePref($)
-    if (silenced()) return done
-    const now = await read($, turn)
-    if (now !== null && now.turnId === e.turnId && !now.isDone) {
-      await update($, turn, last => (last !== null && last.turnId === e.turnId ? { ...last, isDone: true } : last))
+    // `next` has run. The `.catch` below would replay its answer, not rerun
+    // it, but bookkeeping failing should not fail the hook either.
+    try {
+      if (e.agentId !== undefined) return done
+      await ensurePref($)
+      if (silenced()) return done
+      const now = await read($, turn)
+      if (now !== null && now.turnId === e.turnId && !now.isDone) {
+        await update($, turn, last => (last !== null && last.turnId === e.turnId ? { ...last, isDone: true } : last))
+      }
+    } catch {
+      // Bookkeeping only: the turn's answer goes back as it was.
     }
 
     return done
@@ -328,7 +349,7 @@ export const register: Register = (on, options) => {
             <Button key="dismiss" plain onPress={() => dismiss()}>
               {DISMISS_LABEL}
             </Button>
-            <Button key="disable" plain dimColor onPress={() => silenceForever($)}>
+            <Button key="disable" plain dimColor onPress={() => void silenceForever($).catch(() => undefined)}>
               {DISABLE_LABEL}
             </Button>
           </Box>

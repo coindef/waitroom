@@ -77,11 +77,31 @@ export const rootOf = (root: string): string => toSlashes(root.trim()).replace(/
  * absolute where it lies outside the root. A relative path is read from the root.
  */
 export const projectPath = (root: string, path: string): string => {
-  const base = rootOf(root)
-  const raw = toSlashes(path.trim())
+  const base = collapse(driveUpper(rootOf(root)))
+  const raw = driveUpper(toSlashes(path.trim()))
   const full = collapse(isAbsolute(raw) ? raw : `${base}/${raw}`)
+  const rest = relativeTo(base, full) ?? relativeTo(macAlias(base), macAlias(full))
 
-  return full.startsWith(`${base}/`) ? full.slice(base.length + 1) : full
+  return rest ?? full
+}
+
+/** A Windows drive letter in upper case, so `c:/repo` and `C:/repo` are one root. */
+const driveUpper = (path: string): string => path.replace(/^([a-z]):\//, (_, d: string) => `${d.toUpperCase()}:/`)
+
+/** macOS names its temp and home trees twice: `/private/var` is `/var`, and so on. */
+const macAlias = (path: string): string => path.replace(/^\/private(?=\/(?:var|tmp|etc)(?:\/|$))/, '')
+
+/**
+ * The part of `full` under `base`, or undefined when it is not under it.
+ * A Windows path compares without case, as its file system does.
+ */
+const relativeTo = (base: string, full: string): string | undefined => {
+  const folds = /^[A-Z]:\//.test(base)
+  const b = folds ? base.toLowerCase() : base
+  const f = folds ? full.toLowerCase() : full
+  if (base === '/') return full.startsWith('/') && full !== '/' ? full.slice(1) : undefined
+
+  return f.startsWith(`${b}/`) ? full.slice(base.length + 1) : undefined
 }
 
 /** Whether a kept path lies inside the project root, the only place a scope's globs reach. */
