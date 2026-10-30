@@ -71,7 +71,7 @@ turn's toll on you.
 - 🌬️ **[wait-breathe](./wait-breathe)** — One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. The row. **Off** until `/breathe`.
 - 📋 **[wait-changed](./wait-changed)** — The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. Not in the four-room install. The row. On.
 - 🔔 **[wait-ping](./wait-ping)** — The handoff. A local notification when a long turn has ended, or when a permission confirm is waiting. The OS. On. Not in the four-room install.
-- 🎯 **[wait-scope](./wait-scope)** — Files a turn edited outside the scope you set: a short `N outside scope` count on the status line, then a list once the turn ends. Only warns. Not in the four-room install. The row. On.
+- 🎯 **[wait-scope](./wait-scope)** — Files a turn edited outside the scope you set: a short `N outside scope` count on the status line, then a list once the turn ends. Only warns. Not in the four-room install.
 
 ### One family, four rooms
 
