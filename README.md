@@ -71,6 +71,7 @@ turn's toll on you.
 - 🌬️ **[wait-breathe](./wait-breathe)** — One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. The row. **Off** until `/breathe`.
 - 📋 **[wait-changed](./wait-changed)** — The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. Not in the four-room install. The row. On.
 - 🔔 **[wait-ping](./wait-ping)** — The handoff. A local notification when a long turn has ended, or when a permission confirm is waiting. The OS. On. Not in the four-room install.
+- 🎯 **[wait-scope](./wait-scope)** — Files a turn edited outside the scope you set: a short `N outside scope` count on the status line, then a list once the turn ends. Only warns. Not in the four-room install.
 
 ### One family, four rooms
 
@@ -79,7 +80,8 @@ one row above the prompt. wait-changed is not a fifth way to spend the wait:
 it uses that same row only after a turn ends, and only to list the files that
 turn changed. wait-ping draws nothing in the session. When a turn runs long,
 or a permission confirm is waiting, it sends a notification through the
-operating system on this machine.
+operating system on this machine. wait-changed shows what changed this turn;
+wait-scope shows what changed outside what you asked for.
 
 | | Plugin | Spends the wait on | Where | Starts |
 | --- | --- | --- | --- | --- |
@@ -89,6 +91,7 @@ operating system on this machine.
 | <img src="wait-breathe/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-breathe**](./wait-breathe) | You. One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. | The row | **Off** until `/breathe` |
 | <img src="wait-changed/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-changed**](./wait-changed) | The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. | The row | On |
 | <img src="wait-ping/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-ping**](./wait-ping) | The handoff. A local notification when a long turn has ended, or when a permission confirm is waiting. | The OS | On |
+| <img src="wait-scope/.claude-plugin/icon.svg" width="24" alt=""> | [**wait-scope**](./wait-scope) | Edits outside what you asked for: `N outside scope` on the status line, then the list once the turn ends. Warns only; never blocks or reverts. | The row | On |
 
 ### Repository
 
@@ -104,6 +107,7 @@ docs/demo.mp4                 full-length cut of that session
 docs/brand/                   pixel README lockup
 ads/assets/                   pixel promo placeholders
 wait-ping/                    local notification · separate install
+wait-scope/                   outside-scope warning · separate install
 wait-review-opencode/         unpublished OpenCode prototype
 bet-on-your-agent-opencode/   unpublished OpenCode prototype
 ```
@@ -133,6 +137,14 @@ claude plugin install wait-ping@waitroom
 ```
 
 A turn under 30 seconds ends quietly. Sound stays off until you turn it on. [What it sends](./wait-ping).
+
+Optional — warn when a turn edits outside the scope you set (not in the four-room install):
+
+```sh
+claude plugin install wait-scope@waitroom
+```
+
+Put one glob per line in `.claude/wait-scope` (or set *Files in scope*). Only warns. [What it shows](./wait-scope).
 
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
@@ -191,6 +203,7 @@ disk straight away but only loaded by the next session:
 /plugin update wait-breathe@waitroom
 /plugin update wait-changed@waitroom
 /plugin update wait-ping@waitroom
+/plugin update wait-scope@waitroom
 ```
 
 `/plugin update waitroom@waitroom` picks up a room newly added to that install.
@@ -376,6 +389,18 @@ show again` turns the card off; `/wait-changed` turns it back on. A clean
 turn, a turn still running, and a folder that is not a git repository all
 stay silent.
 
+### wait-scope · what changed outside what you asked for
+
+wait-changed shows what changed this turn; wait-scope shows what changed
+outside what you asked for. Write the scope as globs, one per line, in
+`.claude/wait-scope` at the project root (or comma-separated in the *Files in
+scope* setting; the file wins). While a turn edits files outside those globs,
+the status line says `N outside scope`; once the turn ends, the row lists
+them under `Changed outside what you asked for`. With no scope set, the paths
+your prompt names are only a guess: files outside them are listed marked
+`(guess)`, and never counted on the status line. It never blocks an edit,
+never reverts one, and makes no network call.
+
 ## How they share the screen
 
 <img src="docs/waitroom.svg" alt="One real Claude Code screen with all of it at once: on the left, Claude's fix for the hunk flagged in the last turn, wait-ship's three Draft written lines, and below them the bet row asking Did it land? you said 90% · &quot;Fix what I flagged&quot; with 1: Landed  2: Needed fixing  0: Skip; on the right, the wait-review pane on src/client.ts +26 −4 · file 1 of 2; at the bottom, the status lines bet-on-your-agent: did it land? 1 to answer and wait-review: 2 to read">
@@ -511,6 +536,9 @@ claude plugin test     ./wait-changed         # 32 tests
 claude plugin validate ./wait-ping
 claude plugin test     ./wait-ping            # 31 tests
 
+claude plugin validate ./wait-scope
+claude plugin test     ./wait-scope           # 47 tests
+
 claude plugin validate ./waitroom
 claude plugin test     ./waitroom             # 6 tests
 ```
@@ -563,7 +591,7 @@ rather than pick a fresh one:
   bet-on-your-agent, whose main surface is the row above the prompt, so the
   pane is only worth the screen space once you ask for it with `/bet`.
 - **`enabled`** is a master switch, present only on mods with a core behavior
-  worth turning off entirely — wait-ship, wait-breathe, wait-changed, and wait-ping.
+  worth turning off entirely — wait-ship, wait-breathe, wait-changed, wait-ping, and wait-scope.
   wait-review and bet-on-your-agent have no `enabled` key at all, because
   neither has a mode where it does nothing; they are always on. Where
   `enabled` exists, default it to whatever keeps the mod's main claim on the
