@@ -1,5 +1,14 @@
 # Changelog
 
+## wait-scope 0.1.0
+
+First release: warns when a Claude Code turn edits files outside the scope you set. wait-changed shows what changed this turn; wait-scope shows what changed outside what you asked for.
+
+- **Scope.** Globs in `.claude/wait-scope` (one per line, `#` comments), or the comma-separated *Files in scope* setting. The file wins. These are authoritative.
+- **Status line.** After each landed Edit, Write, MultiEdit or NotebookEdit, `N outside scope` — only for files outside your globs. Hidden at 0 and when no scope is set.
+- **Turn end.** The row lists the files outside the scope (up to eight, then `N more files…`). With no scope, files outside the paths your prompt named are listed as `(guess)` and never counted.
+- **Only warns.** Never blocks, never reverts, no network, no telemetry. `/wait-scope` turns it off and on.
+
 ## wait-ping 0.1.0
 
 First release: a local OS notification when a Claude Code turn ends, or when a permission confirm is waiting.

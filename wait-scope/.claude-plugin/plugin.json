@@ -1,0 +1,27 @@
+{
+  "name": "wait-scope",
+  "version": "0.1.0",
+  "description": "Warns when a Claude Code turn edits files outside the scope you set: a short count on the status line, then a list once the turn ends. Never blocks or reverts an edit.",
+  "author": {
+    "name": "coindef"
+  },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/wait-scope",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
+  "icon": "./.claude-plugin/icon.png",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "title": "Warn when a turn edits outside the scope",
+      "description": "On by default. A status-line count while a turn edits files outside the scope, and a list once it ends. Only a warning: nothing is blocked or undone. Off leaves every turn silent."
+    },
+    "globs": {
+      "type": "string",
+      "default": "",
+      "title": "Files in scope",
+      "description": "Comma-separated globs, relative to the project root, that a turn's edits should stay inside (src/auth/**, docs). A project's .claude/wait-scope file, one glob per line, wins over this. With neither, the paths your prompt names are only a guess."
+    }
+  }
+}
