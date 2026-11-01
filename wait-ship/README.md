@@ -2,7 +2,7 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-ship's icon: an outbox with an arrow rising out of it">
 
-One of the core four in [waitroom](../README.md#plugins):
+One of seven plugins in [waitroom](../README.md#plugins):
 [wait-review](../wait-review) (the diff) ·
 [bet-on-your-agent](../bet-on-your-agent) (your calibration) ·
 **wait-ship (what ships)** · [wait-breathe](../wait-breathe) (you).
