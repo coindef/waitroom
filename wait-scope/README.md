@@ -13,7 +13,7 @@ outside what you asked for.** Local only. It only warns.
 /plugin install wait-scope@waitroom
 ```
 
-This install stays on its own. The four rooms are `/plugin install waitroom@waitroom`.
+This install stays on its own. The core four are `/plugin install waitroom@waitroom`.
 
 ## Setting the scope
 

@@ -85,7 +85,7 @@ rather than pick a fresh one:
   a draft) and for wait-changed (the list is read-only, and `Don't show again` turns
   it off), `false` for wait-breathe (its claim is on your attention, not your
   screen). wait-ping's `enabled` defaults to `true` for the same reason as
-  wait-changed: it is its own install, not part of the four rooms. Its `sound`
+  wait-changed: it is its own install, not part of the core four. Its `sound`
   defaults to `false`, and `thresholdSeconds` defaults to 30, so a shorter
   turn does not notify when it ends.
 

@@ -2,7 +2,7 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-review's icon: a magnifying glass over two lines of text">
 
-One of four rooms in [waitroom](../README.md#plugins):
+One of the core four in [waitroom](../README.md#plugins):
 **wait-review (the diff)** ·
 [bet-on-your-agent](../bet-on-your-agent) (your calibration) ·
 [wait-ship](../wait-ship) (what ships) · [wait-breathe](../wait-breathe) (you).
@@ -17,7 +17,7 @@ review of the diff it has already written.
 /plugin install wait-review@waitroom
 ```
 
-All four rooms at once: `/plugin install waitroom@waitroom`.
+All core four at once: `/plugin install waitroom@waitroom`.
 
 (Each as its own message; both are safe to send again. Needs Claude Code
 2.1.291 or later; `claude update` if `claude --version` says otherwise.)
