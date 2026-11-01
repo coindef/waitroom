@@ -53,6 +53,13 @@ listed at turn end marked `(guess)`. A guess never reaches the status line and
 is never counted as outside scope. A prompt that names no path, with no scope
 set, shows nothing at all.
 
+## Limits
+
+wait-scope only sees edits made through Claude Code's Edit, Write, MultiEdit
+and NotebookEdit tools. Files written through Bash are not tracked. That
+includes `echo >>`, `sed -i`, and scripts. They do not count toward
+`N outside scope`, and they are not listed when the turn ends.
+
 ## What it never does
 
 It never blocks a tool, never reverts or edits a file, makes no network call,
