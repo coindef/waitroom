@@ -76,3 +76,20 @@ on — the same switch as *Warn when a turn edits outside the scope* under
 claude plugin validate ./wait-scope
 claude plugin test     ./wait-scope   # 47 tests
 ```
+
+## The first minute
+
+Each room shows up by itself the first time it has something to say. Every
+image below is a real capture of this build: Claude Code 2.1.311 in a scratch
+repository, cut from the terminal as it was, never redrawn.
+
+
+wait-changed shows what changed this turn; wait-scope shows what changed
+outside what you asked for. Write the scope as globs, one per line, in
+`.claude/wait-scope` at the project root (or comma-separated in the *Files in
+scope* setting; the file wins). While a turn edits files outside those globs,
+the status line says `N outside scope`; once the turn ends, the row lists
+them under `Changed outside what you asked for`. With no scope set, the paths
+your prompt names are only a guess: files outside them are listed marked
+`(guess)`, and never counted on the status line. It never blocks an edit,
+never reverts one, and makes no network call.

@@ -2,7 +2,7 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="bet-on-your-agent's icon: a target, one ring with four ticks and a dot at its center">
 
-One of four rooms in [waitroom](../README.md#one-family-four-rooms):
+One of four rooms in [waitroom](../README.md#plugins):
 [wait-review](../wait-review) (the diff) ·
 **bet-on-your-agent (your calibration)** ·
 [wait-ship](../wait-ship) (what ships) · [wait-breathe](../wait-breathe) (you).
@@ -247,3 +247,23 @@ directly; `hooks/register.tsx` is the hooks module and `types/index.d.ts` the
 state contract. `tests/band.test.tsx` drives the whole loop through the engine:
 place a bet while a turn runs, land the turn, answer the verdict, and read the
 call back out of the record.
+
+## The first minute
+
+Each room shows up by itself the first time it has something to say. Every
+image below is a real capture of this build: Claude Code 2.1.311 in a scratch
+repository, cut from the terminal as it was, never redrawn.
+
+
+bet-on-your-agent scores your calibration, not a wager. It keeps no currency
+and no winnings, just whether you called it. While a turn runs, it puts a
+question above the prompt:
+
+<img src="../docs/bet-forecast.svg" width="600" alt="The row above the prompt while a turn runs: a bet tag, Will &quot;In src/retry.ts, rewrite retry to take an options…&quot; land first try?, and 1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip">
+
+Type 1 to 5 into the empty composer and it answers: no pane, no focus, no
+click. `0: Skip` is the exception. A bare `0` stays in the composer (seen live
+on 2.1.311), so give the row the keys first with `ctrl+x tab`, or click it.
+`/bet` shows what it has learned about you. In your first week, the forecast
+and the file count are all it asks. The extras (a bonus question, a daily
+challenge, a badge wall) wait in `/bet-recap` until then.

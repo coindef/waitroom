@@ -2,7 +2,7 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-breathe's icon: three breathing rings">
 
-One of four rooms in [waitroom](../README.md#one-family-four-rooms):
+One of four rooms in [waitroom](../README.md#plugins):
 [wait-review](../wait-review) (the diff) ·
 [bet-on-your-agent](../bet-on-your-agent) (your calibration) ·
 [wait-ship](../wait-ship) (what ships) · **wait-breathe (you)**.
@@ -137,3 +137,23 @@ with the mock clock, arming the threshold at `turn.start` and advancing past it
 the way a real long turn would — including `/breathe` flipping the setting
 both ways, and the nudge taking the shared row from a bet question or a ship
 offer beneath it.
+
+## The first minute
+
+Each room shows up by itself the first time it has something to say. Every
+image below is a real capture of this build: Claude Code 2.1.311 in a scratch
+repository, cut from the terminal as it was, never redrawn.
+
+
+wait-breathe is the one plugin that starts off. Send `/breathe` to turn it on
+(see [Install](../README.md#install) above); it answers `wait-breathe: on · one quiet nudge
+once a turn runs 90s · /breathe again turns it off`. Once it is on, a single
+turn running past `longTurnSeconds` (90s by default) gets one quiet line, never
+more than one every ten minutes:
+
+<img src="../docs/breathe-nudge.svg" width="600" alt="The row above the prompt: a grey breathe tag, posture check: reset how you are sitting, and b: Took it">
+
+No health claim and no "you should": just the action, rotating so it is never
+the same one twice running. Its tag stays grey, the quietest thing on the
+screen. `/breathe` turns it on, and off again; the same switch is *Enable the
+breathing nudges* under `/plugin` → wait-breathe.

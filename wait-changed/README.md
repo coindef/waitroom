@@ -61,3 +61,18 @@ claude plugin test .
 
 The engine-free logic is `hooks/changed.ts`. The card is drawn from
 `hooks/register.tsx` on `turn.complete` only.
+
+## The first minute
+
+Each room shows up by itself the first time it has something to say. Every
+image below is a real capture of this build: Claude Code 2.1.311 in a scratch
+repository, cut from the terminal as it was, never redrawn.
+
+
+wait-changed needs no setup. When a turn ends having changed files, the row
+above the prompt lists them under `What changed this turn`, with `Read-only
+local git — nothing uploaded` under the title. Up to eight files, then `N
+more files…`. No hunks, no commit, no PR. `Close` clears this turn. `Don't
+show again` turns the card off; `/wait-changed` turns it back on. A clean
+turn, a turn still running, and a folder that is not a git repository all
+stay silent.
