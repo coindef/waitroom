@@ -2,7 +2,7 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-review's icon: a magnifying glass over two lines of text">
 
-One of four rooms in [waitroom](../README.md#one-family-four-rooms):
+One of seven plugins in [waitroom](../README.md#plugins):
 **wait-review (the diff)** ·
 [bet-on-your-agent](../bet-on-your-agent) (your calibration) ·
 [wait-ship](../wait-ship) (what ships) · [wait-breathe](../wait-breathe) (you).
@@ -281,3 +281,61 @@ Run a working copy without installing it, from inside this folder:
 ```
 claude --plugin-dir .
 ```
+
+## The first minute
+
+Each room shows up by itself the first time it has something to say. Every
+image below is a real capture of this build: Claude Code 2.1.311 in a scratch
+repository, cut from the terminal as it was, never redrawn.
+
+
+wait-review needs no setup. Ask Claude for a change. When the turn ends, the
+pane starts offering the diff a hunk at a time. Here it is paging through a
+hunk longer than the pane, with the one before it already flagged:
+
+<img src="../docs/paging.svg" width="490" alt="The review pane: its wait-review tag and a progress bar, 1 to read · 1 flagged, src/retry.ts +20 −6, lines 1–15 of 28 of a colored diff with j: more, the controls lit because the pane holds the keys, and an amber note that 1 flagged hunk goes to Claude with your next message">
+
+**Give the pane the keys first: `/wait-review` or `ctrl+x tab`** (or click
+it). Its letters only work while it holds the keyboard — press `o` without that
+and you type an `o` into your prompt. The pane reminds you at the bottom, and
+`esc` hands the keys back when you are done. `/wait-review` always works;
+`ctrl+x tab` gives the keys to the row above the prompt instead while that row
+has buttons up, as it does when bet-on-your-agent asks "Did it land?".
+
+| Key | Does |
+|---|---|
+| `o` | Looks right — next hunk |
+| `f` | Flag it; it goes to Claude with your next message |
+| `n` | After `f`: say why, in a line |
+| `l` | Later — comes back once the rest are read |
+| `x` | Skip the rest of this file |
+| `u` | Undo the last call |
+| `j` / `k` | Read on / back through a hunk longer than the pane |
+
+A new file is a single hunk as long as the file, so `j` matters more than it
+looks: the pane shows `lines 1–30 of 200` and pages through the rest.
+
+Running `/wait-review` opens the pane already holding the keyboard, so the
+letters answer at once. The pane that opens by itself at the start of a session
+deliberately does not take the keys: it would eat the first keystrokes of a
+prompt you have not sent yet. The first time that happens it says so, in bold,
+`Focus this pane: /wait-review · then o / f work`, and that line does not come
+back after you have run `/wait-review` or pressed `o` or `f` with the pane
+focused.
+
+If the pane never appears, your terminal is under 144 columns — a pane nobody
+asked for needs that much room. Run `/wait-review` and it opens at any width,
+even while a turn is still going. The status line tells you so:
+
+```
+wait-review: 3 to read · terminal too narrow — /wait-review opens anyway
+```
+
+**On Claude Code 2.1.304 or later**, Claude Code has a diff panel of its own,
+and it opens beside the transcript the first time Claude edits — in front of
+wait-review's pane. Send `/diff` once to hide it. Claude Code remembers that,
+so the side is wait-review's from then on, in later sessions too; `/diff` again
+brings the built-in panel back whenever you want it. If you run `/wait-review`
+and see nothing, its reply says `Claude’s /diff is covering this side — send
+/diff once to show wait-review`. The first time a turn writes a diff while that
+panel is covering the pane, the transcript says once: `Claude's Diff is covering Waitroom. Send /diff once to show wait-review — Claude remembers.`

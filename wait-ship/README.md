@@ -2,7 +2,7 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-ship's icon: an outbox with an arrow rising out of it">
 
-One of four rooms in [waitroom](../README.md#one-family-four-rooms):
+One of seven plugins in [waitroom](../README.md#plugins):
 [wait-review](../wait-review) (the diff) ·
 [bet-on-your-agent](../bet-on-your-agent) (your calibration) ·
 **wait-ship (what ships)** · [wait-breathe](../wait-breathe) (you).
@@ -146,3 +146,26 @@ the whole loop through the engine, with git and the filesystem answered by the
 test — including a turn with no changes, a turn that changed nothing in an
 already-dirty tree, one outside a repository, and each of the band's keys
 actually writing (or not writing) the right files.
+
+## The first minute
+
+Each room shows up by itself the first time it has something to say. Every
+image below is a real capture of this build: Claude Code 2.1.311 in a scratch
+repository, cut from the terminal as it was, never redrawn.
+
+
+wait-ship needs no setup either. When a turn ends having changed anything, the
+same row offers the kit it drafted: a commit message, a PR description, and,
+where `CHANGELOG.md` exists, a changelog entry:
+
+<img src="../docs/ship-offer.svg" width="600" alt="The row above the prompt: a green ship tag, Drafts ready: Update 2 files · commit 61B · PR 180B · changelog 55B, then a: Accept all  m: More  s: Skip, then ctrl+x tab to use these keys · or click them · read each draft before using it">
+
+Its keys are letters, so give the row the keys first (`ctrl+x tab`, or a
+click, as the row's last line says). Then `a` takes every draft and `s` skips.
+`m` puts each draft on a key of its own (`c` commit message, `p` PR body, `l`
+changelog, `e` drafts for editing). A letter typed into the composer stays in
+the composer; only bet-on-your-agent's digits 1 to 5 answer from there. Accepted drafts land under
+`.waitroom/ship`, a folder that ignores itself in git, with the exact command
+to run printed in the transcript — nothing here ever runs on your behalf.
+**A turn that changed nothing gets no row**, even with earlier changes still
+uncommitted.
