@@ -66,12 +66,12 @@ description that will ship it, and — quietly, off by default — on a long
 turn's toll on you.
 
 - 🔍 **[wait-review](./wait-review)** — The diff Claude already wrote, a hunk at a time. What you flag goes back with your next message, with your reason. A pane. On.
-- 🎯 **[bet-on-your-agent](./bet-on-your-agent)** — Your call on how the turn will go, scored afterwards: a Brier score, and a calibration table that shows where your confidence runs hot or cold. No currency and no winnings.
-- 🚢 **[wait-ship](./wait-ship)** — A drafted commit message, PR description, and changelog entry, to review the way wait-review lets you review the code.
+- 🎯 **[bet-on-your-agent](./bet-on-your-agent)** — Your call on how the turn will go, scored afterwards: a Brier score, and a calibration table that shows where your confidence runs hot or cold. No currency and no winnings. The row. On.
+- 🚢 **[wait-ship](./wait-ship)** — A drafted commit message, PR description, and changelog entry, to review the way wait-review lets you review the code. The row. On.
 - 🌬️ **[wait-breathe](./wait-breathe)** — One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. The row. **Off** until `/breathe`.
-- 📋 **[wait-changed](./wait-changed)** — The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. Not in the four-room install.
+- 📋 **[wait-changed](./wait-changed)** — The files this turn changed, listed once the turn has ended. Read-only. Not shown during the wait, and not shown when nothing changed. Not in the four-room install. The row. On.
 - 🔔 **[wait-ping](./wait-ping)** — The handoff. A local notification when a long turn has ended, or when a permission confirm is waiting. The OS. On. Not in the four-room install.
-- 🎯 **[wait-scope](./wait-scope)** — Files a turn edited outside the scope you set: a short `N outside scope` count on the status line, then a list once the turn ends. Only warns. Not in the four-room install.
+- 🎯 **[wait-scope](./wait-scope)** — Files a turn edited outside the scope you set: a short `N outside scope` count on the status line, then a list once the turn ends. Only warns. Not in the four-room install. The row. On.
 
 ### One family, four rooms
 
