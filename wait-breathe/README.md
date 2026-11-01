@@ -17,7 +17,7 @@ during a long turn. Off by default.
 /plugin install wait-breathe@waitroom
 ```
 
-All core four at once: `/plugin install waitroom@waitroom`.
+All four rooms at once: `/plugin install waitroom@waitroom`.
 
 (Each as its own message; both are safe to send again. Needs Claude Code
 2.1.291 or later; `claude update` if `claude --version` says otherwise.)
@@ -44,7 +44,7 @@ the prompt — the same row `bet-on-your-agent` and `wait-ship` use:
 <img src="../docs/breathe-nudge.svg" width="600" alt="The row above the prompt: a grey breathe tag, posture check: reset how you are sitting, and b: Took it">
 
 *A real capture (Claude Code 2.1.311), not a mockup. The tag stays grey on
-purpose: of the core four's tags, this one is the quietest.*
+purpose: of the four rooms' tags, this one is the quietest.*
 
 That's the whole interaction. No health claim, no "you should," just the
 action: posture check, a 20-20-20 eye break, 4-4-4 breathing, or stand up and

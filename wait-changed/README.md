@@ -12,7 +12,7 @@ changed. Read-only, local git, and easy to turn off.
 /plugin install wait-changed@waitroom
 ```
 
-This install stays on its own. The core four are `/plugin install waitroom@waitroom`.
+This install stays on its own. The four rooms are `/plugin install waitroom@waitroom`.
 
 (Each as its own message; both are safe to send again. Needs Claude Code
 2.1.291 or later; `claude update` if `claude --version` says otherwise.)

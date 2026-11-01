@@ -1,6 +1,6 @@
 # waitroom
 
-One install for the core four. It adds no pane, no row, and no command of
+One install for the four rooms. It adds no pane, no row, and no command of
 its own. Installing it installs:
 
 - [wait-review](../wait-review)
@@ -12,7 +12,7 @@ its own. Installing it installs:
 claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
 ```
 
-That installs the core four above. The first interactive session logs one short tip in the transcript — the core four are in, that wait-breathe stays off until `/breathe`, and the optional wait-changed install — and does not log it again; there is no pane or row for it.
+That installs the four rooms above. The first interactive session logs one short tip in the transcript — the four rooms, that wait-breathe stays off until `/breathe`, and the optional wait-changed install — and does not log it again; there is no pane or row for it.
 
 Optional — turn-end file list (not in the four-room install):
 
@@ -20,7 +20,7 @@ Optional — turn-end file list (not in the four-room install):
 claude plugin install wait-changed@waitroom
 ```
 
-After a turn that changed files, lists them above the prompt. Read-only. Skip if you only want the core four. [What it shows](../wait-changed).
+After a turn that changed files, lists them above the prompt. Read-only. Skip if you only want the four rooms. [What it shows](../wait-changed).
 
 Optional — local notification when a long turn ends (not in the four-room install):
 

@@ -15,7 +15,7 @@ Optional — turn-end file list (not in the four-room install):
 claude plugin install wait-changed@waitroom
 ```
 
-After a turn that changed files, lists them above the prompt. Read-only. Skip if you only want the core four. [What it shows](../wait-changed).
+After a turn that changed files, lists them above the prompt. Read-only. Skip if you only want the four rooms. [What it shows](../wait-changed).
 
 Optional — local notification when a long turn ends (not in the four-room install):
 
@@ -44,7 +44,7 @@ message — `/plugin marketplace add coindef/waitroom`, then `/plugin install
 waitroom@waitroom` — and save the install screen as it is.
 
 Both halves are safe to run again: adding a marketplace that is already there,
-or installing a plugin that already is, changes nothing. With the core four
+or installing a plugin that already is, changes nothing. With the four rooms
 in, `/plugin` reads `4 mods active · wait-review, bet-on-your-agent,
 wait-ship, wait-breathe`.
 
