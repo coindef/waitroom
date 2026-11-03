@@ -20,12 +20,13 @@
 claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
 ```
 
-That installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Add the other three one at a time:
+That installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Add the other four one at a time:
 
 ```sh
 claude plugin install wait-changed@waitroom
 claude plugin install wait-ping@waitroom
 claude plugin install wait-scope@waitroom
+claude plugin install wait-secret@waitroom
 ```
 
 Restart Claude Code afterwards. Single-plugin installs, updating, and the old name: [docs/install.md](docs/install.md).
@@ -39,6 +40,7 @@ Restart Claude Code afterwards. Single-plugin installs, updating, and the old na
 - 📋 **[wait-changed](./wait-changed)** — Lists the files a turn changed, once it has ended. The row. On.
 - 🔔 **[wait-ping](./wait-ping)** — A local notification when a long turn ends or a permission confirm is waiting. The OS. On.
 - 🎯 **[wait-scope](./wait-scope)** — Flags files a turn edited outside the scope you set, and never blocks them. The row. On.
+- 🔑 **[wait-secret](./wait-secret)** — Flags likely secrets in files this turn changed. The row. On.
 
 How they share the screen: [docs/design.md](docs/design.md).
 

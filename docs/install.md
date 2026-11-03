@@ -33,6 +33,14 @@ claude plugin install wait-scope@waitroom
 
 Put one glob per line in `.claude/wait-scope` (or set *Files in scope*). Only warns. [What it shows](../wait-scope).
 
+Optional — flag lines a turn wrote that look like a key or token (not in the four-room install):
+
+```sh
+claude plugin install wait-secret@waitroom
+```
+
+Masked, local regex over this turn's added lines. Only warns. [What it shows](../wait-secret).
+
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
 wait-breathe stays off until you send `/breathe`. The installer's `userConfig
@@ -91,6 +99,7 @@ disk straight away but only loaded by the next session:
 /plugin update wait-changed@waitroom
 /plugin update wait-ping@waitroom
 /plugin update wait-scope@waitroom
+/plugin update wait-secret@waitroom
 ```
 
 `/plugin update waitroom@waitroom` picks up a room newly added to that install.

@@ -1,0 +1,45 @@
+                                                                                        │                                                                     ✕
+ ▐▛███▛█   Claude Code v2.1.317                                                         │1 file changed                                       source: Current ▾
+▝▜██████▀  Opus 5.5 · Claude API                                                        │
+ ▝▝   ▝▝   /tmp/wait-secret-e2e-2346428                                                 │secrets.example.ts
+                                                                                        │
+                                                                                        │──────────────────────────────────────────────────────────────────────
+❯ Use the Write tool to create secrets.example.ts containing exactly one line: export   │secrets.example.ts (untracked)
+  const FAKE_KEY = "sk-proj-TESTKEY0000000000000000000000000"; Then stop. Do not read   │──────────────────────────────────────────────────────────────────────
+  files, do not run shell, do not commit, no other edits.                               │New file not yet staged.
+                                                                                        │Run `git add :/secrets.example.ts` to see line counts.
+● Write(secrets.example.ts)                                                             │
+  ⎿  Wrote 1 line to secrets.example.ts                                                 │
+      1 export const FAKE_KEY = "sk-proj-TESTKEY0000000000000000000000000";             │
+                                                                                        │
+● I created secrets.example.ts with that one line in it. As you asked, I didn't read any│
+  files, run any commands, commit or make other edits.                                  │
+                                                                                        │
+✻ Cogitated for 7s · done 1:25 PM                                                       │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+                                                                                        │
+Possible secrets in what this turn wrote                    Close  Don't show again [-] │
+Local pattern match, masked — nothing blocked, edited or uploaded                       │
+secrets.example.ts:1  sk-…0000  (OpenAI key?)                                           │
+  tmux detected · scroll with PgUp/PgDn · or add 'set -g mouse on' to ~/.tmux.conf fo…  │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠ wait-secret: 1 possible secret
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
