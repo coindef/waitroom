@@ -4,7 +4,7 @@
 
 <h1 align="center">Waitroom</h1>
 
-<p align="center">Seven small Claude Code plugins for the time your agent is thinking.</p>
+<p align="center">Eight small Claude Code plugins for the time your agent is thinking.</p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
