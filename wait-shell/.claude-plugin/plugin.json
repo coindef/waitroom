@@ -1,0 +1,21 @@
+{
+  "name": "wait-shell",
+  "version": "0.1.0",
+  "description": "Lists the shell commands a Claude Code turn ran, while it runs and after: a count on the status line, then the commands above the prompt. Read-only and local. Never blocks or reruns a command.",
+  "author": {
+    "name": "coindef"
+  },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/wait-shell",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
+  "icon": "./.claude-plugin/icon.png",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "title": "List the shell commands a turn ran",
+      "description": "On by default. A status-line count while a turn runs shell commands, and the list above the prompt. Only a list: nothing is blocked, rerun or sent. Off leaves every turn silent."
+    }
+  }
+}

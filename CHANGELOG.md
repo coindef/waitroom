@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### wait-shell 0.1.0
+
+First release: while a turn runs, lists the shell commands it ran. wait-changed shows the files a turn changed; wait-shell shows the commands it ran.
+
+- **Every Bash call in the turn.** Claude's and its subagents', in the order they finish. A call a hook refused never ran, so the list leaves it out. `error`, `stopped` and `background` mark a command that did not simply finish.
+- **Status line.** `N shell command(s)` while the turn runs, and after it until `Close` or the next turn. Hidden at 0.
+- **The row.** `$ git status`, one command per row, newest last: line breaks shown as `↵`, cut at 200 characters, up to eight rows under `N earlier commands…`. Last in the shared row.
+- **Only a list.** Never blocks, rewrites or reruns a command, and runs nothing of its own. No network, no telemetry. `Close` puts it away for the turn; `Don't show again` and `/wait-shell` turn it off and on.
+
 ## wait-secret 0.1.0
 
 First release: after a turn ends, flags lines it wrote that look like a key or token. wait-changed shows what changed this turn; wait-secret shows what in it looks like a secret.
