@@ -1,6 +1,6 @@
 # wait-secret
 
-One of eight plugins in [waitroom](../README.md#plugins).
+Part of [waitroom](../README.md#plugins).
 
 A Claude Code plugin that flags lines a turn wrote that look like a key or a
 token. **wait-changed shows what changed this turn; wait-secret shows what in

@@ -2,7 +2,7 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="bet-on-your-agent's icon: a target, one ring with four ticks and a dot at its center">
 
-One of eight plugins in [waitroom](../README.md#plugins):
+One of seven plugins in [waitroom](../README.md#plugins):
 [wait-review](../wait-review) (the diff) ·
 **bet-on-your-agent (your calibration)** ·
 [wait-ship](../wait-ship) (what ships) · [wait-breathe](../wait-breathe) (you).

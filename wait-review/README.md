@@ -2,7 +2,7 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-review's icon: a magnifying glass over two lines of text">
 
-One of eight plugins in [waitroom](../README.md#plugins):
+One of seven plugins in [waitroom](../README.md#plugins):
 **wait-review (the diff)** ·
 [bet-on-your-agent](../bet-on-your-agent) (your calibration) ·
 [wait-ship](../wait-ship) (what ships) · [wait-breathe](../wait-breathe) (you).
