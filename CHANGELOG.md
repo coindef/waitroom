@@ -1,5 +1,16 @@
 # Changelog
 
+## wait-secret 0.1.0
+
+First release: after a turn ends, flags lines it wrote that look like a key or token. wait-changed shows what changed this turn; wait-secret shows what in it looks like a secret.
+
+- **Only this turn's lines.** Lines added against HEAD (tracked and untracked), minus those already uncommitted when the turn started. Read with the same local `git diff` wait-changed uses.
+- **Eight patterns.** `sk-ant-`, `sk-`, `AKIA`, `ghp_`/`github_pat_`, `xoxb-`, private key headers, `.env` `KEY=value`, and `api_key=`-style assignments with a random-looking value.
+- **Status line.** `N possible secret(s)` once the turn ends, never the kind. Hidden at 0.
+- **Turn end.** The row lists `path:line  sk-…3f9a  (OpenAI key?)`: prefix and last four only. Up to eight, then `N more…`.
+- **Ignore.** `# wait-secret: ignore` or `// wait-secret: ignore` on the line.
+- **Only warns.** Never blocks, never edits a file, no network, no telemetry. `/wait-secret` turns it off and on.
+
 ## wait-scope 0.1.0
 
 First release: warns when a Claude Code turn edits files outside the scope you set. wait-changed shows what changed this turn; wait-scope shows what changed outside what you asked for.

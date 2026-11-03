@@ -8,7 +8,7 @@
     {
       "name": "waitroom",
       "source": "./waitroom",
-      "description": "Installs the four rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Optional — not in the four-room install: claude plugin install wait-changed@waitroom (turn-end file list), claude plugin install wait-ping@waitroom (local OS notification when a long turn ends or a permission confirm is waiting), claude plugin install wait-scope@waitroom (warns when a turn edits outside the scope you set).",
+      "description": "Installs the four rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Optional — not in the four-room install: claude plugin install wait-changed@waitroom (turn-end file list), claude plugin install wait-ping@waitroom (local OS notification when a long turn ends or a permission confirm is waiting), claude plugin install wait-scope@waitroom (warns when a turn edits outside the scope you set), claude plugin install wait-secret@waitroom (flags lines a turn wrote that look like a key or token).",
       "dependencies": [
         "wait-review",
         "bet-on-your-agent",
@@ -50,6 +50,11 @@
       "name": "wait-scope",
       "source": "./wait-scope",
       "description": "Warns when a Claude Code turn edits files outside the scope you set: a short count on the status line, then a list once the turn ends. Never blocks or reverts an edit."
+    },
+    {
+      "name": "wait-secret",
+      "source": "./wait-secret",
+      "description": "After a Claude Code turn ends, flags lines in the files that turn changed that look like a secret: a short count on the status line, then a masked list. Local regex only. Never blocks or edits a file."
     }
   ]
 }
