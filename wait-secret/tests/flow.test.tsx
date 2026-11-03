@@ -27,6 +27,8 @@ type Repo = {
   root?: string
   /** Each `git diff HEAD` takes the next entry; the last one repeats. */
   diffs: string[]
+  /** Untracked files the turn left, by name, with their `--no-index` diff. */
+  untracked?: Record<string, string>
 }
 
 type Settings = { refuse?: string; set: { key: string; value: unknown }[] }
@@ -59,7 +61,17 @@ const engineBottom = (on: On, repo: Repo, settings: Settings = { set: [] }, stor
       throw new Error(`not a read-only git read: ${argv}`)
     }
     if (argv.includes('--show-toplevel')) return repo.root === undefined ? ran('', 128) : ran(`${repo.root}\n`)
-    if (argv.includes('ls-files')) return ran('')
+    if (argv.includes('ls-files')) {
+      // Only -z output is NUL-separated and unquoted; anything else is a bug.
+      if (!e.argv.includes('-z')) throw new Error(`ls-files without -z: ${argv}`)
+
+      return ran(Object.keys(repo.untracked ?? {}).map(path => `${path}\0`).join(''))
+    }
+    if (argv.includes('--no-index')) {
+      const one = repo.untracked?.[e.argv.at(-1) ?? '']
+
+      return one === undefined ? ran('', 128) : ran(one, 1)
+    }
     if (argv.includes('diff HEAD')) {
       const text = repo.diffs[Math.min(diffAt, Math.max(0, repo.diffs.length - 1))] ?? ''
       diffAt += 1
@@ -143,6 +155,25 @@ test('a turn that writes a key: count once it ends, then a masked list; nothing 
   expect(argvs.every(argv => argv[0] === 'git')).toBe(true)
   expect(fetched).toEqual([])
   expect(wrote).toEqual([])
+})
+
+test('an untracked file whose name has spaces and non-ASCII is still scanned', async ($, on) => {
+  const name = 'notes/café key ☕.ts'
+  const repo: Repo = { root: ROOT, diffs: [''], untracked: {} }
+  const { said, argvs } = engineBottom(on, repo)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'jot it down', turnId: 'turn-1' })
+  // The file appears during the turn: the baseline saw an empty tree.
+  repo.untracked = {}
+  repo.untracked[name] = [`diff --no-index /dev/null ${name}`, '--- /dev/null', `+++ ${name}\t`, '@@ -0,0 +1 @@', `+const key = "${OPENAI}"`].join('\n') + '\n'
+  await $.turn.complete(finish('turn-1'))
+  expect(said.at(-1)).toBe('1 possible secret')
+
+  const band = await mountBand($, false)
+  expect(await band.find({ text: `${name}:1  sk-…3f9a  (OpenAI key?)` })).toBeDefined()
+  await band.unmount()
+  expect(argvs.some(argv => argv.includes('ls-files') && argv.includes('-z'))).toBe(true)
+  expect(argvs.some(argv => argv.at(-1) === name)).toBe(true)
 })
 
 test('a turn with no hit sets no count and draws nothing', async ($, on) => {

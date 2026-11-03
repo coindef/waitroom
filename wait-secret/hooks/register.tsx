@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Baseline, SecretCard, TreeScan } from '../types'
 import {
+  splitNul,
   baselineOf,
   cardFor,
   DISABLE_LABEL,
@@ -50,23 +51,23 @@ const scanTree = async ($: EngineInterface): Promise<TreeScan> => {
   const root = await repoRoot($)
   if (root === undefined) return { ok: false }
 
-  const tracked = await runGit($, ['diff', 'HEAD', '--no-color', '--no-prefix', '--no-ext-diff'], root)
-  const others = await runGit($, ['ls-files', '--others', '--exclude-standard'], root)
+  // core.quotePath=false keeps non-ASCII names raw in the diff headers, so
+  // the path on a row is the path on disk rather than octal escapes.
+  const tracked = await runGit($, ['-c', 'core.quotePath=false', 'diff', 'HEAD', '--no-color', '--no-prefix', '--no-ext-diff'], root)
+  // -z: NUL-separated and never quoted, so a name with a space, a quote or
+  // non-ASCII characters comes back as it is on disk instead of skipped.
+  const others = await runGit($, ['ls-files', '-z', '--others', '--exclude-standard'], root)
   const trackedOk = tracked !== undefined && tracked.exitCode === 0
   const othersOk = others !== undefined && others.exitCode === 0
   if (!trackedOk && !othersOk) return { ok: false }
 
   const chunks: string[] = trackedOk ? [tracked.stdout] : []
   const untracked = othersOk
-    ? others.stdout
-        .split('\n')
-        .map(line => line.trim())
-        .filter(path => path !== '')
-        .slice(0, UNTRACKED_LIMIT)
+    ? splitNul(others.stdout).slice(0, UNTRACKED_LIMIT)
     : []
   for (const path of untracked) {
     // --no-index exits 1 when the two sides differ, which is the point here.
-    const one = await runGit($, ['diff', '--no-color', '--no-prefix', '--no-index', '--', '/dev/null', path], root)
+    const one = await runGit($, ['-c', 'core.quotePath=false', 'diff', '--no-color', '--no-prefix', '--no-index', '--', '/dev/null', path], root)
     if (one && one.exitCode <= 1) chunks.push(one.stdout)
   }
 

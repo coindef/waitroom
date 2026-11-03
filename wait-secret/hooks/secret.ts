@@ -194,6 +194,12 @@ const sidePath = (rest: string): string => {
   return name.length > 1 && name.startsWith('"') && name.endsWith('"') ? name.slice(1, -1) : name
 }
 
+/**
+ * Splits `git ls-files -z` output into paths. NUL is the only separator and
+ * nothing is trimmed: a name may begin or end with a space.
+ */
+export const splitNul = (output: string): string[] => output.split('\0').filter(path => path !== '')
+
 const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/
 
 /**
