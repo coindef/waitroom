@@ -12,6 +12,7 @@ import {
   isEnvFile,
   looksRandom,
   mask,
+  splitNul,
   MAX_ROWS,
   overflowLine,
   parseAddedLines,
@@ -199,4 +200,14 @@ test('the settings row, and its place in the shared row: last', () => {
   expect(yieldsBand('wait-secret', 'wait-changed')).toBe(true)
   expect(yieldsBand('wait-secret', undefined)).toBe(false)
   expect(yieldsBand('wait-secret', 'someone-else')).toBe(false)
+})
+
+test('splitNul keeps names with spaces, quotes and non-ASCII exactly as git wrote them', () => {
+  expect(splitNul('a.ts\0notes/café key ☕.ts\0 lead and trail \0say "hi".ts\0')).toEqual([
+    'a.ts',
+    'notes/café key ☕.ts',
+    ' lead and trail ',
+    'say "hi".ts',
+  ])
+  expect(splitNul('')).toEqual([])
 })

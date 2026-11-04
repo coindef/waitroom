@@ -26,7 +26,7 @@ claude plugin validate ./wait-scope
 claude plugin test     ./wait-scope           # 47 tests
 
 claude plugin validate ./wait-secret
-claude plugin test     ./wait-secret          # 21 tests
+claude plugin test     ./wait-secret          # 23 tests
 
 claude plugin validate ./waitroom
 claude plugin test     ./waitroom             # 6 tests
