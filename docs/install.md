@@ -41,6 +41,14 @@ claude plugin install wait-secret@waitroom
 
 Masked, local regex over this turn's added lines. Only warns. [What it shows](../wait-secret).
 
+Optional: list the shell commands a turn ran (not in the four-room install):
+
+```sh
+claude plugin install wait-shell@waitroom
+```
+
+Each command as it finishes, newest last, above the prompt. Never blocks one. [What it shows](../wait-shell).
+
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
 wait-breathe stays off until you send `/breathe`. The installer's `userConfig
@@ -100,6 +108,7 @@ disk straight away but only loaded by the next session:
 /plugin update wait-ping@waitroom
 /plugin update wait-scope@waitroom
 /plugin update wait-secret@waitroom
+/plugin update wait-shell@waitroom
 ```
 
 `/plugin update waitroom@waitroom` picks up a room newly added to that install.
