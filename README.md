@@ -4,7 +4,7 @@
 
 <h1 align="center">Waitroom</h1>
 
-<p align="center">While Claude works, review its diff one hunk at a time.</p>
+<p align="center">Claude is thinking. Here's something to do while you wait.</p>
 
 <p align="center">
   <img src="docs/first-screen.gif" width="720" alt="The wait-review pane in a real Claude Code session: the diff arrives while Claude works, and one hunk gets flagged with a reason">
@@ -27,6 +27,7 @@ claude plugin marketplace add coindef/waitroom && claude plugin install waitroom
 | <img src="wait-changed/.claude-plugin/icon.png" width="32" height="32" alt="wait-changed icon"> | [wait-changed](./wait-changed) | Lists the files a turn changed after the turn ends. The status row, on by default. |
 | <img src="wait-ping/.claude-plugin/icon.png" width="32" height="32" alt="wait-ping icon"> | [wait-ping](./wait-ping) | Sends a local notification when a long turn ends or a permission prompt is waiting. On by default. |
 | <img src="wait-scope/.claude-plugin/icon.png" width="32" height="32" alt="wait-scope icon"> | [wait-scope](./wait-scope) | Flags files a turn edited outside the scope you set, and never blocks them. The status row, on by default. |
+| <img src="wait-secret/.claude-plugin/icon.png" width="32" height="32" alt="wait-secret icon"> | [wait-secret](./wait-secret) | Flags lines a turn wrote that look like a key or a token. Local only, and it only warns. The status row, after the turn ends. |
 
 How the rooms share the screen is in [docs/design.md](docs/design.md).
 
@@ -38,6 +39,7 @@ The command above installs wait-review, bet-on-your-agent, wait-ship, and wait-b
 claude plugin install wait-changed@waitroom
 claude plugin install wait-ping@waitroom
 claude plugin install wait-scope@waitroom
+claude plugin install wait-secret@waitroom
 ```
 
 Restart Claude Code afterwards. Requires Claude Code 2.1.291 or later, and a git repository for wait-review and wait-ship. Single-plugin installs and updates are in [docs/install.md](docs/install.md).
