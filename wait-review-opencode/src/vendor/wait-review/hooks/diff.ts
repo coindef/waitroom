@@ -1,0 +1,558 @@
+/**
+ * Pure diff handling: no engine, no $, so `claude plugin test` exercises it
+ * directly.
+ */
+
+import type { Grade, Hunk, SessionStats } from '../types'
+
+/** FNV-1a, in base 36. Enough to tell one hunk's text from another's. */
+export const hash = (text: string): string => {
+  let value = 0x811c9dc5
+  for (let index = 0; index < text.length; index++) {
+    value ^= text.charCodeAt(index)
+    value = Math.imul(value, 0x01000193) >>> 0
+  }
+  return value.toString(36)
+}
+
+const HUNK_HEAD = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/
+
+/**
+ * The file name off a `---` or `+++` line.
+ *
+ * Under `--no-prefix` git terminates the name with a tab when it holds a space,
+ * as the unified diff convention requires, and quotes it when `core.quotePath`
+ * is on; neither belongs in the name.
+ */
+export const sidePath = (rest: string): string => {
+  const cut = rest.indexOf('\t')
+  const name = cut < 0 ? rest : rest.slice(0, cut)
+
+  return name.length > 1 && name.startsWith('"') && name.endsWith('"')
+    ? name.slice(1, -1)
+    : name
+}
+
+/** A body line git writes inside a hunk: context, added, removed, or the no-newline marker. */
+const isBodyLine = (line: string): boolean =>
+  line.startsWith(' ') || line.startsWith('+') || line.startsWith('-') || line.startsWith('\\')
+
+/**
+ * Reads `git diff --no-prefix` output into hunks, each one its own review card.
+ *
+ * Paths come off the `---` / `+++` pair rather than the `diff --git` line, whose
+ * two halves cannot be split apart when a path holds a space. A side reading
+ * `/dev/null` (a file added or deleted whole) falls back to the other side.
+ */
+export const parseDiff = (output: string): Hunk[] => {
+  const hunks: Hunk[] = []
+  let minus = ''
+  let plus = ''
+  let path = ''
+  let header = ''
+  let body: string[] = []
+  let isOpen = false
+
+  const flush = () => {
+    if (!isOpen) return
+    isOpen = false
+    while (body.length > 0 && body[body.length - 1] === '') body.pop()
+    if (body.length === 0) return
+    const text = [header, ...body].join('\n')
+    const head = HUNK_HEAD.exec(header)
+    hunks.push({
+      id: `${path}@${hash(text)}`,
+      path,
+      header,
+      start: Number(head?.[3] ?? 0),
+      text,
+      added: body.filter(line => line.startsWith('+')).length,
+      removed: body.filter(line => line.startsWith('-')).length,
+      status: 'pending',
+    })
+  }
+
+  for (const line of output.split('\n')) {
+    if (line.startsWith('diff --git ') || line.startsWith('diff --no-index ')) {
+      flush()
+      minus = ''
+      plus = ''
+      continue
+    }
+    if (line.startsWith('--- ')) {
+      flush()
+      minus = sidePath(line.slice(4))
+      continue
+    }
+    if (line.startsWith('+++ ')) {
+      flush()
+      plus = sidePath(line.slice(4))
+      path = plus !== '/dev/null' ? plus : minus
+      continue
+    }
+    const head = HUNK_HEAD.exec(line)
+    if (head) {
+      flush()
+      header = line
+      body = []
+      isOpen = path !== ''
+      continue
+    }
+    if (isOpen && isBodyLine(line)) {
+      body.push(line)
+      continue
+    }
+    flush()
+  }
+  flush()
+
+  return hunks
+}
+
+/** Counts the `-` and `+` side of a body, the way a hunk header reports them. */
+const countSides = (body: readonly string[]): { removed: number; added: number } => {
+  let removed = 0
+  let added = 0
+  for (const line of body) {
+    if (line.startsWith('\\')) continue
+    if (line.startsWith('-')) removed++
+    else if (line.startsWith('+')) added++
+    else {
+      removed++
+      added++
+    }
+  }
+  return { removed, added }
+}
+
+/**
+ * Cuts a hunk down to `maxLines` of body and rewrites its header's line counts
+ * to match, because a hunk whose counts disagree with its body is a hunk the
+ * `Code` element will not parse as a diff.
+ */
+export const trimHunk = (text: string, maxLines: number): { text: string; hidden: number } => {
+  const lines = text.split('\n')
+  const header = lines[0] ?? ''
+  const body = lines.slice(1)
+  if (maxLines < 1) return { text: header, hidden: body.length }
+  if (body.length <= maxLines) return { text, hidden: 0 }
+
+  const kept = body.slice(0, maxLines)
+  const head = HUNK_HEAD.exec(header)
+  if (!head) return { text: [header, ...kept].join('\n'), hidden: body.length - kept.length }
+
+  const sides = countSides(kept)
+  const rewritten = `@@ -${head[1]},${sides.removed} +${head[3]},${sides.added} @@${head[5] ?? ''}`
+  return { text: [rewritten, ...kept].join('\n'), hidden: body.length - kept.length }
+}
+
+/** The rows one body line takes once wrapped to `columns`, at least one. */
+export const rowsFor = (line: string, columns: number): number => {
+  // The first character is the diff marker, which the gutter draws instead.
+  const width = line.slice(1).replace(/\t/g, '    ').length
+
+  return Math.max(1, Math.ceil(width / Math.max(1, columns)))
+}
+
+/**
+ * How many body lines from `offset` fit in `rows` once each wraps to
+ * `columns`, never fewer than one.
+ *
+ * The diff wraps rather than truncates, because cutting a changed line at the
+ * pane's edge hid exactly the change being reviewed. A page is therefore
+ * measured in rows, so a run of long lines does not push the controls off the
+ * bottom of the pane.
+ */
+export const linesThatFit = (text: string, offset: number, rows: number, columns: number): number => {
+  const body = text.split('\n').slice(1)
+  let used = 0
+  let count = 0
+  for (const line of body.slice(Math.max(0, offset))) {
+    const need = rowsFor(line, columns)
+    if (count > 0 && used + need > rows) break
+    used += need
+    count++
+  }
+
+  return Math.max(1, count)
+}
+
+/** One page of a hunk: the drawable text, and where it sits in the whole. */
+export type Slice = {
+  text: string
+  /** Index of the first body line shown, from 0. */
+  first: number
+  /** Index one past the last body line shown. */
+  last: number
+  /** Body lines in the whole hunk. */
+  total: number
+}
+
+/**
+ * A page of `room` body lines from `offset`, with a header rewritten to match.
+ *
+ * A new file is a single hunk as long as the file, so cutting every hunk to
+ * the room in the pane meant a new file could never actually be read. Paging
+ * instead keeps each page a valid hunk of its own: the start lines move on by
+ * the lines already passed on each side, and the counts are the page's own,
+ * because a header that disagrees with its body is not drawn as a diff.
+ *
+ * The last page is pulled back to stay full rather than ending half empty.
+ */
+export const sliceHunk = (text: string, offset: number, room: number): Slice => {
+  const lines = text.split('\n')
+  const header = lines[0] ?? ''
+  const body = lines.slice(1)
+  const total = body.length
+  const size = Math.max(1, Math.floor(room))
+  if (total <= size) return { text, first: 0, last: total, total }
+
+  const first = Math.max(0, Math.min(Math.floor(offset), total - size))
+  const kept = body.slice(first, first + size)
+  const head = HUNK_HEAD.exec(header)
+  if (!head) return { text: [header, ...kept].join('\n'), first, last: first + kept.length, total }
+
+  const passed = countSides(body.slice(0, first))
+  const sides = countSides(kept)
+  const minus = Number(head[1]) + passed.removed
+  const plus = Number(head[3]) + passed.added
+
+  return {
+    text: [`@@ -${minus},${sides.removed} +${plus},${sides.added} @@${head[5] ?? ''}`, ...kept].join('\n'),
+    first,
+    last: first + kept.length,
+    total,
+  }
+}
+
+/**
+ * The order a person reads in: each file together, top of the file first.
+ *
+ * Without this the queue grows in whatever order the scans happened to find
+ * things, and reading jumps between files mid-thought.
+ */
+export const sortHunks = (list: readonly Hunk[]): Hunk[] =>
+  [...list].sort((a, b) => (a.path === b.path ? a.start - b.start : a.path < b.path ? -1 : 1))
+
+/**
+ * Merges a fresh scan into the queue, keeping what the person already decided.
+ *
+ * The scan reads the whole repository diff, so `found` is the whole truth: a
+ * hunk missing from it was reverted or committed away and leaves the queue,
+ * and one the agent rewrote returns under a new id, undecided.
+ */
+export const mergeHunks = (old: readonly Hunk[], found: readonly Hunk[], limit = 400): Hunk[] => {
+  const decided = new Map(old.map(hunk => [hunk.id, hunk]))
+
+  // Cap newest-first so a huge diff drops the tail rather than every file late
+  // in the alphabet; order what survives for reading.
+  return sortHunks(found.map(hunk => decided.get(hunk.id) ?? hunk).slice(-limit))
+}
+
+/**
+ * The hunks worth offering: not in an ignored file, and not already there
+ * before the session began.
+ */
+export const reviewable = (
+  found: readonly Hunk[],
+  ignore: readonly string[],
+  preexisting: readonly string[],
+): Hunk[] => {
+  const before = new Set(preexisting)
+
+  return found.filter(hunk => !before.has(hunk.id) && !isIgnored(hunk.path, ignore))
+}
+
+/**
+ * Where the current hunk sits in what is left to read.
+ *
+ * A reviewer wants to know how much is still coming before they commit to
+ * reading, and which file they are in; a bare count of unread hunks says
+ * neither.
+ */
+export type Progress = {
+  /** Unread hunks in this file, the current one included. */
+  hereLeft: number
+  /** Unread hunks in all, the current one included. */
+  totalLeft: number
+  /** This file's place among the files with anything left. */
+  atFile: number
+  ofFiles: number
+}
+
+const isLeft = (hunk: Hunk): boolean => hunk.status === 'pending' || hunk.status === 'later'
+
+export const progressOf = (list: readonly Hunk[], current: Hunk): Progress => {
+  const left = list.filter(isLeft)
+  const files = [...new Set(left.map(one => one.path))]
+
+  return {
+    hereLeft: left.filter(one => one.path === current.path).length,
+    totalLeft: left.length,
+    atFile: files.indexOf(current.path) + 1,
+    ofFiles: files.length,
+  }
+}
+
+/**
+ * How many of a progress bar's cells are filled: never a full bar before the
+ * last hunk is decided, and never an empty one once any is.
+ */
+export const filledCells = (done: number, total: number, cells: number): number => {
+  if (total <= 0 || cells <= 0 || done <= 0) return 0
+  if (done >= total) return cells
+
+  return Math.min(cells - 1, Math.max(1, Math.round((done / total) * cells)))
+}
+
+/** The counts worth showing: a zero says nothing, so it is left out. */
+export const summaryOf = (list: readonly Hunk[]): string => {
+  const counts = tally(list)
+  const parts: string[] = []
+  if (counts.pending > 0) parts.push(`${counts.pending} to read`)
+  if (counts.reviewed > 0) parts.push(`${counts.reviewed} read`)
+  if (counts.flagged > 0) parts.push(`${counts.flagged} flagged`)
+  if (counts.later > 0) parts.push(`${counts.later} put off`)
+  if (counts.dropped > 0) parts.push(`${counts.dropped} skipped`)
+
+  return parts.join(' · ')
+}
+
+/** The hunk to show: the first one not yet decided, else the first put off. */
+export const nextHunk = (list: readonly Hunk[]): Hunk | undefined =>
+  list.find(hunk => hunk.status === 'pending') ?? list.find(hunk => hunk.status === 'later')
+
+/** How the queue stands, for the pane's counts and the status line. */
+export const tally = (list: readonly Hunk[]) => ({
+  pending: list.filter(hunk => hunk.status === 'pending').length,
+  later: list.filter(hunk => hunk.status === 'later').length,
+  flagged: list.filter(hunk => hunk.status === 'flagged').length,
+  reviewed: list.filter(hunk => hunk.status === 'ok' || hunk.status === 'sent').length,
+  dropped: list.filter(hunk => hunk.status === 'dropped').length,
+})
+
+/** The fresh stats a new session starts with. */
+export const EMPTY_SESSION: SessionStats = { read: 0, flagged: 0, skipped: 0, combo: 0, longestCombo: 0 }
+
+/**
+ * The grade's own percent cutoffs, named once rather than read off a table by
+ * position.
+ */
+export const GRADE_S_PERCENT = 0.9
+export const GRADE_A_PERCENT = 0.75
+export const GRADE_B_PERCENT = 0.5
+
+/**
+ * The session grade: of every hunk resolved one way or another — decided
+ * individually, or skipped in bulk with a file — how much was actually read
+ * rather than waved away.
+ *
+ * S additionally needs at least one flag: reading everything and finding
+ * nothing wrong is good calibration on the agent's part, not evidence of a
+ * careful read, so it earns one grade short of top marks.
+ */
+export const gradeOf = (stats: SessionStats): Grade => {
+  const resolved = stats.read + stats.skipped
+  const percent = resolved === 0 ? 0 : stats.read / resolved
+  if (percent >= GRADE_S_PERCENT && stats.flagged > 0) return 'S'
+  if (percent >= GRADE_A_PERCENT) return 'A'
+
+  return percent >= GRADE_B_PERCENT ? 'B' : 'C'
+}
+
+/**
+ * The session's combo stats and grade in one line: shown on the pane's
+ * caught-up card and written to the transcript when the session ends, never
+ * while a hunk is up.
+ */
+export const sessionSummaryLine = (stats: SessionStats): string =>
+  `Session: ${stats.read} read · ${stats.flagged} flagged · ${stats.skipped} skipped · ` +
+  `longest combo ${stats.longestCombo} — grade ${gradeOf(stats)}.`
+
+/**
+ * Files the agent writes but nobody reviews: lockfiles, build output,
+ * snapshots. One regenerated lockfile is otherwise forty hunks of noise ahead
+ * of the code that matters.
+ */
+export const DEFAULT_IGNORE = [
+  '**/package-lock.json',
+  '**/pnpm-lock.yaml',
+  '**/yarn.lock',
+  '**/bun.lockb',
+  '**/Cargo.lock',
+  '**/poetry.lock',
+  '**/composer.lock',
+  '**/Gemfile.lock',
+  '**/go.sum',
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/out/**',
+  '**/target/**',
+  '**/.next/**',
+  '**/coverage/**',
+  '**/__snapshots__/**',
+  '**/*.snap',
+  '**/*.min.js',
+  '**/*.min.css',
+  '**/*.map',
+].join(',')
+
+/** Splits a configured ignore list on commas and newlines. */
+export const parseIgnore = (text: string): string[] =>
+  text
+    .split(/[,\n]/)
+    .map(one => one.trim())
+    .filter(one => one !== '')
+
+/**
+ * A glob as a whole-path pattern: `*` within a segment, `?` one character,
+ * `**` across segments, and a leading double-star-slash that may match no
+ * leading segments at all, so one pattern covers a relative and an absolute
+ * spelling of the same file.
+ */
+export const globToRegExp = (pattern: string): RegExp => {
+  let out = ''
+  for (let at = 0; at < pattern.length; at++) {
+    const char = pattern[at]
+    if (char === '*') {
+      if (pattern[at + 1] === '*') {
+        if (pattern[at + 2] === '/') {
+          out += '(?:.*/)?'
+          at += 2
+        } else {
+          out += '.*'
+          at += 1
+        }
+      } else {
+        out += '[^/]*'
+      }
+      continue
+    }
+    if (char === '?') {
+      out += '[^/]'
+      continue
+    }
+    out += (char ?? '').replace(/[.+^${}()|[\]\\]/g, '\\$&')
+  }
+
+  return new RegExp(`^${out}$`)
+}
+
+/** Whether any pattern covers this path; matched against the path as given. */
+export const isIgnored = (path: string, patterns: readonly string[]): boolean =>
+  patterns.some(pattern => globToRegExp(pattern).test(path))
+
+const NOTE_BUDGET = 12000
+
+/**
+ * First-run copy, in one place so a wording change is a wording change.
+ *
+ * The status line is drawn by the engine as `wait-review: ` plus the text
+ * this mod sets, so the narrow-terminal tail below does not repeat the name.
+ */
+export const FOCUS_HINT = 'Focus this pane: /wait-review · then o / f work'
+/**
+ * Status-line tail when an unasked open is waiting because the terminal is
+ * under the column floor. The engine's reason starts `unasked below N columns`.
+ */
+export const NARROW_PANE_HINT = ' · terminal too narrow — /wait-review opens anyway'
+/** Status-line tail when the pane is missing, closed, or behind another tab. */
+export const OPEN_PANE_HINT = ' · open with /wait-review'
+
+/**
+ * Whether `$.ui.open` refused to place a pane because the terminal is too
+ * narrow for one nobody asked for.
+ *
+ * Other refusals share `isPlaced: false` — no surface is attached, say — and
+ * a closed pane is simply absent from `$.ui.panes()`. Neither is a narrow terminal.
+ */
+export const isNarrowPlacement = (reason: string | undefined): boolean =>
+  reason !== undefined && reason.startsWith('unasked below ') && reason.includes(' columns')
+/**
+ * What `/wait-review` says when the focus it just asked for never arrives:
+ * Claude Code's own diff panel is covering this pane.
+ */
+export const DIFF_COVER_HINT =
+  'Claude’s /diff is covering this side — send /diff once to show wait-review'
+
+/**
+ * Transcript line the first time a turn writes hunks while Claude's Diff
+ * covers the pane. Locked copy.
+ */
+export const DIFF_COVER_TIP =
+  "Claude's Diff is covering Waitroom. Send /diff once to show wait-review — Claude remembers."
+
+/** `$.store` key. Set once the cover tip has been decided, and then forever. */
+export const DIFF_COVER_TIP_KEY = 'diff-cover-tip-shown'
+
+/**
+ * What to do with the cover tip on a turn that might be the covered one.
+ *
+ * `show` — this turn produced hunks, the focus we asked for never arrived
+ * (Claude's Diff is covering the pane), and the once-key is unset: write the
+ * line and spend the key. `settle` — focus landed, so `/diff` is not covering
+ * the pane: spend the key without a line, so a later turn does not ask for
+ * the keys again. `skip` — nothing to decide (no new hunks, the pane is not
+ * in that check, or the key is already set).
+ */
+export type DiffCoverTipAction = 'show' | 'settle' | 'skip'
+
+export const diffCoverTipAction = (
+  producedHunks: boolean,
+  focus: boolean | undefined,
+  stored: unknown,
+): DiffCoverTipAction => {
+  if (!producedHunks || stored === true) return 'skip'
+  if (focus === false) return 'show'
+  if (focus === true) return 'settle'
+
+  return 'skip'
+}
+
+/**
+ * What the status line adds about the pane, so a count never points at a pane
+ * the person cannot see.
+ *
+ * In view, the count stands alone. Placed but not shown, another tab is in
+ * front. Unplaced and `narrow` — the open was refused with the engine's
+ * column reason — the terminal is too narrow and `/wait-review` still places
+ * it. Anything else (closed, never opened, a panes lookup that failed, some
+ * other refusal) gets the plain way in, and does not claim the terminal is narrow.
+ */
+export const paneHint = (
+  pane: { isPlaced: boolean; isShown: boolean } | undefined,
+  narrow = false,
+): string => {
+  if (pane !== undefined && pane.isPlaced && pane.isShown) return ''
+  if (pane !== undefined && pane.isPlaced) return OPEN_PANE_HINT
+  if (pane !== undefined && !pane.isPlaced && narrow) return NARROW_PANE_HINT
+
+  return OPEN_PANE_HINT
+}
+
+/**
+ * The review notes that ride along with the next prompt: the flagged hunks, as
+ * the diff the person was looking at when they flagged them.
+ */
+export const reviewNote = (flagged: readonly Hunk[]): string => {
+  const lines: string[] = [
+    'Review notes from wait-review. While you were working, the user read the',
+    'diff you had already written and flagged the hunks below. Treat each one as',
+    'a review comment: fix it, or say why it should stay as it is.',
+    '',
+  ]
+  let budget = NOTE_BUDGET
+  let shown = 0
+  for (const hunk of flagged) {
+    const said = hunk.note === undefined || hunk.note === '' ? '' : `\nthey said: ${hunk.note}`
+    const block = `${hunk.path} ${hunk.header}${said}\n\`\`\`diff\n${hunk.text}\n\`\`\`\n`
+    if (block.length > budget && shown > 0) break
+    lines.push(block)
+    budget -= block.length
+    shown++
+  }
+  const left = flagged.length - shown
+  if (left > 0) lines.push(`(${left} more flagged hunk${left === 1 ? '' : 's'} not shown here.)`)
+  return lines.join('\n')
+}

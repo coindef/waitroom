@@ -8,8 +8,8 @@
  * it runs as plain Node/Bun code and can shell out directly.
  */
 
-import { isIgnored, parseDiff } from '../../wait-review/hooks/diff.ts'
-import type { Hunk } from '../../wait-review/types/index.ts'
+import { isIgnored, parseDiff } from '../src/vendor/wait-review/hooks/diff.ts'
+import type { Hunk } from '../src/vendor/wait-review/types/index.ts'
 
 export type GitResult = { stdout: string; exitCode: number }
 export type GitRunner = (argv: readonly string[], cwd: string) => Promise<GitResult | undefined>

@@ -1,6 +1,6 @@
 # wait-review (OpenCode prototype)
 
-An unpublished, uncommitted prototype of [`wait-review`](../wait-review) for
+An unpublished, uncommitted prototype of wait-review for
 [OpenCode](https://opencode.ai). It is not a plugin you can install — see
 "Status" below.
 
@@ -48,9 +48,9 @@ Claude Code hands a mod `$.process.run` for git and a `session.start` /
   never one of those, since nothing here opens its route.
 
 Everything else — hunk parsing, the ignore list, merge-and-reorder logic,
-progress and summary text — is `wait-review/hooks/diff.ts`, imported
-unmodified. That is the actual finding of this prototype: the portable core
-really is portable.
+progress and summary text — is `src/vendor/wait-review/hooks/diff.ts`,
+vendored unmodified from the removed Claude Code mod. That is the actual
+finding of this prototype: the portable core really is portable.
 
 ## What's ported
 
@@ -98,8 +98,8 @@ really is portable.
 ## Status
 
 This is a prototype, not an installable plugin: no version, not published,
-not registered anywhere. To type-check it yourself, install
-`@opencode-ai/plugin`, `@opentui/core`, `@opentui/keymap`, and
-`@opentui/solid` next to a copy of this folder plus `../wait-review/hooks` and
-`../wait-review/types` (it imports both by relative path), then run `tsc
---noEmit`.
+not registered anywhere. The shared diff/types modules live under
+`src/vendor/wait-review/` (copied from the removed `wait-review` package).
+To type-check it yourself, install `@opencode-ai/plugin`, `@opentui/core`,
+`@opentui/keymap`, and `@opentui/solid` in this folder, then run
+`npx -y -p typescript@5.7 tsc -p .`.
