@@ -1,10 +1,10 @@
 <p align="center"><img src="docs/brand/waitroom-social-1280x640-v8c.png" width="720" alt="Waitroom"></p>
 
-<p align="center"><b>Claude is thinking. Call the turn.</b></p>
+<h2 align="center">Claude is thinking. Call the turn.</h2>
 
-<p align="center">Claude is thinking. Here's something to do while you wait.</p>
+<p align="center"><sub>Here's something to do while you wait.</sub></p>
 
-<p align="center">If it saved you a boring minute, a star helps.</p>
+<p align="center"><sub>If it saved you a boring minute, a star helps.</sub></p>
 
 ```sh
 claude plugin marketplace add coindef/waitroom
@@ -31,8 +31,6 @@ claude plugin install wait-ship@waitroom
 | <img src="wait-secret/.claude-plugin/icon.png" width="32" height="32" alt="wait-secret icon"> | [wait-secret](./wait-secret) | Flags lines a turn wrote that look like a key or a token. Local only, and it only warns. The status row, after the turn ends. |
 | <img src="wait-scope/.claude-plugin/icon.png" width="32" height="32" alt="wait-scope icon"> | [wait-scope](./wait-scope) | Flags files a turn edited outside the scope you set, and never blocks them. The status row, on by default. |
 | <img src="wait-ping/.claude-plugin/icon.png" width="32" height="32" alt="wait-ping icon"> | [wait-ping](./wait-ping) | Local OS notification when a long turn ends or a permission confirm is waiting. Will be replaced by wait-notify. |
-
-<p align="center"><img src="docs/status-bar.png" width="100%" alt="The Claude Code status bar during a turn: wait-breathe shows a posture check"></p>
 
 How the rooms share the screen is in [docs/design.md](docs/design.md).
 
