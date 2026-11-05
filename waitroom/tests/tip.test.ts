@@ -3,9 +3,9 @@ import { expect, test } from 'claude-code/testing'
 import { FIRST_SESSION_TIP, shouldShowTip } from '../hooks/tip'
 
 const LOCKED = [
-  'Waitroom ready: wait-review · bet-on-your-agent · wait-ship · wait-breathe.',
+  'Waitroom ready: bet-on-your-agent · wait-ship · wait-breathe.',
   'wait-breathe stays off until /breathe.',
-  'Optional turn-end file list (not in this install): claude plugin install wait-changed@waitroom',
+  'Optional local notification (not in this install): claude plugin install wait-ping@waitroom',
 ] as const
 
 test('the tip is the three locked lines, and nothing else', () => {

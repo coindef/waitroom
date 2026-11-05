@@ -322,7 +322,7 @@ export const register: Register = (on, options) => {
    * scope, or, with none, outside what its prompt named.
    *
    * The row shows one mod at a time, and this card comes last: a breathe
-   * nudge, a wait-changed card, a ship offer and the bet's question all keep
+   * nudge, a ship offer and the bet's question all keep
    * the row ahead of it. The status line carries the count meanwhile.
    */
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

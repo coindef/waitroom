@@ -197,7 +197,7 @@ test('the settings row, and its place in the shared row: last', () => {
   expect(enabledRowKey([])).toBe('wait-secret.enabled')
   expect(BAND_PRECEDENCE.at(-1)).toBe('wait-secret')
   expect(yieldsBand('wait-secret', 'wait-scope')).toBe(true)
-  expect(yieldsBand('wait-secret', 'wait-changed')).toBe(true)
+  expect(yieldsBand('wait-secret', 'wait-ship')).toBe(true)
   expect(yieldsBand('wait-secret', undefined)).toBe(false)
   expect(yieldsBand('wait-secret', 'someone-else')).toBe(false)
 })

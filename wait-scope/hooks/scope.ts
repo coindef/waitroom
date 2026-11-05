@@ -539,13 +539,13 @@ export const toggleRefusedLine = (reason: string): string =>
  * The waitroom mods that draw into the row above the prompt, the one with
  * precedence first.
  *
- * The list `wait-changed`, `wait-ship` and `bet-on-your-agent` keep in
+ * The list `wait-ship` and `bet-on-your-agent` keep in
  * lockstep, with this card last. Theirs end at bet-on-your-agent, and a mod
  * they do not name is behind them, so their order and this one agree without
  * a change to theirs. While the card waits its turn, the status line already
  * carries the count.
  */
-export const BAND_PRECEDENCE = ['wait-breathe', 'wait-changed', 'wait-ship', 'bet-on-your-agent', 'wait-scope'] as const
+export const BAND_PRECEDENCE = ['wait-breathe', 'wait-ship', 'bet-on-your-agent', 'wait-scope'] as const
 
 export type BandMod = (typeof BAND_PRECEDENCE)[number]
 

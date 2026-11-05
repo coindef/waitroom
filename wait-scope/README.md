@@ -3,7 +3,7 @@
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-scope's icon">
 
 A Claude Code plugin that warns when a turn edits files outside the scope you
-set. **wait-changed shows what changed this turn; wait-scope shows what changed
+set. **wait-scope shows what changed
 outside what you asked for.** Local only. It only warns.
 
 ```
@@ -84,7 +84,7 @@ image below is a real capture of this build: Claude Code 2.1.311 in a scratch
 repository, cut from the terminal as it was, never redrawn.
 
 
-wait-changed shows what changed this turn; wait-scope shows what changed
+wait-scope shows what changed
 outside what you asked for. Write the scope as globs, one per line, in
 `.claude/wait-scope` at the project root (or comma-separated in the *Files in
 scope* setting; the file wins). While a turn edits files outside those globs,

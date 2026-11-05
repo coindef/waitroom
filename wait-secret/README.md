@@ -3,7 +3,7 @@
 Part of [waitroom](../README.md#plugins).
 
 A Claude Code plugin that flags lines a turn wrote that look like a key or a
-token. **wait-changed shows what changed this turn; wait-secret shows what in
+token. **wait-secret shows what in
 it looks like a secret.** Local only. It only warns.
 
 ```
@@ -33,7 +33,7 @@ This install stays on its own. The four rooms are `/plugin install waitroom@wait
 
 ## What it looks for
 
-Only lines this turn added, read from the same local `git diff` wait-changed
+Only lines this turn added, read from the local `git diff`
 uses (tracked changes against HEAD, plus untracked files). A line that was
 already uncommitted before the turn is not the turn's. Eight patterns, first
 match on a line wins:
