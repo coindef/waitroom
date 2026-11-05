@@ -4,7 +4,19 @@
 
 <h1 align="center">Waitroom</h1>
 
-<p align="center">Seven small Claude Code plugins for the time your agent is thinking.</p>
+<!-- TODO(PM): final one-sentence pitch. Draft from the plan: -->
+<p align="center">Your agent is thinking. Here's something useful to do while it works.</p>
+
+<p align="center">
+  <img src="docs/first-screen.gif" width="720" alt="A real Claude Code session: a bet on the running turn under the prompt, then the diff reviewed a hunk at a time in a pane on the right, one hunk flagged, and Claude fixing it">
+</p>
+
+<!-- TODO(PM): confirm the star line. Plan draft, used once only: -->
+<p align="center">If it saved you a boring minute, a star helps.</p>
+
+```sh
+claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
+```
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
@@ -16,11 +28,7 @@
 
 ## Install
 
-```sh
-claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
-```
-
-That installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Add the other four one at a time:
+That command installs wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Add the other four one at a time:
 
 ```sh
 claude plugin install wait-changed@waitroom
