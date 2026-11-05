@@ -1,9 +1,8 @@
 # waitroom
 
-One install for the four rooms. It adds no pane, no row, and no command of
+One install for the three rooms. It adds no pane, no row, and no command of
 its own. Installing it installs:
 
-- [wait-review](../wait-review)
 - [bet-on-your-agent](../bet-on-your-agent)
 - [wait-ship](../wait-ship)
 - [wait-breathe](../wait-breathe)
@@ -12,17 +11,9 @@ its own. Installing it installs:
 claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
 ```
 
-That installs the four rooms above. The first interactive session logs one short tip in the transcript — the four rooms, that wait-breathe stays off until `/breathe`, and the optional wait-changed install — and does not log it again; there is no pane or row for it.
+That installs the three rooms above. The first interactive session logs one short tip in the transcript — the three rooms, that wait-breathe stays off until `/breathe`, and the optional wait-ping install — and does not log it again; there is no pane or row for it.
 
-Optional — turn-end file list (not in the four-room install):
-
-```sh
-claude plugin install wait-changed@waitroom
-```
-
-After a turn that changed files, lists them above the prompt. Read-only. Skip if you only want the four rooms. [What it shows](../wait-changed).
-
-Optional — local notification when a long turn ends (not in the four-room install):
+Optional — local notification when a long turn ends (not in the three-room install):
 
 ```sh
 claude plugin install wait-ping@waitroom

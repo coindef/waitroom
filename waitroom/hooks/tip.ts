@@ -10,9 +10,9 @@
  * and the punctuation stays as written.
  */
 export const FIRST_SESSION_TIP = [
-  'Waitroom ready: wait-review · bet-on-your-agent · wait-ship · wait-breathe.',
+  'Waitroom ready: bet-on-your-agent · wait-ship · wait-breathe.',
   'wait-breathe stays off until /breathe.',
-  'Optional turn-end file list (not in this install): claude plugin install wait-changed@waitroom',
+  'Optional local notification (not in this install): claude plugin install wait-ping@waitroom',
 ] as const
 
 /** `$.store` key. `true` once the tip has been written, and then forever. */

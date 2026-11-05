@@ -1,0 +1,21 @@
+{
+  "name": "wait-secret",
+  "version": "0.1.0",
+  "description": "After a Claude Code turn ends, flags lines in the files that turn changed that look like a secret: a short count on the status line, then a masked list. Local regex only. Never blocks or edits a file.",
+  "author": {
+    "name": "coindef"
+  },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/wait-secret",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
+  "icon": "./.claude-plugin/icon.png",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "title": "Flag likely secrets a turn wrote",
+      "description": "On by default. When a turn ends having added lines that look like a key or token, a status-line count and a masked list. Only a warning: nothing is blocked, edited or uploaded. Off leaves every turn silent."
+    }
+  }
+}

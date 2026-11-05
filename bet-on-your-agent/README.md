@@ -2,8 +2,7 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="bet-on-your-agent's icon: a target, one ring with four ticks and a dot at its center">
 
-One of four rooms in [waitroom](../README.md#one-family-four-rooms):
-[wait-review](../wait-review) (the diff) ·
+One of the plugins in [waitroom](../README.md#plugins):
 **bet-on-your-agent (your calibration)** ·
 [wait-ship](../wait-ship) (what ships) · [wait-breathe](../wait-breathe) (you).
 
@@ -18,7 +17,7 @@ how calibrated you were.
 /plugin install bet-on-your-agent@waitroom
 ```
 
-All four rooms at once: `/plugin install waitroom@waitroom`.
+All three rooms at once: `/plugin install waitroom@waitroom`.
 
 (Each as its own message; both are safe to send again. Needs Claude Code
 2.1.291 or later; `claude update` if `claude --version` says otherwise.)
@@ -42,7 +41,7 @@ lands.
 
 ## What it does
 
-![Claude Code just after a turn lands: above the prompt the bet row asks Did it land? you said 90% · "Fix what I flagged" with 1: Landed  2: Needed fixing  0: Skip, under wait-ship's three Draft written lines, beside the wait-review pane on src/client.ts](../docs/waitroom.svg)
+![Claude Code just after a turn lands: above the prompt the bet row asks Did it land? you said 90% · "Fix what I flagged" with 1: Landed  2: Needed fixing  0: Skip, under wait-ship's three Draft written lines](../docs/waitroom.svg)
 
 *A real capture (Claude Code 2.1.311), not a mockup. The ship offer was
 answered a moment before, so "Did it land?" has the row.*
@@ -80,12 +79,11 @@ never the question:
 1: Landed  2: Needed fixing  0: Skip
 ```
 
-The row is shared with `wait-changed`, `wait-ship`, and `wait-breathe`, and
-shows one of them at a time. Between turns a `wait-changed` summary comes
-first when that mod is installed and the turn changed files, then a ship
-offer, and "Did it land?" takes the row once those are dismissed. While a
-turn runs, only a breathe nudge holds the forecast back, since the window to
-call the turn closes when it lands.
+The row is shared with `wait-ship` and `wait-breathe`, and shows one of them
+at a time. Between turns a ship offer comes first when the turn changed
+files, and "Did it land?" takes the row once that is dismissed. While a turn
+runs, only a breathe nudge holds the forecast back, since the window to call
+the turn closes when it lands.
 
 - **Will it land first try?** Resolved by your own verdict, which it asks for
   once the turn lands — with a `skip` if you would rather not say. Answered it
@@ -247,3 +245,23 @@ directly; `hooks/register.tsx` is the hooks module and `types/index.d.ts` the
 state contract. `tests/band.test.tsx` drives the whole loop through the engine:
 place a bet while a turn runs, land the turn, answer the verdict, and read the
 call back out of the record.
+
+## The first minute
+
+Each room shows up by itself the first time it has something to say. Every
+image below is a real capture of this build: Claude Code 2.1.311 in a scratch
+repository, cut from the terminal as it was, never redrawn.
+
+
+bet-on-your-agent scores your calibration, not a wager. It keeps no currency
+and no winnings, just whether you called it. While a turn runs, it puts a
+question above the prompt:
+
+<img src="../docs/bet-forecast.svg" width="600" alt="The row above the prompt while a turn runs: a bet tag, Will &quot;In src/retry.ts, rewrite retry to take an options…&quot; land first try?, and 1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip">
+
+Type 1 to 5 into the empty composer and it answers: no pane, no focus, no
+click. `0: Skip` is the exception. A bare `0` stays in the composer (seen live
+on 2.1.311), so give the row the keys first with `ctrl+x tab`, or click it.
+`/bet` shows what it has learned about you. In your first week, the forecast
+and the file count are all it asks. The extras (a bonus question, a daily
+challenge, a badge wall) wait in `/bet-recap` until then.
