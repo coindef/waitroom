@@ -13,6 +13,8 @@ claude plugin install wait-breathe@waitroom
 claude plugin install wait-ship@waitroom
 ```
 
+<p align="center"><img src="docs/bet-demo.gif" width="640" alt="A real Claude Code session: you ask Claude to change src/retry.ts, the bet row asks whether it will land first try and you call 90%, then 2 to 3 files; the turn runs, the row asks Did it land?, you answer Landed, and it records the call toward your calibration score"></p>
+
 ## Rooms
 
 ### Core
