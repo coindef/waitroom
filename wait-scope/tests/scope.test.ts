@@ -399,14 +399,14 @@ test("the enabled row is found under the installed name or a working copy's, and
 })
 
 test('the row goes to every other waitroom mod first, as their own lists already have it', () => {
-  expect(BAND_PRECEDENCE).toEqual(['wait-breathe', 'wait-changed', 'wait-ship', 'bet-on-your-agent', 'wait-scope'])
-  for (const other of ['wait-breathe', 'wait-changed', 'wait-ship', 'bet-on-your-agent'] as const) {
+  expect(BAND_PRECEDENCE).toEqual(['wait-breathe', 'wait-ship', 'bet-on-your-agent', 'wait-scope'])
+  for (const other of ['wait-breathe', 'wait-ship', 'bet-on-your-agent'] as const) {
     expect(yieldsBand('wait-scope', other)).toBe(true)
     expect(yieldsBand(other, 'wait-scope')).toBe(false)
   }
   expect(yieldsBand('wait-scope', undefined)).toBe(false)
   expect(yieldsBand('wait-scope', 'some-other-plugin')).toBe(false)
-  expect(drawnBy({ type: 'Box', part: { plugin: 'wait-changed' } })).toBe('wait-changed')
+  expect(drawnBy({ type: 'Box', part: { plugin: 'wait-ship' } })).toBe('wait-ship')
   expect(drawnBy({ type: 'Box' })).toBeUndefined()
 })
 

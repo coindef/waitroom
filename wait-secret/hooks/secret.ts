@@ -352,7 +352,6 @@ export const toggleRefusedLine = (reason: string): string =>
  */
 export const BAND_PRECEDENCE = [
   'wait-breathe',
-  'wait-changed',
   'wait-ship',
   'bet-on-your-agent',
   'wait-scope',

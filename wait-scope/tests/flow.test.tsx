@@ -592,11 +592,11 @@ test('a survey already up keeps the row, same as the other mods', async ($, on) 
 })
 
 test(
-  'a wait-changed card beneath keeps the row, and this card shows once that one is closed',
+  'a wait-ship card beneath keeps the row, and this card shows once that one is closed',
   {
     plugins: [
       {
-        name: 'wait-changed',
+        name: 'wait-ship',
         tier: 'append',
         register(on) {
           // The stand-in's own state: an inline plugin runs in an environment of its own.
@@ -631,7 +631,7 @@ test(
     const band = await mountBand($, false)
     expect(await band.find({ text: 'What changed this turn' })).toBeDefined()
     expect(await band.find({ text: TITLE })).toBeUndefined()
-    await $.ui.press({ plugin: 'wait-changed', key: 'close' })
+    await $.ui.press({ plugin: 'wait-ship', key: 'close' })
     await band.unmount()
 
     const after = await mountBand($, false)

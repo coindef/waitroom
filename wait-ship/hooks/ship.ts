@@ -522,7 +522,7 @@ export const fingerprintOf = (text: string): string => {
 
 /**
  * The waitroom mods that draw into the row above the prompt, the one with
- * precedence first: wait-breathe, then wait-changed, then wait-ship, then
+ * precedence first: wait-breathe, then wait-ship, then
  * bet-on-your-agent. Kept in lockstep with the same list in those mods.
  *
  * The row shows one of them at a time. Hooks of different plugins nest in an
@@ -531,7 +531,7 @@ export const fingerprintOf = (text: string): string => {
  * the row to a mod ahead of it here: whatever the load order, the mod with
  * precedence is the one row on screen, and the others wait for it.
  */
-export const BAND_PRECEDENCE = ['wait-breathe', 'wait-changed', 'wait-ship', 'bet-on-your-agent'] as const
+export const BAND_PRECEDENCE = ['wait-breathe', 'wait-ship', 'bet-on-your-agent'] as const
 
 export type BandMod = (typeof BAND_PRECEDENCE)[number]
 

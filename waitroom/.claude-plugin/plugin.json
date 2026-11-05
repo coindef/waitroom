@@ -1,8 +1,8 @@
 {
   "name": "waitroom",
-  "displayName": "Four rooms",
+  "displayName": "Three rooms",
   "version": "0.1.1",
-  "description": "Installs the four rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Optional — not in the four-room install: claude plugin install wait-changed@waitroom (turn-end file list), claude plugin install wait-ping@waitroom (local OS notification when a long turn ends or a permission confirm is waiting).",
+  "description": "Installs bet-on-your-agent, wait-ship, and wait-breathe. Optional \u2014 not in that install: claude plugin install wait-ping@waitroom (local OS notification when a long turn ends or a permission confirm is waiting).",
   "author": {
     "name": "coindef"
   },
@@ -10,7 +10,6 @@
   "repository": "https://github.com/coindef/waitroom",
   "license": "MIT",
   "dependencies": [
-    "wait-review",
     "bet-on-your-agent",
     "wait-ship",
     "wait-breathe"

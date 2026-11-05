@@ -2,8 +2,7 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="bet-on-your-agent's icon: a target, one ring with four ticks and a dot at its center">
 
-One of seven plugins in [waitroom](../README.md#plugins):
-[wait-review](../wait-review) (the diff) ·
+One of the plugins in [waitroom](../README.md#plugins):
 **bet-on-your-agent (your calibration)** ·
 [wait-ship](../wait-ship) (what ships) · [wait-breathe](../wait-breathe) (you).
 
@@ -18,7 +17,7 @@ how calibrated you were.
 /plugin install bet-on-your-agent@waitroom
 ```
 
-All four rooms at once: `/plugin install waitroom@waitroom`.
+All three rooms at once: `/plugin install waitroom@waitroom`.
 
 (Each as its own message; both are safe to send again. Needs Claude Code
 2.1.291 or later; `claude update` if `claude --version` says otherwise.)
@@ -42,7 +41,7 @@ lands.
 
 ## What it does
 
-![Claude Code just after a turn lands: above the prompt the bet row asks Did it land? you said 90% · "Fix what I flagged" with 1: Landed  2: Needed fixing  0: Skip, under wait-ship's three Draft written lines, beside the wait-review pane on src/client.ts](../docs/waitroom.svg)
+![Claude Code just after a turn lands: above the prompt the bet row asks Did it land? you said 90% · "Fix what I flagged" with 1: Landed  2: Needed fixing  0: Skip, under wait-ship's three Draft written lines](../docs/waitroom.svg)
 
 *A real capture (Claude Code 2.1.311), not a mockup. The ship offer was
 answered a moment before, so "Did it land?" has the row.*
@@ -80,12 +79,11 @@ never the question:
 1: Landed  2: Needed fixing  0: Skip
 ```
 
-The row is shared with `wait-changed`, `wait-ship`, and `wait-breathe`, and
-shows one of them at a time. Between turns a `wait-changed` summary comes
-first when that mod is installed and the turn changed files, then a ship
-offer, and "Did it land?" takes the row once those are dismissed. While a
-turn runs, only a breathe nudge holds the forecast back, since the window to
-call the turn closes when it lands.
+The row is shared with `wait-ship` and `wait-breathe`, and shows one of them
+at a time. Between turns a ship offer comes first when the turn changed
+files, and "Did it land?" takes the row once that is dismissed. While a turn
+runs, only a breathe nudge holds the forecast back, since the window to call
+the turn closes when it lands.
 
 - **Will it land first try?** Resolved by your own verdict, which it asks for
   once the turn lands — with a `skip` if you would rather not say. Answered it

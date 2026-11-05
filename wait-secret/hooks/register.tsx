@@ -44,7 +44,7 @@ const repoRoot = async ($: EngineInterface): Promise<string | undefined> => {
 
 /**
  * The lines every changed file adds against HEAD right now: the same
- * read-only scan wait-changed makes (staged and unstaged tracked changes,
+ * read-only scan of this turn's changes (staged and unstaged tracked changes,
  * plus untracked files). diff and ls-files, nothing else, and no file read.
  */
 const scanTree = async ($: EngineInterface): Promise<TreeScan> => {

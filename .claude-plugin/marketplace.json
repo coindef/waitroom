@@ -8,18 +8,12 @@
     {
       "name": "waitroom",
       "source": "./waitroom",
-      "description": "Installs the four rooms: wait-review, bet-on-your-agent, wait-ship, and wait-breathe. Optional — not in the four-room install: claude plugin install wait-changed@waitroom (turn-end file list), claude plugin install wait-ping@waitroom (local OS notification when a long turn ends or a permission confirm is waiting), claude plugin install wait-scope@waitroom (warns when a turn edits outside the scope you set), claude plugin install wait-secret@waitroom (flags lines a turn wrote that look like a key or token), claude plugin install wait-shell@waitroom (lists the shell commands a turn ran).",
+      "description": "Installs bet-on-your-agent, wait-ship, and wait-breathe. Optional \u2014 not in that install: claude plugin install wait-ping@waitroom (local OS notification when a long turn ends or a permission confirm is waiting), claude plugin install wait-scope@waitroom (warns when a turn edits outside the scope you set), claude plugin install wait-secret@waitroom (flags lines a turn wrote that look like a key or token).",
       "dependencies": [
-        "wait-review",
         "bet-on-your-agent",
         "wait-ship",
         "wait-breathe"
       ]
-    },
-    {
-      "name": "wait-review",
-      "source": "./wait-review",
-      "description": "Turns the wait while Claude works into incremental review of the diff it already wrote."
     },
     {
       "name": "bet-on-your-agent",
@@ -29,17 +23,12 @@
     {
       "name": "wait-ship",
       "source": "./wait-ship",
-      "description": "Drafts the commit message, PR description and changelog entry for the turn's changes, so you can review the words the way wait-review lets you review the code."
+      "description": "Drafts the commit message, PR description and changelog entry for the turn's changes, so you can review the words before you ship."
     },
     {
       "name": "wait-breathe",
       "source": "./wait-breathe",
-      "description": "Shows one quiet nudge in the row above the prompt once a turn runs long — off by default until you turn it on."
-    },
-    {
-      "name": "wait-changed",
-      "source": "./wait-changed",
-      "description": "After a Claude Code turn ends, shows a read-only list of the files that turn changed. On until you turn it off."
+      "description": "Shows one quiet nudge in the row above the prompt once a turn runs long \u2014 off by default until you turn it on."
     },
     {
       "name": "wait-ping",
@@ -55,11 +44,6 @@
       "name": "wait-secret",
       "source": "./wait-secret",
       "description": "After a Claude Code turn ends, flags lines in the files that turn changed that look like a secret: a short count on the status line, then a masked list. Local regex only. Never blocks or edits a file."
-    },
-    {
-      "name": "wait-shell",
-      "source": "./wait-shell",
-      "description": "Lists the shell commands a Claude Code turn ran, while it runs and after: a count on the status line, then the commands above the prompt. Read-only and local. Never blocks or reruns a command."
     }
   ]
 }
