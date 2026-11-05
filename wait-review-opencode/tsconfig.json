@@ -13,6 +13,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["plugin", "tests", "../wait-review/hooks", "../wait-review/types"],
-  "exclude": ["../wait-review/hooks/register.tsx"]
+  "include": ["plugin", "tests", "src/vendor/wait-review/hooks", "src/vendor/wait-review/types"]
 }

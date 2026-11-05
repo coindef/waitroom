@@ -37,8 +37,8 @@ import {
   summaryOf,
   tally,
   trimHunk,
-} from '../../wait-review/hooks/diff.ts'
-import type { Hunk, HunkStatus } from '../../wait-review/types/index.ts'
+} from '../src/vendor/wait-review/hooks/diff.ts'
+import type { Hunk, HunkStatus } from '../src/vendor/wait-review/types/index.ts'
 import { currentHead, repoRoot, scanRepo, type GitResult, type GitRunner } from './scan.ts'
 
 const runGit: GitRunner = (argv, cwd) =>
