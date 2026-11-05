@@ -32,7 +32,7 @@ claude plugin install wait-ship@waitroom
 | <img src="wait-scope/.claude-plugin/icon.png" width="32" height="32" alt="wait-scope icon"> | [wait-scope](./wait-scope) | Flags files a turn edited outside the scope you set, and never blocks them. The status row, on by default. |
 | <img src="wait-ping/.claude-plugin/icon.png" width="32" height="32" alt="wait-ping icon"> | [wait-ping](./wait-ping) | Local OS notification when a long turn ends or a permission confirm is waiting. Will be replaced by wait-notify. |
 
-<p align="center"><img src="docs/status-bar.png" width="720" alt="The Claude Code status bar during a turn: wait-breathe shows a posture check"></p>
+<p align="center"><img src="docs/status-bar.png" width="100%" alt="The Claude Code status bar during a turn: wait-breathe shows a posture check"></p>
 
 How the rooms share the screen is in [docs/design.md](docs/design.md).
 
