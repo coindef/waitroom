@@ -19,25 +19,25 @@ claude plugin install wait-ship@waitroom
 
 ### Core
 
-| | Room | What it does |
+| | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Room&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | What it does |
 |---|---|---|
-| <img src="docs/brand/plugin-icons/breathe.png" width="52" alt="wait-breathe icon"> | [wait‑breathe](./wait-breathe) | **Your lungs need a turn too.**<br>Shows one quiet line during a long turn, such as an eye break or a stretch. The status row, off until you run /breathe. |
-| <img src="docs/brand/plugin-icons/bet.png" width="52" alt="bet-on-your-agent icon"> | [bet‑on‑your‑agent](./bet-on-your-agent) | **Call the turn. Get scored.**<br>Call how the turn will go, then see how well your calls match what happened. The status row, on by default. |
-| <img src="docs/brand/plugin-icons/notify.png" width="52" alt="wait-notify icon"> | wait‑notify | **Go outside. We'll yell.**<br>Coming soon. A macOS notification when Claude needs input, and one reminder after 3 idle minutes. |
+| <img src="docs/brand/plugin-icons/breathe.png" width="52" alt="wait-breathe icon"> | [wait-breathe](./wait-breathe) | **Your lungs need a turn too.**<br>Shows one quiet line during a long turn, such as an eye break or a stretch. The status row, off until you run /breathe. |
+| <img src="docs/brand/plugin-icons/bet.png" width="52" alt="bet-on-your-agent icon"> | [bet-on-your-agent](./bet-on-your-agent) | **Call the turn. Get scored.**<br>Call how the turn will go, then see how well your calls match what happened. The status row, on by default. |
+| <img src="docs/brand/plugin-icons/notify.png" width="52" alt="wait-notify icon"> | wait-notify | **Go outside. We'll yell.**<br>Coming soon. A macOS notification when Claude needs input, and one reminder after 3 idle minutes. |
 
 ### Also
 
-| | Room | What it does |
+| | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Room&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | What it does |
 |---|---|---|
-| <img src="docs/brand/plugin-icons/ship.png" width="52" alt="wait-ship icon"> | [wait‑ship](./wait-ship) | **Commit msg? Already cooked.**<br>Drafts the commit message, PR description, and changelog entry for you to review. The status row, on by default. |
+| <img src="docs/brand/plugin-icons/ship.png" width="52" alt="wait-ship icon"> | [wait-ship](./wait-ship) | **Commit msg? Already cooked.**<br>Drafts the commit message, PR description, and changelog entry for you to review. The status row, on by default. |
 
 ### Optional
 
-| | Room | What it does |
+| | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Room&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | What it does |
 |---|---|---|
-| <img src="wait-secret/.claude-plugin/icon.png" width="32" height="32" alt="wait-secret icon"> | [wait‑secret](./wait-secret) | Flags lines a turn wrote that look like a key or a token. Local only, and it only warns. The status row, after the turn ends. |
-| <img src="wait-scope/.claude-plugin/icon.png" width="32" height="32" alt="wait-scope icon"> | [wait‑scope](./wait-scope) | Flags files a turn edited outside the scope you set, and never blocks them. The status row, on by default. |
-| <img src="wait-ping/.claude-plugin/icon.png" width="32" height="32" alt="wait-ping icon"> | [wait‑ping](./wait-ping) | Local OS notification when a long turn ends or a permission confirm is waiting. Will be replaced by wait-notify. |
+| <img src="wait-secret/.claude-plugin/icon.png" width="32" height="32" alt="wait-secret icon"> | [wait-secret](./wait-secret) | Flags lines a turn wrote that look like a key or a token. Local only, and it only warns. The status row, after the turn ends. |
+| <img src="wait-scope/.claude-plugin/icon.png" width="32" height="32" alt="wait-scope icon"> | [wait-scope](./wait-scope) | Flags files a turn edited outside the scope you set, and never blocks them. The status row, on by default. |
+| <img src="wait-ping/.claude-plugin/icon.png" width="32" height="32" alt="wait-ping icon"> | [wait-ping](./wait-ping) | Local OS notification when a long turn ends or a permission confirm is waiting. Will be replaced by wait-notify. |
 
 How the rooms share the screen is in [docs/design.md](docs/design.md).
 
