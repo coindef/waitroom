@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### wait-notify 0.1.0
+
+First release: a native macOS notification when Claude Code is blocked on you and you're not at the terminal. One reminder after 3 minutes, then quiet.
+
+- **Two moments, from Claude Code's `Notification` hook.** `permission_prompt` says `Waiting on a permission`. Claude asking you a question says `Asked you a question`: the `AskUserQuestion` dialog (Claude Code sends `permission_prompt` for it too, so an open `AskUserQuestion` call tells them apart) or an MCP server's `elicitation_dialog`. Titled `Claude needs you`. `idle_prompt` and every other type send nothing.
+- **Only when you're away.** Present means `HIDIdleTime` from `ioreg -c IOHIDSystem` under 30 seconds, with Terminal, iTerm2, Ghostty, VS Code or Cursor frontmost (`osascript`). Present sends nothing, now or later.
+- **One reminder.** After 3 minutes, if Claude is still blocked and you're still away: `Still waiting · 3 min`. Never a second. Your prompt, the waiting tool call finishing, the main turn ending, an answered MCP question or the session ending cancels it, and so does being back at the terminal at the recheck.
+- **A turn end is silent** unless `notify_on_stop` is on.
+- **`~/.waitroom/notify.json`:** `present_idle_secs` (30), `remind_after_min` (3), `notify_on_stop` (false). A missing or broken file means the defaults.
+- **macOS only.** Anything but `Darwin` from `uname`, and nothing else runs. No shell, no network, no sound. It never blocks or changes a tool call or a prompt.
+
 ### wait-shell 0.1.0
 
 First release: while a turn runs, lists the shell commands it ran. wait-changed shows the files a turn changed; wait-shell shows the commands it ran.

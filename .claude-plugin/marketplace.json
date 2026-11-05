@@ -8,7 +8,7 @@
     {
       "name": "waitroom",
       "source": "./waitroom",
-      "description": "Installs bet-on-your-agent, wait-ship, and wait-breathe. Optional \u2014 not in that install: claude plugin install wait-ping@waitroom (local OS notification when a long turn ends or a permission confirm is waiting), claude plugin install wait-scope@waitroom (warns when a turn edits outside the scope you set), claude plugin install wait-secret@waitroom (flags lines a turn wrote that look like a key or token).",
+      "description": "Installs bet-on-your-agent, wait-ship, and wait-breathe. Optional \u2014 not in that install: claude plugin install wait-ping@waitroom (local OS notification when a long turn ends or a permission confirm is waiting), claude plugin install wait-scope@waitroom (warns when a turn edits outside the scope you set), claude plugin install wait-secret@waitroom (flags lines a turn wrote that look like a key or token), claude plugin install wait-notify@waitroom (macOS notification when Claude is blocked on a permission or a question and you're away).",
       "dependencies": [
         "bet-on-your-agent",
         "wait-ship",
@@ -44,6 +44,11 @@
       "name": "wait-secret",
       "source": "./wait-secret",
       "description": "After a Claude Code turn ends, flags lines in the files that turn changed that look like a secret: a short count on the status line, then a masked list. Local regex only. Never blocks or edits a file."
+    },
+    {
+      "name": "wait-notify",
+      "source": "./wait-notify",
+      "description": "A native macOS notification when Claude Code is blocked on you (a permission or a question) and you're not at the terminal. One reminder after 3 minutes, then quiet."
     }
   ]
 }
