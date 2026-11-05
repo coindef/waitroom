@@ -4,11 +4,11 @@
 
 <h1 align="center">Waitroom</h1>
 
-<!-- TODO(PM): final one-sentence pitch. Draft from the plan: -->
-<p align="center">Your agent is thinking. Here's something useful to do while it works.</p>
+<!-- TODO(PM): final one-sentence pitch. -->
+<p align="center">Review the diff Claude already wrote, a hunk at a time, while it keeps working.</p>
 
 <p align="center">
-  <img src="docs/first-screen.gif" width="720" alt="A real Claude Code session: a bet on the running turn under the prompt, then the diff reviewed a hunk at a time in a pane on the right, one hunk flagged, and Claude fixing it">
+  <img src="docs/first-screen.gif" width="720" alt="The wait-review pane in a real Claude Code session: the diff arrives while Claude works, and one hunk gets flagged with a reason">
 </p>
 
 <!-- TODO(PM): confirm the star line. Plan draft, used once only: -->
