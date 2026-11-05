@@ -17,6 +17,7 @@ claude plugin marketplace add coindef/waitroom
 claude plugin install bet-on-your-agent@waitroom
 claude plugin install wait-breathe@waitroom
 claude plugin install wait-ship@waitroom
+claude plugin install wait-ping@waitroom
 ```
 
 ## Rooms
@@ -27,7 +28,8 @@ claude plugin install wait-ship@waitroom
 |---|---|---|
 | <img src="wait-breathe/.claude-plugin/icon.png" width="32" height="32" alt="wait-breathe icon"> | [wait-breathe](./wait-breathe) | Shows one quiet line during a long turn, such as an eye break or a stretch. The status row, off until you run /breathe. |
 | <img src="bet-on-your-agent/.claude-plugin/icon.png" width="32" height="32" alt="bet-on-your-agent icon"> | [bet-on-your-agent](./bet-on-your-agent) | Call how the turn will go, then see how well your calls match what happened. The status row, on by default. |
-| | wait-notify | Coming soon. A macOS notification when Claude needs input, plus one short summary when a turn ends. |
+| <img src="wait-ping/.claude-plugin/icon.png" width="32" height="32" alt="wait-ping icon"> | [wait-ping](./wait-ping) | Sends a local OS notification when a long turn ends or a permission confirm is waiting. On by default. Will become wait-notify. |
+| | wait-notify | Coming soon. A macOS notification when Claude needs input, and one reminder after 3 idle minutes. |
 
 ### Also
 
@@ -46,7 +48,7 @@ How the rooms share the screen is in [docs/design.md](docs/design.md).
 
 ## Install
 
-The command above installs bet-on-your-agent, wait-breathe, and wait-ship. Optional rooms install on their own:
+The command above installs bet-on-your-agent, wait-breathe, wait-ship, and wait-ping. Optional rooms install on their own:
 
 ```sh
 claude plugin install wait-secret@waitroom
