@@ -1,37 +1,35 @@
 # Install
 
+```sh
+claude plugin marketplace add coindef/waitroom
+claude plugin install bet-on-your-agent@waitroom
+claude plugin install wait-breathe@waitroom
+claude plugin install wait-ship@waitroom
+```
+
+Star it on GitHub if it earned it.
+
+That installs bet-on-your-agent, wait-breathe, and wait-ship.
+
+You can also install the three-room bundle in one step (bet-on-your-agent, wait-ship, and wait-breathe):
 
 ```sh
 claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
 ```
 
-Star it on GitHub if it earned it.
-
-That installs bet-on-your-agent, wait-ship, and wait-breathe.
-
-Optional — local notification when a long turn ends (not in the three-room install):
-
-```sh
-claude plugin install wait-ping@waitroom
-```
-
-A turn under 30 seconds ends quietly. Sound stays off until you turn it on. [What it sends](../wait-ping).
-
-Optional — warn when a turn edits outside the scope you set (not in the three-room install):
+Optional rooms:
 
 ```sh
 claude plugin install wait-scope@waitroom
-```
-
-Put one glob per line in `.claude/wait-scope` (or set *Files in scope*). Only warns. [What it shows](../wait-scope).
-
-Optional — flag lines a turn wrote that look like a key or token (not in the three-room install):
-
-```sh
 claude plugin install wait-secret@waitroom
+claude plugin install wait-ping@waitroom
 ```
 
-Masked, local regex over this turn's added lines. Only warns. [What it shows](../wait-secret).
+wait-scope warns when a turn edits outside the globs in `.claude/wait-scope` (or *Files in scope*). Only warns. [What it shows](../wait-scope).
+
+wait-secret flags lines a turn wrote that look like a key or token. Masked, local regex. Only warns. [What it shows](../wait-secret).
+
+Local OS notification when a long turn ends or a permission confirm is waiting. Will be replaced by wait-notify. [What it sends](../wait-ping).
 
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
@@ -39,14 +37,12 @@ wait-breathe stays off until you send `/breathe`. The installer's `userConfig
 options not yet set` lines are fine: every option has a working default
 ([more](#what-the-installer-says-on-the-way-in)).
 
-Already at the Claude Code prompt? Send two slash commands, each as its own
-message — `/plugin marketplace add coindef/waitroom`, then `/plugin install
-waitroom@waitroom` — and save the install screen as it is.
+Already at the Claude Code prompt? Send the marketplace add, then each
+`/plugin install …@waitroom` as its own message, and save the install screen
+as it is.
 
-Both halves are safe to run again: adding a marketplace that is already there,
-or installing a plugin that already is, changes nothing. With the three rooms
-in, `/plugin` reads `3 mods active · bet-on-your-agent, wait-ship,
-wait-breathe`.
+Those commands are safe to run again: adding a marketplace that is already
+there, or installing a plugin that already is, changes nothing.
 
 ## Or install one room
 
@@ -54,11 +50,12 @@ wait-breathe`.
 claude plugin install bet-on-your-agent@waitroom
 claude plugin install wait-ship@waitroom
 claude plugin install wait-breathe@waitroom
+claude plugin install wait-ping@waitroom
 ```
 
-The marketplace add in the line above still comes first. At the prompt, each
-of those is its own message: `/plugin install bet-on-your-agent@waitroom`, and the
-same shape for the other two.
+The marketplace add in the block above still comes first. At the prompt, each
+of those is its own message: `/plugin install bet-on-your-agent@waitroom`, and
+the same shape for the others.
 
 Every plugin here needs **Claude Code 2.1.291 or later** — `claude --version` says which you
 have, `claude update` moves you on. An older build installs it without
@@ -67,13 +64,13 @@ complaint and then shows it as `failed to load`; see
 
 The one-liner adds the marketplace from its repository path,
 `coindef/waitroom`. From then on the marketplace goes by its name,
-**`waitroom`**, the part after the `@`. `waitroom@waitroom` is this three-room
-install.
+**`waitroom`**, the part after the `@`. `waitroom@waitroom` is the three-room
+bundle (bet-on-your-agent, wait-ship, wait-breathe).
 
 You may also see `/plugin install waitroom --marketplace coindef/waitroom`.
 It works once. Sent again, it answers `Plugin "waitroom" not found in any
 marketplace`, because by then `--marketplace` wants the name `waitroom`, not
-the repository path. The one-liner above has no such trap.
+the repository path. The commands above have no such trap.
 
 ## Updating
 
@@ -130,7 +127,7 @@ so your calibration starts fresh under the new name.
   <img src="breathe-nudge.svg" width="220" alt="The wait-breathe row: one quiet posture check and the key b">
 </p>
 
-<p align="center"><em>Real captures from this build, not pixel mockups. The walkthrough is in <a href="../README.md#plugins">The first minute</a>.</em></p>
+<p align="center"><em>Real captures from this build, not pixel mockups. The rooms list is in <a href="../README.md#rooms">Rooms</a>.</em></p>
 
 <!--
   Optional pixel screenshot strip, when Design ships stills:
@@ -150,7 +147,7 @@ so your calibration starts fresh under the new name.
     2.1.242, 2.1.260 and 2.1.280);
   - 2.1.281 to 2.1.290 accept the module but were not run live.
 - **A git repository** for wait-ship. It reads the diff, so outside one it has
-  nothing to show. bet-on-your-agent and wait-breathe work anywhere.
+  nothing to show. bet-on-your-agent, wait-breathe, and wait-ping work anywhere.
 - Plugins that hook Claude Code's own events are **early access**. See
   [If a plugin shows an error](troubleshooting.md#if-a-plugin-shows-an-error).
 

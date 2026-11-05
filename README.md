@@ -1,55 +1,62 @@
 <p align="center">
-  <img src="docs/brand/A-hero-B-final2.png" srcset="docs/brand/A-hero-B-final2.png 1x, docs/brand/A-hero-B-final2@2x.png 2x" width="720" alt="Waitroom: seven pixel icons for the seven plugins">
+  <img src="docs/brand/A-hero-B-final2.png" srcset="docs/brand/A-hero-B-final2.png 1x, docs/brand/A-hero-B-final2@2x.png 2x" width="720" alt="Waitroom pixel icons: breathe, bet, notify, ship">
 </p>
 
 <h1 align="center">Waitroom</h1>
 
-<p align="center">Seven small Claude Code plugins for the time your agent is thinking.</p>
+<p align="center">Claude is thinking. Here's something to do while you wait.</p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
-  &nbsp;
-  <a href="https://github.com/coindef/waitroom/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/coindef/waitroom?style=flat-square"></a>
-  &nbsp;
-  <img alt="Requires Claude Code 2.1.291 or later" src="https://img.shields.io/badge/Claude_Code-2.1.291%2B-blue?style=flat-square">
+  <img src="docs/first-screen.gif" width="720" alt="A real Claude Code session: while Claude works, the wait-breathe status row shows one quiet nudge, then clears when the turn ends">
 </p>
+
+<p align="center">If it saved you a boring minute, a star helps.</p>
+
+```sh
+claude plugin marketplace add coindef/waitroom
+claude plugin install bet-on-your-agent@waitroom
+claude plugin install wait-breathe@waitroom
+claude plugin install wait-ship@waitroom
+```
+
+## Rooms
+
+### Core
+
+| | Room | What it does |
+|---|---|---|
+| <img src="wait-breathe/.claude-plugin/icon.png" width="32" height="32" alt="wait-breathe icon"> | [wait-breathe](./wait-breathe) | Shows one quiet line during a long turn, such as an eye break or a stretch. The status row, off until you run /breathe. |
+| <img src="bet-on-your-agent/.claude-plugin/icon.png" width="32" height="32" alt="bet-on-your-agent icon"> | [bet-on-your-agent](./bet-on-your-agent) | Call how the turn will go, then see how well your calls match what happened. The status row, on by default. |
+| | wait-notify | Coming soon. A macOS notification when Claude needs input, and one reminder after 3 idle minutes. |
+
+### Also
+
+| | Room | What it does |
+|---|---|---|
+| <img src="wait-ship/.claude-plugin/icon.png" width="32" height="32" alt="wait-ship icon"> | [wait-ship](./wait-ship) | Drafts the commit message, PR description, and changelog entry for you to review. The status row, on by default. |
+
+### Optional
+
+| | Room | What it does |
+|---|---|---|
+| <img src="wait-secret/.claude-plugin/icon.png" width="32" height="32" alt="wait-secret icon"> | [wait-secret](./wait-secret) | Flags lines a turn wrote that look like a key or a token. Local only, and it only warns. The status row, after the turn ends. |
+| <img src="wait-scope/.claude-plugin/icon.png" width="32" height="32" alt="wait-scope icon"> | [wait-scope](./wait-scope) | Flags files a turn edited outside the scope you set, and never blocks them. The status row, on by default. |
+| <img src="wait-ping/.claude-plugin/icon.png" width="32" height="32" alt="wait-ping icon"> | [wait-ping](./wait-ping) | Local OS notification when a long turn ends or a permission confirm is waiting. Will be replaced by wait-notify. |
+
+How the rooms share the screen is in [docs/design.md](docs/design.md).
 
 ## Install
 
-```sh
-claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
-```
-
-That installs bet-on-your-agent, wait-ship, and wait-breathe. Add the others one at a time:
+The command above installs bet-on-your-agent, wait-breathe, and wait-ship. Optional rooms install on their own:
 
 ```sh
-claude plugin install wait-ping@waitroom
-claude plugin install wait-scope@waitroom
 claude plugin install wait-secret@waitroom
+claude plugin install wait-scope@waitroom
+claude plugin install wait-ping@waitroom
 ```
 
-Restart Claude Code afterwards. Single-plugin installs, updating, and the old name: [docs/install.md](docs/install.md).
-
-## Plugins
-
-- 🎯 **[bet-on-your-agent](./bet-on-your-agent)** — Call how the turn will go and get scored afterwards on your calibration. The row. On.
-- 🚢 **[wait-ship](./wait-ship)** — Drafts the commit message, PR description, and changelog entry for you to review. The row. On.
-- 🌬️ **[wait-breathe](./wait-breathe)** — One quiet line during a long turn: a posture check, an eye break, a breath, a stretch. The row. Off until /breathe.
-- 🔔 **[wait-ping](./wait-ping)** — A local notification when a long turn ends or a permission confirm is waiting. The OS. On.
-- 🎯 **[wait-scope](./wait-scope)** — Flags files a turn edited outside the scope you set, and never blocks them. The row. On.
-- 🔑 **[wait-secret](./wait-secret)** — Flags likely secrets in files this turn changed. The row. On.
-
-How they share the screen: [docs/design.md](docs/design.md).
-
-## Demo
-
-<p align="center">
-  <img src="docs/demo.gif" width="880" alt="A Claude Code session: a one-keystroke bet on the running turn above the prompt, the diff reviewed a hunk at a time in a pane on the right, one hunk flagged with a reason, and Claude fixing exactly that from &quot;Fix what I flagged&quot;">
-</p>
-
-<p align="center"><em>A real session, sped up only while Claude works. <a href="docs/demo.mp4">Full-length video</a>.</em></p>
+Restart Claude Code afterwards. Requires Claude Code 2.1.291 or later, and a git repository for wait-ship. Single-plugin installs and updates are in [docs/install.md](docs/install.md).
 
 ---
 
-Requires Claude Code 2.1.291+ and, for wait-ship, a git repository ([details](docs/install.md#requirements)).
 [Troubleshooting](docs/troubleshooting.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · MIT, see [LICENSE](LICENSE).
