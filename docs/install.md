@@ -5,18 +5,16 @@ claude plugin marketplace add coindef/waitroom
 claude plugin install bet-on-your-agent@waitroom
 claude plugin install wait-breathe@waitroom
 claude plugin install wait-ship@waitroom
-claude plugin install wait-ping@waitroom
 ```
 
 Star it on GitHub if it earned it.
 
-That installs bet-on-your-agent, wait-breathe, wait-ship, and wait-ping.
+That installs bet-on-your-agent, wait-breathe, and wait-ship.
 
-You can also install the three-room bundle in one step (bet-on-your-agent, wait-ship, and wait-breathe). wait-ping is not in that bundle, so add it with the line above if you want it:
+You can also install the three-room bundle in one step (bet-on-your-agent, wait-ship, and wait-breathe):
 
 ```sh
 claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
-claude plugin install wait-ping@waitroom
 ```
 
 Optional rooms:
@@ -24,11 +22,14 @@ Optional rooms:
 ```sh
 claude plugin install wait-scope@waitroom
 claude plugin install wait-secret@waitroom
+claude plugin install wait-ping@waitroom
 ```
 
 wait-scope warns when a turn edits outside the globs in `.claude/wait-scope` (or *Files in scope*). Only warns. [What it shows](../wait-scope).
 
 wait-secret flags lines a turn wrote that look like a key or token. Masked, local regex. Only warns. [What it shows](../wait-secret).
+
+wait-ping: basic ping when Claude needs input. Will be replaced by wait-notify. [What it sends](../wait-ping).
 
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
