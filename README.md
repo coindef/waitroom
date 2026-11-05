@@ -1,10 +1,8 @@
 <p align="center"><img src="docs/brand/waitroom-social-1280x640-v8c.png" width="720" alt="Waitroom"></p>
 
-<p align="center">Claude is thinking. Here's something to do while you wait.</p>
+<p align="center"><b>Claude is thinking. Call the turn.</b></p>
 
-<p align="center">
-  <img src="docs/first-screen.gif" width="720" alt="A real Claude Code session: while Claude works, the wait-breathe status row shows one quiet nudge, then clears when the turn ends">
-</p>
+<p align="center">Claude is thinking. Here's something to do while you wait.</p>
 
 <p align="center">If it saved you a boring minute, a star helps.</p>
 
@@ -21,14 +19,9 @@ claude plugin install wait-ship@waitroom
 
 | | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Room&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | What it does |
 |---|---|---|
-| <img src="docs/brand/plugin-icons/breathe.png" width="52" alt="wait-breathe icon"> | [wait-breathe](./wait-breathe) | **Your lungs need a turn too.**<br>Shows one quiet line during a long turn, such as an eye break or a stretch. The status row, off until you run /breathe. |
 | <img src="docs/brand/plugin-icons/bet.png" width="52" alt="bet-on-your-agent icon"> | [bet-on-your-agent](./bet-on-your-agent) | **Call the turn. Get scored.**<br>Call how the turn will go, then see how well your calls match what happened. The status row, on by default. |
+| <img src="docs/brand/plugin-icons/breathe.png" width="52" alt="wait-breathe icon"> | [wait-breathe](./wait-breathe) | **Your lungs need a turn too.**<br>Shows one quiet line during a long turn, such as an eye break or a stretch. The status row, off until you run /breathe. |
 | <img src="docs/brand/plugin-icons/notify.png" width="52" alt="wait-notify icon"> | wait-notify | **Go outside. We'll yell.**<br>Coming soon. A macOS notification when Claude needs input, and one reminder after 3 idle minutes. |
-
-### Also
-
-| | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Room&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | What it does |
-|---|---|---|
 | <img src="docs/brand/plugin-icons/ship.png" width="52" alt="wait-ship icon"> | [wait-ship](./wait-ship) | **Commit msg? Already cooked.**<br>Drafts the commit message, PR description, and changelog entry for you to review. The status row, on by default. |
 
 ### Optional
@@ -38,6 +31,8 @@ claude plugin install wait-ship@waitroom
 | <img src="wait-secret/.claude-plugin/icon.png" width="32" height="32" alt="wait-secret icon"> | [wait-secret](./wait-secret) | Flags lines a turn wrote that look like a key or a token. Local only, and it only warns. The status row, after the turn ends. |
 | <img src="wait-scope/.claude-plugin/icon.png" width="32" height="32" alt="wait-scope icon"> | [wait-scope](./wait-scope) | Flags files a turn edited outside the scope you set, and never blocks them. The status row, on by default. |
 | <img src="wait-ping/.claude-plugin/icon.png" width="32" height="32" alt="wait-ping icon"> | [wait-ping](./wait-ping) | Local OS notification when a long turn ends or a permission confirm is waiting. Will be replaced by wait-notify. |
+
+<p align="center"><img src="docs/status-bar.png" width="720" alt="The Claude Code status bar during a turn: wait-breathe shows a posture check"></p>
 
 How the rooms share the screen is in [docs/design.md](docs/design.md).
 
