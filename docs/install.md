@@ -29,7 +29,7 @@ wait-scope warns when a turn edits outside the globs in `.claude/wait-scope` (or
 
 wait-secret flags lines a turn wrote that look like a key or token. Masked, local regex. Only warns. [What it shows](../wait-secret).
 
-wait-ping: basic ping when Claude needs input. Will be replaced by wait-notify. [What it sends](../wait-ping).
+Local OS notification when a long turn ends or a permission confirm is waiting. Will be replaced by wait-notify. [What it sends](../wait-ping).
 
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
