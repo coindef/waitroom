@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/A-hero-B-final2.png" srcset="docs/brand/A-hero-B-final2.png 1x, docs/brand/A-hero-B-final2@2x.png 2x" width="720" alt="Waitroom: pixel icons">
+  <img src="docs/brand/A-hero-B-final2.png" srcset="docs/brand/A-hero-B-final2.png 1x, docs/brand/A-hero-B-final2@2x.png 2x" width="720" alt="Waitroom pixel icons: breathe, bet, notify, ship">
 </p>
 
 <h1 align="center">Waitroom</h1>
