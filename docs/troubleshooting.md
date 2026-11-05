@@ -16,19 +16,19 @@ other marketplaces. Run `claude update`, restart, and they load. (Reproduced on
 2.1.200 and 2.1.241; 2.1.242 is the first build that reads it.)
 
 Otherwise, check whether they are running at all. Open `/plugin`: when all
-four are loaded, the line under the tabs reads
+three are loaded, the line under the tabs reads
 
 ```
-4 mods active · wait-review, bet-on-your-agent, wait-ship, wait-breathe
+3 mods active · bet-on-your-agent, wait-ship, wait-breathe
 ```
 
 If one is missing from it, the **Errors** tab in the same menu names the reason
-— so does `claude --debug`, on a line starting `hooks module wait-review@waitroom
+— so does `claude --debug`, on a line starting `hooks module bet-on-your-agent@waitroom
 not loaded:`. What it can say:
 
 | It says | What it means | What to do |
 | --- | --- | --- |
-| `Its hooks module does not load. "wait-review@…" holds the same plugin name and comes first` | Two copies are installed — almost always one from the old `wait-mods` marketplace beside the new one | `/plugin marketplace remove wait-mods` removes the old copy with its marketplace. See [Coming from the old name](install.md#coming-from-the-old-name) |
+| `Its hooks module does not load. "bet-on-your-agent@…" holds the same plugin name and comes first` | Two copies are installed — almost always one from the old `wait-mods` marketplace beside the new one | `/plugin marketplace remove wait-mods` removes the old copy with its marketplace. See [Coming from the old name](install.md#coming-from-the-old-name) |
 | `hooks modules are turned off for installed plugins in this process: …` | The early-access switch, below | Depends on the rest of the line |
 | `only managed plugins and built-in plugins run (allowManagedHooksOnly / disableAllHooks)` | Your organization's managed settings allow only its own plugins' hooks | Ask whoever manages Claude Code for you |
 | `… load no hooks module in this mode (--bare)` | Claude Code was started with `--bare` | Start it without `--bare` |
@@ -37,7 +37,7 @@ No error anywhere, and no `mods active` line at all, means `disableAllHooks` is
 on in your settings. It turns off every hook, these included.
 
 The same "holds the same plugin name" error appears if you run
-`claude --plugin-dir ./wait-review` while the installed copy is enabled. Disable
+`claude --plugin-dir ./bet-on-your-agent` while the installed copy is enabled. Disable
 the installed one while you work on a clone.
 
 ### The early-access switch

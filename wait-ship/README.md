@@ -2,15 +2,13 @@
 
 <img src="./.claude-plugin/icon.svg" width="56" align="right" alt="wait-ship's icon: an outbox with an arrow rising out of it">
 
-One of seven plugins in [waitroom](../README.md#plugins):
-[wait-review](../wait-review) (the diff) ·
+One of the plugins in [waitroom](../README.md#plugins):
 [bet-on-your-agent](../bet-on-your-agent) (your calibration) ·
 **wait-ship (what ships)** · [wait-breathe](../wait-breathe) (you).
 
 A Claude Code plugin that drafts the words around the turn's changes — the
 commit message, the PR description, the changelog entry — the moment the
-turn lands, so you can review them the way `wait-review` lets you review the
-diff itself.
+turn lands, so you can review them before you ship.
 
 ```
 /plugin marketplace add coindef/waitroom
@@ -19,7 +17,7 @@ diff itself.
 /plugin install wait-ship@waitroom
 ```
 
-All four rooms at once: `/plugin install waitroom@waitroom`.
+All three rooms at once: `/plugin install waitroom@waitroom`.
 
 (Each as its own message; both are safe to send again. Needs Claude Code
 2.1.291 or later; `claude update` if `claude --version` says otherwise.)
@@ -28,9 +26,9 @@ All four rooms at once: `/plugin install waitroom@waitroom`.
 
 An agent can already write a commit message. What it cannot do unprompted is
 hand you something to read, correct, and use on your own time — so this reads
-the diff the turn already wrote, the same diff `wait-review` reads, and turns
-it into three things worth looking at before you ship: a commit message, a PR
-description, and — only where one applies — a changelog entry.
+the diff the turn already wrote and turns it into three things worth looking
+at before you ship: a commit message, a PR description, and — only where one
+applies — a changelog entry.
 
 It never runs `git commit`, never runs `gh`, never touches `CHANGELOG.md`. It
 writes drafts to their own folder and tells you the exact command to run if
@@ -47,8 +45,7 @@ one `bet-on-your-agent` uses — offers the kit it drafted:
 change in a scratch repository.*
 
 **The keys are letters, so give the row the keys first** — `ctrl+x tab`, or a
-click, as the row's own last line says, in the same words wait-review's pane
-uses — then press one. A letter typed into the composer stays in the
+click, as the row's own last line says — then press one. A letter typed into the composer stays in the
 composer; only `bet-on-your-agent`'s digits 1 to 5 answer from there.
 
 - **`a` accepts every drafted artifact.**
@@ -70,8 +67,8 @@ wait-ship: Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file
 
 - The drafts folder ignores itself: the first time it writes there, it adds a
   `.gitignore` of `*` (never over one you already have, and never when
-  `shipDir` is the repository root). So drafts stay out of `git status`, out of
-  `wait-review`'s queue, and out of the next kit's diff.
+  `shipDir` is the repository root). So drafts stay out of `git status` and out
+  of the next kit's diff.
 
 Nothing here is ever executed on your behalf — not the commit, not a `gh`
 call, not an edit to `CHANGELOG.md`. The transcript names the command; you
@@ -84,10 +81,8 @@ the session began). **Outside a git repository**, same thing — there is no
 diff to draft from.
 
 The row is shared, and shows one mod at a time: a `wait-breathe` nudge comes
-first, then — between turns, when that mod is installed and the turn changed
-files — `wait-changed`'s read-only list, then this kit, then
-`bet-on-your-agent`'s "Did it land?", which takes the row the moment the kit
-is answered.
+first, then this kit, then `bet-on-your-agent`'s "Did it land?", which takes
+the row the moment the kit is answered.
 
 ## What goes into each draft
 
