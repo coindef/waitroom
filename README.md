@@ -18,14 +18,15 @@ claude plugin install bet-on-your-agent@waitroom
 Restart Claude Code. On your next turn, the bet row above the prompt asks for your first call. You need Claude Code 2.1.291 or later. If `claude --version` shows an older one, run `claude update`.
 
 <details>
-<summary>Install wait-ship, wait-breathe, and the optional rooms</summary>
+<summary>Install wait-ship, wait-breathe, wait-notify, and the optional rooms</summary>
 
 ```sh
 claude plugin install wait-ship@waitroom
 claude plugin install wait-breathe@waitroom
+claude plugin install wait-notify@waitroom
 ```
 
-wait-ship needs a git repository. wait-breathe stays off until you run `/breathe`.
+wait-ship needs a git repository. wait-breathe stays off until you run `/breathe`. wait-notify is macOS only: after install and a restart, it notifies when Claude is blocked on you and you're away from the terminal, and stays silent while you're active there.
 
 Optional rooms:
 
@@ -64,6 +65,7 @@ You run long Claude Code turns. You alt-tab. Now you call the turn instead.
 | <img src="docs/brand/plugin-icons/bet.png" width="52" alt="bet-on-your-agent icon"><br>[bet-on-your-agent](./bet-on-your-agent) | **Call the turn. Get scored.**<br>Call how the turn will go, then see how well your calls match what happened. The status row, on by default. |
 | <img src="docs/brand/plugin-icons/breathe.png" width="52" alt="wait-breathe icon"><br>[wait-breathe](./wait-breathe) | **Your lungs need a turn too.**<br>Shows one quiet line during a long turn, such as an eye break or a stretch. The status row, off until you run /breathe. |
 | <img src="docs/brand/plugin-icons/ship.png" width="52" alt="wait-ship icon"><br>[wait-ship](./wait-ship) | **Commit msg? Already cooked.**<br>Drafts the commit message, PR description, and changelog entry for you to review. The status row, on by default. |
+| <img src="docs/brand/plugin-icons/notify.png" width="52" alt="wait-notify icon"><br>[wait-notify](./wait-notify) | **Go outside. We'll yell.**<br>macOS notification when Claude needs you and you're away. Silent while you're at the terminal. One reminder after 3 minutes. |
 
 ### Optional
 
