@@ -86,12 +86,21 @@ These cancel the reminder as soon as they happen:
 - your answer to an MCP server's question
 - the session ending, `/clear` included
 
-Being back at the terminal at the recheck cancels it too.
+Being back at the terminal by the recheck cancels it too. Any key or mouse
+event since the notification counts, as long as a terminal is in front at the
+recheck. When `present_idle_secs` is longer than the wait, the recheck looks
+back that far instead.
 
-Claude Code raises no event when you answer a permission dialog, only when
-that tool call finishes. So a long command you allowed counts as still waiting
-until it finishes. If you allowed it and then walked away while it ran, the
-recheck can still send its one reminder.
+Claude Code raises no event when you answer a permission dialog. PreToolUse
+runs before the dialog opens, and the tool call ends only when the command
+does. Your answer is a key press or a click at the terminal, so the recheck
+counts it. If you allow a long command and walk away, no reminder comes while
+it runs.
+
+The recheck can't see an answer from your phone or the web, because that
+leaves no key press on the Mac. It also misses an answer you give before
+moving to another app, because the terminal is no longer in front. In both
+cases the reminder can still come.
 
 ## Config
 
@@ -142,7 +151,7 @@ notification does not check whether you are at the terminal.
 
 ```
 claude plugin validate ./wait-notify
-claude plugin test     ./wait-notify   # 42 tests
+claude plugin test     ./wait-notify   # 48 tests
 ```
 
 `hooks/notify.ts` has no engine dependency: the copy, the config, parsing

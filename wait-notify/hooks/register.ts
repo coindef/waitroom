@@ -43,9 +43,10 @@ export const register: Register = on => {
 
   /**
    * Every tool call, watched and never changed. Its start tells an
-   * AskUserQuestion dialog from a permission dialog. Its end, for a call that
-   * was already running when the notification went out, means Claude has
-   * moved on: you answered.
+   * AskUserQuestion dialog from a permission dialog. Its start can't mark your
+   * answer, because a call starts, PreToolUse included, before its dialog
+   * opens. Its end, for a call that was already running when the notification
+   * went out, means Claude has moved on: you answered.
    */
   on('tool.call', async ($, e, next) => {
     const stamp = notifier.toolStarted(e.tool)

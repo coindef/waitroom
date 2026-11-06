@@ -23,6 +23,7 @@ import {
   PERMISSION_BODY,
   platformOfUname,
   QUESTION_BODY,
+  recheckIdleSecs,
   reminderBody,
   type RunResult,
   STOP_BODY,
@@ -254,6 +255,44 @@ test('away: one notification, one timer at the configured minutes, one reminder,
   await fire()
   expect(ran).toHaveLength(7)
   expect(timers).toEqual([])
+})
+
+test('the recheck looks back over the whole wait, or present_idle_secs when that is longer', () => {
+  expect(recheckIdleSecs(DEFAULT_CONFIG)).toBe(3 * 60)
+  expect(recheckIdleSecs({ ...DEFAULT_CONFIG, remindAfterMin: 10 })).toBe(10 * 60)
+  expect(recheckIdleSecs({ ...DEFAULT_CONFIG, remindAfterMin: 0.25 })).toBe(30)
+  expect(recheckIdleSecs({ ...DEFAULT_CONFIG, presentIdleSecs: 900 })).toBe(900)
+})
+
+test('a key since the notification, with a terminal in front at the recheck: no reminder', async () => {
+  const notifier = createNotifier()
+  const you = { idleSeconds: 1, front: SAFARI }
+  const { host, ran, timers, fire } = fakeHost(argv => mac(you.idleSeconds, you.front)(argv))
+  await notifier.notification(host, 'permission_prompt')
+  expect(ran).toEqual(NOTIFIED_AFTER_UNAME)
+
+  // You allowed it at the terminal 20 seconds in, then left.
+  you.front = ITERM
+  you.idleSeconds = 3 * 60 - 20
+  await fire()
+  expect(ran.slice(4)).toEqual([IOREG_ARGV, FRONTMOST_ARGV])
+  expect(timers).toEqual([])
+})
+
+test('no key since the notification, or another app in front at the recheck: the reminder', async () => {
+  const gone = createNotifier()
+  const left = { idleSeconds: 45, front: ITERM }
+  const idle = fakeHost(argv => mac(left.idleSeconds, left.front)(argv))
+  await gone.notification(idle.host, 'permission_prompt')
+  left.idleSeconds = 45 + 3 * 60
+  await idle.fire()
+  expect(idle.ran.slice(3)).toEqual([IOREG_ARGV, notifyArgv(reminderBody(3))])
+
+  const busy = createNotifier()
+  const elsewhere = fakeHost(mac(2, SAFARI))
+  await busy.notification(elsewhere.host, 'permission_prompt')
+  await elsewhere.fire()
+  expect(elsewhere.ran.slice(4)).toEqual([IOREG_ARGV, FRONTMOST_ARGV, notifyArgv(reminderBody(3))])
 })
 
 test('an answer that lands while the presence check runs: no notification and no reminder', async () => {
