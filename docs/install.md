@@ -17,6 +17,14 @@ You can also install the three-room bundle in one step (bet-on-your-agent, wait-
 claude plugin marketplace add coindef/waitroom && claude plugin install waitroom@waitroom
 ```
 
+Core room on its own install (not in the three-room bundle):
+
+```sh
+claude plugin install wait-notify@waitroom
+```
+
+wait-notify is **macOS only**. After install and a restart, it sends a native notification when Claude is blocked on you (a permission or a question) and you're away from the terminal. Silent while you're active there. One reminder after 3 minutes, then quiet. [What it does](../wait-notify).
+
 Optional rooms:
 
 ```sh
@@ -29,7 +37,7 @@ wait-scope warns when a turn edits outside the globs in `.claude/wait-scope` (or
 
 wait-secret flags lines a turn wrote that look like a key or token. Masked, local regex. Only warns. [What it shows](../wait-secret).
 
-Local OS notification when a long turn ends or a permission confirm is waiting. Will be replaced by wait-notify. [What it sends](../wait-ping).
+wait-ping is the legacy notifier: local OS notification when a long turn ends or a permission confirm is waiting. Prefer wait-notify on macOS. [What it sends](../wait-ping).
 
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
@@ -50,6 +58,7 @@ there, or installing a plugin that already is, changes nothing.
 claude plugin install bet-on-your-agent@waitroom
 claude plugin install wait-ship@waitroom
 claude plugin install wait-breathe@waitroom
+claude plugin install wait-notify@waitroom
 claude plugin install wait-ping@waitroom
 ```
 
