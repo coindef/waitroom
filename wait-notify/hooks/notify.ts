@@ -154,6 +154,19 @@ export const isTerminalApp = (name: string): boolean => TERMINAL_APP_KEYS.has(na
 export const isPresent = (idleSeconds: number | undefined, app: string | undefined, presentIdleSecs: number): boolean =>
   idleSeconds !== undefined && idleSeconds < presentIdleSecs && app !== undefined && isTerminalApp(app)
 
+/**
+ * The idle threshold at the reminder's recheck: the whole wait, or
+ * `present_idle_secs` when that is longer.
+ *
+ * Claude Code raises no event when you answer a permission dialog. PreToolUse
+ * runs before the dialog opens, and the call's end can come long after your
+ * answer. But the answer is a key or a click at the terminal, so a key or
+ * mouse event since the notification, with a terminal in front now, means you
+ * came back.
+ */
+export const recheckIdleSecs = (config: NotifyConfig): number =>
+  Math.max(config.presentIdleSecs, config.remindAfterMin * 60)
+
 /** What Claude is blocked on. */
 export type WaitKind = 'permission' | 'question'
 
@@ -282,7 +295,8 @@ export const createNotifier = (): Notifier => {
 
   const remind = async (host: NotifyHost, mine: Wait, config: NotifyConfig): Promise<void> => {
     if (wait !== mine) return
-    const isHere = await checkPresence(host, config.presentIdleSecs)
+    // Back at the terminal at any point since the notification counts, not only now.
+    const isHere = await checkPresence(host, recheckIdleSecs(config))
     if (wait !== mine) return
     // One check, one reminder at most: the wait is done either way.
     wait = null

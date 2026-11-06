@@ -23,7 +23,7 @@ claude plugin validate ./wait-secret
 claude plugin test     ./wait-secret          # 23 tests
 
 claude plugin validate ./wait-notify
-claude plugin test     ./wait-notify          # 42 tests
+claude plugin test     ./wait-notify          # 48 tests
 
 claude plugin validate ./waitroom
 claude plugin test     ./waitroom             # 6 tests

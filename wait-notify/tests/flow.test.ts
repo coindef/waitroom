@@ -204,6 +204,78 @@ test('the waiting tool call going on (you answered) cancels the reminder', async
   expect(ran).toEqual(NOTIFIED)
 })
 
+/**
+ * Claude Code's order for a command that needs your OK: its `tool.call` starts
+ * (PreToolUse runs inside it, before any dialog), the dialog opens, the
+ * Notification comes, you answer, and the command runs. Nothing is raised at
+ * your answer, so the hold below is the dialog and the run together.
+ */
+test('you allow a long command at the terminal and walk away: no reminder while it runs', async ($, on) => {
+  const { clock, ran, mac, holds } = engineBottom(on)
+  holds.Bash = 5 * MIN
+  const call = $.tool.call({ tool: 'Bash', command: 'npm run test:e2e' })
+  await clock.settle()
+  await permission($)
+  expect(ran).toEqual(NOTIFIED)
+
+  // 20 seconds in, you switch to the terminal, press Enter on the dialog and leave.
+  mac.front = ITERM
+  mac.idleSeconds = 3 * 60 - 20
+  await clock.advance(3 * MIN)
+  expect(ran.slice(4)).toEqual([IOREG_ARGV, FRONTMOST_ARGV])
+
+  await clock.advance(2 * MIN)
+  expect((await call).result).toEqual({ ok: true })
+  await clock.advance(60 * MIN)
+  expect(posted(ran)).toEqual([notifyArgv(PERMISSION_BODY)])
+})
+
+test('you never answer while the call waits: the reminder still comes at 3 minutes', async ($, on) => {
+  const { clock, ran, mac, holds } = engineBottom(on, { idleSeconds: 45, front: ITERM })
+  holds.Bash = 10 * MIN
+  const call = $.tool.call({ tool: 'Bash', command: 'npm run test:e2e' })
+  await clock.settle()
+  await permission($)
+  expect(ran).toEqual([['uname'], IOREG_ARGV, notifyArgv(PERMISSION_BODY)])
+
+  // The terminal stays in front, and no key or mouse event comes after the notification.
+  mac.idleSeconds = 45 + 3 * 60
+  await clock.advance(3 * MIN)
+  expect(ran.slice(3)).toEqual([IOREG_ARGV, notifyArgv(reminderBody(3))])
+
+  await clock.advance(7 * MIN)
+  expect((await call).result).toEqual({ ok: true })
+  expect(posted(ran)).toHaveLength(2)
+})
+
+test('a new prompt later in the same turn, once you have walked away, notifies and reminds as usual', async ($, on) => {
+  const { clock, ran, mac, holds } = engineBottom(on)
+  holds.Bash = 5 * MIN
+  const first = $.tool.call({ tool: 'Bash', command: 'npm run build' })
+  await clock.settle()
+  await permission($)
+  mac.front = ITERM
+  mac.idleSeconds = 3 * 60 - 20
+  await clock.advance(5 * MIN)
+  await first
+  expect(posted(ran)).toEqual([notifyArgv(PERMISSION_BODY)])
+
+  // Your last key was the first answer, 4 minutes 40 seconds ago.
+  mac.idleSeconds = 5 * 60 - 20
+  const second = $.tool.call({ tool: 'Bash', command: 'npm run deploy:staging' })
+  await clock.settle()
+  await permission($)
+  expect(ran.at(-1)).toEqual(notifyArgv(PERMISSION_BODY))
+
+  mac.idleSeconds += 3 * 60
+  await clock.advance(3 * MIN)
+  expect(ran.at(-1)).toEqual(notifyArgv(reminderBody(3)))
+  expect(posted(ran)).toEqual([notifyArgv(PERMISSION_BODY), notifyArgv(PERMISSION_BODY), notifyArgv(reminderBody(3))])
+
+  await clock.advance(2 * MIN)
+  await second
+})
+
 test("a tool call that starts after the notification, a background agent's, does not cancel it", async ($, on) => {
   const { clock, ran } = engineBottom(on)
   await permission($)
