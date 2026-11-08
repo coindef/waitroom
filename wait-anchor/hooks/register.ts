@@ -34,10 +34,18 @@ const load = async ($: EngineInterface): Promise<Loaded> => {
   return { key, note: noteFromStore(raw) }
 }
 
-/** One key, replaced or removed as a whole. Other sessions' keys are not read. */
-const write = async ($: EngineInterface, key: string, note: Note | null): Promise<void> => {
+/**
+ * One key, replaced or removed as a whole. Other sessions' keys are not read.
+ * A failed `set` or `delete` throws and leaves the previous value in place.
+ */
+const persistNote = async ($: EngineInterface, key: string, note: Note | null): Promise<void> => {
   if (note === null) await $.store.delete(key)
   else await $.store.set(key, toStored(note))
+}
+
+/** Persist, then show the status line. The status call is not the save. */
+const write = async ($: EngineInterface, key: string, note: Note | null): Promise<void> => {
+  await persistNote($, key, note)
   $.ui.status(statusFor(note))
 }
 
@@ -69,9 +77,11 @@ const remind = async ($: EngineInterface, prompt: PromptLike, claim: Claim): Pro
     if ('gap' in found || found.note === null) return
     const taken = onPrompt(found.note, true)
     if (taken.line === undefined || taken.note === null) return
-    // A transcript line. It is not added to the prompt, so the model is not told.
+    // Save first. A failed set must not print the line and then show it again
+    // on the next prompt. The log is not part of the saved state.
+    await persistNote($, found.key, taken.note)
     $.ui.log(taken.line)
-    await write($, found.key, taken.note)
+    $.ui.status(statusFor(taken.note))
   } finally {
     claim.current = false
   }
@@ -146,11 +156,7 @@ export const register: Register = on => {
    * reminder is a log line, once, and a task notice does not spend it.
    */
   on('prompt.submit', async ($, e, next) => {
-    try {
-      await remind($, e, claim)
-    } catch {
-      // The prompt still goes through.
-    }
+    await remind($, e, claim)
 
     return next(e)
   }).catch(($, e, next) => next(e))

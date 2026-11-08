@@ -10,7 +10,8 @@ First release: a note you set for yourself, the goal and what to check when you 
 - **Status line.** `⚓ ship login fix → redirect works`. The check words stay as written. Past 48 columns the line ends in `…`. Claude Code chooses where that line sits among the other mods' lines. No note, no line. It does not take the row above the prompt.
 - **After Stop.** The next prompt you type logs `Back? You said: redirect works.` once. The prompt is unchanged. A later prompt does not repeat it until another main-loop turn ends.
 - **Kept in `$.store`.** Plugin-scoped JSON under Claude's configuration directory. One value per project root and session id. Stop does not clear it. `/anchor clear` does. This mod does not choose the file name. A missing session id or project root saves nothing.
-- **No summary, no transcript, no model, no network.** The text is stored as text.
+- **No transcript reads.** The note is not taken from the transcript. `$.ui.log` still writes the return line into the transcript. That line is not sent to the model. No summary, no model, no network. The text is stored as text.
+- **A failed save does not show the return line.** The note is written to `$.store` before `$.ui.log`. If that write throws, the line is not shown and the next prompt can still show it.
 
 ### wait-notify 0.1.0
 

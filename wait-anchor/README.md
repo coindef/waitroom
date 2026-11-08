@@ -41,7 +41,7 @@ Stop a turn, or let it finish. The note stays. The next prompt you type logs one
 Back? You said: redirect works.
 ```
 
-The prompt itself is unchanged. The line is `$.ui.log`. Claude Code does not send that log to the model. A second prompt does not log it again. The next Stop arms it once more. A subagent's turn does not.
+The prompt itself is unchanged. The line is `$.ui.log`. Claude Code shows that log. It does not send the log to the model, and this mod does not read the transcript to write the note. The note is saved before the log. If the save throws, the log is not shown, and the next prompt can still show it. A second prompt does not log it again until another main-loop turn ends. A subagent's turn does not.
 
 A real Claude Code session has shown the `Back?` line after a turn that finished. It has not been checked in a real session after a turn you interrupt. The engine flow tests run an aborted turn, but a test does not replace that check.
 
@@ -53,6 +53,10 @@ The key comes from the project root and the session id the host reports. The val
 
 Every session of this plugin on the machine shares that store. The key is what keeps two sessions apart, including two directories with the same name. A missing session id or a missing project root does not pick a shorter key. Nothing is saved, and the reply says so. The process id and the folder name are not keys.
 
+A set or delete replaces one key. It does not read every note and write them back. The mods API still says a get and a later set of the same key can drop another write that lands in between. Two different session ids are the isolation case. Two processes on one session id are one key with two writers.
+
+`claude --help` says `--bg --resume <session-id>` continues that session, or starts a copy and says so when the session is already running. A copy is a different session. Concurrent `--resume` of one id is not a supported way to edit one note from two processes. `demo/real-store-race.sh` is the real-host check for two different sessions. A stand-in for `$.store` is not that check. The script exits 2 when Claude Code is not logged in, and that exit is not a pass.
+
 Stop does not clear the note. `/anchor clear` does. What a new process still sees is whatever `$.store` still holds. This mod does not keep a second copy.
 
 The text is stored as text. Control characters and color codes are stripped before it is stored. It is not an instruction.
@@ -61,24 +65,33 @@ The text is stored as text. Control characters and color codes are stripped befo
 
 - It does not ask you to set a note each turn.
 - It does not summarize the session.
-- It does not read the transcript, call a model, or open a connection.
+- It does not read the transcript. `$.ui.log` still writes the return line, which Claude Code shows.
+- It does not call a model or open a connection.
 - It does not take the bet's row.
 
 ## Developing
 
 ```sh
 claude plugin validate ./wait-anchor
-claude plugin test     ./wait-anchor   # 33 tests
+claude plugin test     ./wait-anchor   # 34 tests
 ```
 
 `hooks/anchor.ts` has the note, the command, the 48-column line, and the store key, with no engine. `hooks/register.ts` is the hooks. `tests/flow.test.ts` is the engine run. `tests/wiring.test.ts` drives `register` through a stand-in for `$`. That file is not a Claude Code session, and a pass there does not mean the hooks module loaded. `demo/leave-and-return.ts` is the same stand-in across processes. `tests/load-shape.test.ts` checks that `$` is only passed to a top-level helper, which is the rule that kept the module from loading on Claude Code 2.1.318.
 
-`claude plugin test` runs 33 tests:
+`claude plugin test` runs 34 tests:
 
 - 17 pure tests
-- 8 wiring tests against the stand-in for `$`
+- 9 wiring tests against the stand-in for `$`. Those are not evidence about the real store.
 - 5 engine flow tests, with the identity, the store, and the UI mocked
 - 3 load-shape tests
+
+The real store check is a logged-in Claude Code:
+
+```sh
+bash wait-anchor/demo/real-store-race.sh
+```
+
+Exit 2 means it did not log in and did not touch the store. Exit 0 is two different sessions, a barrier, then a new process reading each session.
 
 Separately from the tests, real Claude Code sessions in a terminal confirmed four things:
 

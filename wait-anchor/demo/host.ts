@@ -14,6 +14,12 @@ export type HostCalls = { http: number; model: number; messages: number }
 export type Installed = {
   status: (string | undefined)[]
   logs: string[]
+  /** `set`, `delete`, `log`, `status`, in the order the stand-in saw them. */
+  order: string[]
+  /** How many hook failures the stand-in forwarded with `next`, instead of hiding. */
+  recovered: { count: number }
+  /** The next N store sets throw and do not change the map. */
+  fail: { sets: number }
   calls: HostCalls
   store: Map<string, unknown>
   prompts: unknown[]
@@ -38,6 +44,9 @@ export const install = (options: {
   const store = options.store ?? new Map<string, unknown>()
   const status: (string | undefined)[] = []
   const logs: string[] = []
+  const order: string[] = []
+  const recovered = { count: 0 }
+  const fail = { sets: 0 }
   const prompts: unknown[] = []
   const calls: HostCalls = { http: 0, model: 0, messages: 0 }
   const hooks: { event: string; filter: Record<string, unknown>; fn: Hook; recover?: Hook }[] = []
@@ -82,17 +91,25 @@ export const install = (options: {
     store: {
       get: async (key: string) => store.get(key),
       set: async (key: string, value: unknown) => {
+        order.push('set')
+        if (fail.sets > 0) {
+          fail.sets -= 1
+          throw new Error('store set failed')
+        }
         store.set(key, JSON.parse(JSON.stringify(value)) as unknown)
       },
       delete: async (key: string) => {
+        order.push('delete')
         store.delete(key)
       },
     },
     ui: {
       status: (text: string | undefined) => {
+        order.push('status')
         status.push(text)
       },
       log: (text: string) => {
+        order.push('log')
         logs.push(text)
       },
       toast: () => {
@@ -129,12 +146,15 @@ export const install = (options: {
     try {
       return await hook.fn($, payload, next)
     } catch (error) {
-      if (hook.recover !== undefined) return hook.recover($, payload, next)
+      if (hook.recover !== undefined) {
+        recovered.count += 1
+        return hook.recover($, payload, next)
+      }
       throw error
     }
   }
 
-  return { status, logs, calls, store, prompts, dispatch }
+  return { status, logs, order, recovered, fail, calls, store, prompts, dispatch }
 }
 
 export const storeToJson = (store: Map<string, unknown>): string => JSON.stringify([...store.entries()])

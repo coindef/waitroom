@@ -40,7 +40,7 @@ wait-secret flags lines a turn wrote that look like a key or token. Masked, loca
 
 wait-ping is the legacy notifier: local OS notification when a long turn ends or a permission confirm is waiting. Prefer wait-notify on macOS. [What it sends](../wait-ping).
 
-wait-anchor keeps a note you set: the goal, and what to check when you come back. Quiet until `/anchor`. [Leave a note for future you](../wait-anchor).
+wait-anchor keeps a note you set: the goal, and what to check when you come back. Quiet until `/anchor`. It needs Claude Code 2.1.318 or later. [Leave a note for future you](../wait-anchor).
 
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
@@ -73,6 +73,7 @@ Every plugin here needs **Claude Code 2.1.291 or later** — `claude --version` 
 have, `claude update` moves you on. An older build installs it without
 complaint and then shows it as `failed to load`; see
 [If a plugin shows an error](troubleshooting.md#if-a-plugin-shows-an-error).
+**wait-anchor needs 2.1.318 or later.** That is the same floor as its own readme.
 
 The one-liner adds the marketplace from its repository path,
 `coindef/waitroom`. From then on the marketplace goes by its name,
@@ -159,6 +160,7 @@ so your calibration starts fresh under the new name.
     state helpers those builds predate (`claude plugin validate` says so on
     2.1.242, 2.1.260 and 2.1.280);
   - 2.1.281 to 2.1.290 accept the module but were not run live.
+- **wait-anchor needs Claude Code 2.1.318 or later.** That is the same floor as its own readme.
 - **A git repository** for wait-ship. It reads the diff, so outside one it has
   nothing to show. bet-on-your-agent, wait-breathe, and wait-ping work anywhere.
 - Plugins that hook Claude Code's own events are **early access**. See

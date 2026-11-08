@@ -26,7 +26,7 @@ claude plugin validate ./wait-notify
 claude plugin test     ./wait-notify          # 48 tests
 
 claude plugin validate ./wait-anchor
-claude plugin test     ./wait-anchor          # 33 tests
+claude plugin test     ./wait-anchor          # 34 tests
 
 claude plugin validate ./waitroom
 claude plugin test     ./waitroom             # 6 tests
