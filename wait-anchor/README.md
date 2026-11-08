@@ -23,15 +23,15 @@ The pixel icon is not in this change.
 
 The reply is the command's own text. It does not start a turn.
 
-While a note is set, this mod's status line is:
+While a note is set, this mod's status line keeps the check words you wrote:
 
 ```text
 ⚓ ship login fix → redirect works
 ```
 
-That is the sentence this mod sets: the goal, an arrow, and the check you wrote. Past 48 columns it ends in `…`, on a character boundary. The mods API keeps one status line per mod and, in its own docs, puts a warning mark and the mod's name in front of that sentence. With no note, this mod sets no line.
+The goal, an arrow, and the check. The check is not rewritten into a shorter label. Past 48 columns the line ends in `…`, on a character boundary. The stored check stays whole.
 
-The line is not the row above the prompt. bet-on-your-agent keeps that row, including its keys and its question. This mod does not draw there, and it does not open a pane or a toast.
+Claude Code draws one status line per mod and chooses the order. This mod does not ask to sit under the bet. It does not draw in the row above the prompt, so the bet's question and its keys stay as they are. It does not open a pane or a toast. With no note, it sets no line. The host puts its own mark and this mod's name in front of the sentence.
 
 ## When you come back
 
@@ -41,15 +41,17 @@ Stop a turn, or let it finish. The note stays. The next prompt you type logs one
 Back? You said: redirect works.
 ```
 
-The prompt itself is unchanged. The line is a transcript log, which Claude Code does not send to the model. A second prompt does not log it again. The next Stop arms it once more. A subagent's turn does not.
-
-The note is still there after a process restart, until `/anchor clear`.
+The prompt itself is unchanged. The line is `$.ui.log`. Claude Code does not send that log to the model. A second prompt does not log it again. The next Stop arms it once more. A subagent's turn does not.
 
 ## Where it is kept
 
-One value in this mod's store, for this project root and this session id. Two sessions do not share it, including two directories with the same name. A missing session id or a missing project root saves nothing and says so. The note is not filed under the process id or the folder name.
+The note is one value in `$.store`, this plugin's store. The key comes from the project root and the session id the host reports. The value is the goal, the check, and whether the return line is still owed.
 
-The text is stored as text. Control characters and color codes are stripped. It is not an instruction.
+Every session of this plugin on the machine shares that store. The key is what keeps two sessions apart, including two directories with the same name. A missing session id or a missing project root does not pick a shorter key. Nothing is saved, and the reply says so. The process id and the folder name are not keys.
+
+This mod writes no file and names no path. Stop does not clear the note. `/anchor clear` does. What a new process still sees is whatever `$.store` still holds. This mod does not keep a second copy.
+
+The text is stored as text. Control characters and color codes are stripped before it is stored. It is not an instruction.
 
 ## What it does not do
 
@@ -62,7 +64,7 @@ The text is stored as text. Control characters and color codes are stripped. It 
 
 ```sh
 claude plugin validate ./wait-anchor
-claude plugin test     ./wait-anchor   # 30 tests
+claude plugin test     ./wait-anchor   # 33 tests
 ```
 
-`hooks/anchor.ts` has the note, the command, the 48-column line, and the store key, with no engine. `hooks/register.ts` is the hooks. `tests/flow.test.ts` is the engine run. `demo/leave-and-return.ts` is a simulated host: separate processes, the real `register` module, a file standing in for `$.store`. It is not a Claude Code session.
+`hooks/anchor.ts` has the note, the command, the 48-column line, and the store key, with no engine. `hooks/register.ts` is the hooks. `tests/flow.test.ts` is the engine run. `tests/wiring.test.ts` drives `register` through a stand-in for `$`. That file is not a Claude Code session, and a pass there does not mean the hooks module loaded. `demo/leave-and-return.ts` is the same stand-in across processes. `tests/load-shape.test.ts` checks that `$` is only passed to a top-level helper, which is the rule that kept the module from loading on Claude Code 2.1.318.

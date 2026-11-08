@@ -7,9 +7,9 @@
 First release: a note you set for yourself, the goal and what to check when you come back.
 
 - **`/anchor`.** `ship login fix · check: redirect works` sets or replaces the note. `/anchor` shows it. `/anchor clear` clears it. With no note, the reply is `/anchor what you're doing · check: what to verify`. The reply does not start a turn.
-- **Status line.** `⚓ ship login fix → redirect works`, cut at 48 columns with `…`. No note, no line. It does not take the row above the prompt.
+- **Status line.** `⚓ ship login fix → redirect works`. The check words stay as written. Past 48 columns the line ends in `…`. Claude Code chooses where that line sits among the other mods' lines. No note, no line. It does not take the row above the prompt.
 - **After Stop.** The next prompt you type logs `Back? You said: redirect works.` once. The prompt is unchanged. A later prompt does not repeat it.
-- **Kept per project and session.** One store value for that pair. A missing session id or project root saves nothing. The note survives Stop and a process restart until you clear it.
+- **Kept in `$.store`.** One value per project root and session id. Stop does not clear it. `/anchor clear` does. This mod writes no file and names no path. A missing session id or project root saves nothing.
 - **No summary, no transcript, no model, no network.** The text is stored as text.
 
 ### wait-notify 0.1.0

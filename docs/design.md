@@ -12,9 +12,11 @@ what gives the next offer the row. While a turn runs, the bet's forecast gives
 way only to a breathe nudge, since the window to call the turn closes when it
 lands.
 
-wait-anchor does not take that row. A note, once you set one, is this mod's own
-status line. With no note, it sets no line. It does not open a pane, and it
-does not cover the bet's question or its keys.
+wait-anchor does not take that row. A note, once you set one, is this mod's
+status line. Claude Code places that line among the other mods' lines. The
+line keeps the check words you wrote, and past 48 columns it ends in an
+ellipsis. With no note, it sets no line. It does not open a pane, and it does
+not cover the bet's question or its keys.
 
 ## The idea
 

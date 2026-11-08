@@ -46,34 +46,39 @@ const showStatus = async ($: EngineInterface): Promise<void> => {
   $.ui.status('gap' in found ? undefined : statusFor(found.note))
 }
 
-export const register: Register = on => {
-  /**
-   * One reminder in flight for this load.
-   *
-   * Set before the first await, so two prompts that arrive together cannot both
-   * pass the check. The flag lives on this `register` call, not the module, so
-   * a second session's load does not borrow it. A new process starts clear.
-   */
-  let claiming = false
+type PromptLike = { origin?: { kind?: string }; command?: unknown; isMeta?: boolean }
 
-  const remind = async (
-    $: EngineInterface,
-    prompt: { origin?: { kind?: string }; command?: unknown; isMeta?: boolean },
-  ): Promise<void> => {
-    if (!isPersonsPrompt(prompt) || claiming) return
-    claiming = true
-    try {
-      const found = await load($)
-      if ('gap' in found || found.note === null) return
-      const taken = onPrompt(found.note, true)
-      if (taken.line === undefined || taken.note === null) return
-      // A transcript line. It is not added to the prompt, so the model is not told.
-      $.ui.log(taken.line)
-      await write($, found.key, taken.note)
-    } finally {
-      claiming = false
-    }
+/**
+ * One in-flight reminder for a single `register` call.
+ *
+ * The object is created inside `register` and passed in. The function that
+ * receives `$` stays at the top of this file, which is the only place the
+ * hooks loader follows `$`. Two loads do not share the flag.
+ */
+type Claim = { current: boolean }
+
+/**
+ * The first prompt after Stop. Declared here, not inside `register`, because
+ * `$` may only be passed to a top-level helper.
+ */
+const remind = async ($: EngineInterface, prompt: PromptLike, claim: Claim): Promise<void> => {
+  if (!isPersonsPrompt(prompt) || claim.current) return
+  claim.current = true
+  try {
+    const found = await load($)
+    if ('gap' in found || found.note === null) return
+    const taken = onPrompt(found.note, true)
+    if (taken.line === undefined || taken.note === null) return
+    // A transcript line. It is not added to the prompt, so the model is not told.
+    $.ui.log(taken.line)
+    await write($, found.key, taken.note)
+  } finally {
+    claim.current = false
   }
+}
+
+export const register: Register = on => {
+  const claim: Claim = { current: false }
 
   on('session.start', async ($, e, next) => {
     try {
@@ -142,7 +147,7 @@ export const register: Register = on => {
    */
   on('prompt.submit', async ($, e, next) => {
     try {
-      await remind($, e)
+      await remind($, e, claim)
     } catch {
       // The prompt still goes through.
     }
