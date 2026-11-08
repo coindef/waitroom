@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### wait-anchor 0.1.0
+
+First release: a note you set for yourself, the goal and what to check when you come back.
+
+- **`/anchor`.** `ship login fix · check: redirect works` sets or replaces the note. `/anchor` shows it. `/anchor clear` clears it. With no note, the reply is `/anchor what you're doing · check: what to verify`. The reply does not start a turn.
+- **Status line.** `⚓ ship login fix → redirect works`, cut at 48 columns with `…`. No note, no line. It does not take the row above the prompt.
+- **After Stop.** The next prompt you type logs `Back? You said: redirect works.` once. The prompt is unchanged. A later prompt does not repeat it.
+- **Kept per project and session.** One store value for that pair. A missing session id or project root saves nothing. The note survives Stop and a process restart until you clear it.
+- **No summary, no transcript, no model, no network.** The text is stored as text.
+
 ### wait-notify 0.1.0
 
 First release: a native macOS notification when Claude Code is blocked on you and you're not at the terminal. One reminder after 3 minutes, then quiet.

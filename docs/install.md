@@ -31,6 +31,7 @@ Optional rooms:
 claude plugin install wait-scope@waitroom
 claude plugin install wait-secret@waitroom
 claude plugin install wait-ping@waitroom
+claude plugin install wait-anchor@waitroom
 ```
 
 wait-scope warns when a turn edits outside the globs in `.claude/wait-scope` (or *Files in scope*). Only warns. [What it shows](../wait-scope).
@@ -38,6 +39,8 @@ wait-scope warns when a turn edits outside the globs in `.claude/wait-scope` (or
 wait-secret flags lines a turn wrote that look like a key or token. Masked, local regex. Only warns. [What it shows](../wait-secret).
 
 wait-ping is the legacy notifier: local OS notification when a long turn ends or a permission confirm is waiting. Prefer wait-notify on macOS. [What it sends](../wait-ping).
+
+wait-anchor keeps a note you set: the goal, and what to check when you come back. Quiet until `/anchor`. [Leave a note for future you](../wait-anchor).
 
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
@@ -95,6 +98,7 @@ disk straight away but only loaded by the next session:
 /plugin update wait-ping@waitroom
 /plugin update wait-scope@waitroom
 /plugin update wait-secret@waitroom
+/plugin update wait-anchor@waitroom
 ```
 
 `/plugin update waitroom@waitroom` picks up a room newly added to that install.

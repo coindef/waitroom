@@ -1,0 +1,12 @@
+{
+  "name": "wait-anchor",
+  "version": "0.1.0",
+  "description": "Leave a note for future you: the goal you are on, and what to check when you come back. Optional. Nothing is written until you set one.",
+  "author": {
+    "name": "coindef"
+  },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/wait-anchor",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
