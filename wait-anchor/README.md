@@ -45,11 +45,13 @@ The prompt itself is unchanged. The line is `$.ui.log`. Claude Code does not sen
 
 ## Where it is kept
 
-The note is one value in `$.store`, this plugin's store. The key comes from the project root and the session id the host reports. The value is the goal, the check, and whether the return line is still owed.
+The note is one JSON value in `$.store`. That store is this plugin's. Claude keeps it under its configuration directory. This mod does not choose the file name.
+
+The key comes from the project root and the session id the host reports. The value is the goal, the check, and whether the return line is still owed.
 
 Every session of this plugin on the machine shares that store. The key is what keeps two sessions apart, including two directories with the same name. A missing session id or a missing project root does not pick a shorter key. Nothing is saved, and the reply says so. The process id and the folder name are not keys.
 
-This mod writes no file and names no path. Stop does not clear the note. `/anchor clear` does. What a new process still sees is whatever `$.store` still holds. This mod does not keep a second copy.
+Stop does not clear the note. `/anchor clear` does. What a new process still sees is whatever `$.store` still holds. This mod does not keep a second copy.
 
 The text is stored as text. Control characters and color codes are stripped before it is stored. It is not an instruction.
 

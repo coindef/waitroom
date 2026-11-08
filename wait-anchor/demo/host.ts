@@ -28,7 +28,7 @@ const matches = (filter: Record<string, unknown>, payload: Record<string, unknow
 /**
  * One process of the fixture. Pass the same `store` to a second `install` to
  * imitate a restart, or a second `install` with another root and session id
- * to imitate a second session on one machine-wide store.
+ * to imitate a second session on the one plugin store.
  */
 export const install = (options: {
   root?: string
@@ -119,7 +119,8 @@ export const install = (options: {
     },
   }
 
-  register(on as never)
+  // The engine always calls register(on, options). This plugin has no userConfig, so options is empty.
+  register(on as never, {})
 
   const dispatch = async (event: string, payload: Record<string, unknown>): Promise<unknown> => {
     const hook = hooks.find(row => row.event === event && matches(row.filter, payload))

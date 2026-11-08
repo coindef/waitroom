@@ -156,8 +156,10 @@ test('no session id explains the limit and does not read a project-only note', a
     args: 'ship login fix · check: redirect works',
   } as never)
 
-  expect(reply.text).toContain('no stable session id')
-  expect(reply.text.includes('not yours')).toBe(false)
+  const text = reply.text
+  if (typeof text !== 'string') throw new Error('anchor returned no text')
+  expect(text).toContain('no stable session id')
+  expect(text.includes('not yours')).toBe(false)
   expect(said.at(-1)).toBeUndefined()
   expect(Object.keys(store)).toEqual(['note/project-only'])
   expect(logged).toEqual([])
