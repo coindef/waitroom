@@ -49,6 +49,11 @@
       "name": "wait-notify",
       "source": "./wait-notify",
       "description": "A native macOS notification when Claude Code is blocked on you (a permission or a question) and you're not at the terminal. One reminder after 3 minutes, then quiet."
+    },
+    {
+      "name": "wait-anchor",
+      "source": "./wait-anchor",
+      "description": "Leave a note for future you: the goal you are on, and what to check when you come back. Optional. Nothing is written until you set one with /anchor."
     }
   ]
 }
