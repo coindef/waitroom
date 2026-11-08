@@ -16,8 +16,10 @@ export type Installed = {
   logs: string[]
   /** `set`, `delete`, `log`, `status`, in the order the stand-in saw them. */
   order: string[]
-  /** How many hook failures the stand-in forwarded with `next`, instead of hiding. */
+  /** How many hook failures the stand-in forwarded with `next`. The error does not leave `dispatch`. */
   recovered: { count: number }
+  /** Diagnostics passed to `next.error`. The original prompt is still forwarded. */
+  reported: unknown[]
   /** The next N store sets throw and do not change the map. */
   fail: { sets: number }
   calls: HostCalls
@@ -46,6 +48,7 @@ export const install = (options: {
   const logs: string[] = []
   const order: string[] = []
   const recovered = { count: 0 }
+  const reported: unknown[] = []
   const fail = { sets: 0 }
   const prompts: unknown[] = []
   const calls: HostCalls = { http: 0, model: 0, messages: 0 }
@@ -71,6 +74,17 @@ export const install = (options: {
   const $ = {
     command: {
       register: async (command: { name: string }) => ({ command: command.name }),
+    },
+    env: {
+      get: async () => undefined,
+    },
+    fs: {
+      write: async () => undefined,
+      list: async () => [],
+    },
+    clock: {
+      now: async () => 0,
+      sleep: async () => undefined,
     },
     session: {
       root: async () => {
@@ -142,7 +156,11 @@ export const install = (options: {
   const dispatch = async (event: string, payload: Record<string, unknown>): Promise<unknown> => {
     const hook = hooks.find(row => row.event === event && matches(row.filter, payload))
     if (hook === undefined) return payload
-    const next = async (inner: Record<string, unknown>) => inner
+    const next = Object.assign(async (inner: Record<string, unknown>) => inner, {
+      error(reason: unknown) {
+        reported.push(reason)
+      },
+    })
     try {
       return await hook.fn($, payload, next)
     } catch (error) {
@@ -154,7 +172,7 @@ export const install = (options: {
     }
   }
 
-  return { status, logs, order, recovered, fail, calls, store, prompts, dispatch }
+  return { status, logs, order, recovered, reported, fail, calls, store, prompts, dispatch }
 }
 
 export const storeToJson = (store: Map<string, unknown>): string => JSON.stringify([...store.entries()])

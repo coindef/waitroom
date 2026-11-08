@@ -34,13 +34,90 @@ const load = async ($: EngineInterface): Promise<Loaded> => {
   return { key, note: noteFromStore(raw) }
 }
 
+/** How long two store writes may wait for each other inside the hook. */
+const BARRIER_WAIT_MS = 30_000
+
+/**
+ * Set only for `demo/real-store-race.sh`. Empty in normal use, so a note
+ * writes straight through. The directory is a rendezvous, not the note store.
+ */
+const barrierRoot = async ($: EngineInterface): Promise<string | undefined> => {
+  const raw = await $.env.get('WAIT_ANCHOR_STORE_BARRIER').catch(() => undefined)
+  if (typeof raw !== 'string') return undefined
+  const dir = raw.trim().replace(/[\\/]+$/, '')
+
+  return dir === '' ? undefined : dir
+}
+
+const sessionFileId = async ($: EngineInterface): Promise<string> => {
+  const id = await $.session.id().catch(() => undefined)
+  if (typeof id !== 'string' || id.trim() === '') throw new Error('wait-anchor: store barrier has no session id')
+
+  return id.trim()
+}
+
+const stampGate = async (
+  $: EngineInterface,
+  dir: string,
+  kind: 'arrive' | 'release' | 'done',
+  sid: string,
+  op: 'set' | 'delete',
+): Promise<void> => {
+  const now = await $.clock.now()
+  await $.fs.write(`${dir}/${kind}-${sid}`, `${op} ${now}\n`)
+}
+
+/** Both writes must have arrived before either one calls `$.store`. */
+const waitForPeer = async ($: EngineInterface, dir: string): Promise<void> => {
+  const deadline = (await $.clock.now()) + BARRIER_WAIT_MS
+  while (true) {
+    const listed = await $.fs.list(dir)
+    let arrivals = 0
+    if (Array.isArray(listed)) {
+      for (const row of listed) {
+        const name = typeof row === 'object' && row !== null && 'name' in row ? row.name : undefined
+        if (typeof name === 'string' && name.startsWith('arrive-')) arrivals += 1
+      }
+    }
+    if (arrivals >= 2) return
+    if ((await $.clock.now()) >= deadline) {
+      throw new Error('wait-anchor: store barrier timed out before both writes arrived')
+    }
+    await $.clock.sleep(50)
+  }
+}
+
+/**
+ * When the barrier directory is set, record arrival, wait until the other
+ * write has arrived, then record release. The `$.store` call comes after this
+ * returns. Unset, this returns immediately.
+ */
+const enterStoreGate = async ($: EngineInterface, op: 'set' | 'delete'): Promise<string | undefined> => {
+  const dir = await barrierRoot($)
+  if (dir === undefined) return undefined
+  const sid = await sessionFileId($)
+  await stampGate($, dir, 'arrive', sid, op)
+  await waitForPeer($, dir)
+  await stampGate($, dir, 'release', sid, op)
+
+  return dir
+}
+
+const leaveStoreGate = async ($: EngineInterface, dir: string | undefined, op: 'set' | 'delete'): Promise<void> => {
+  if (dir === undefined) return
+  await stampGate($, dir, 'done', await sessionFileId($), op)
+}
+
 /**
  * One key, replaced or removed as a whole. Other sessions' keys are not read.
  * A failed `set` or `delete` throws and leaves the previous value in place.
  */
 const persistNote = async ($: EngineInterface, key: string, note: Note | null): Promise<void> => {
+  const op = note === null ? 'delete' : 'set'
+  const gate = await enterStoreGate($, op)
   if (note === null) await $.store.delete(key)
   else await $.store.set(key, toStored(note))
+  await leaveStoreGate($, gate, op)
 }
 
 /** Persist, then show the status line. The status call is not the save. */
@@ -159,5 +236,10 @@ export const register: Register = on => {
     await remind($, e, claim)
 
     return next(e)
-  }).catch(($, e, next) => next(e))
+  }).catch(($, e, next) => {
+    // Record the failure, then forward the original prompt. This does not rethrow.
+    next.error('wait-anchor: the return line was not saved')
+
+    return next(e)
+  })
 }

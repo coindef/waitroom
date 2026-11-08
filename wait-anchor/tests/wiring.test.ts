@@ -180,7 +180,9 @@ test('a failed save does not show the return line, and the next prompt can still
   expect(host.logs).toEqual([])
   expect(host.order.includes('log')).toBe(false)
   expect(host.order[0]).toBe('set')
+  // `.catch` forwards the original prompt with `next(e)`. It does not rethrow.
   expect(host.recovered.count).toBe(1)
+  expect(host.reported.length).toBe(1)
   const kept = [...store.values()][0] as { awaitingReturn?: boolean }
   expect(kept.awaitingReturn).toBe(true)
 

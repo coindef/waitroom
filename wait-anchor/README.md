@@ -41,7 +41,7 @@ Stop a turn, or let it finish. The note stays. The next prompt you type logs one
 Back? You said: redirect works.
 ```
 
-The prompt itself is unchanged. The line is `$.ui.log`. Claude Code shows that log. It does not send the log to the model, and this mod does not read the transcript to write the note. The note is saved before the log. If the save throws, the log is not shown, and the next prompt can still show it. A second prompt does not log it again until another main-loop turn ends. A subagent's turn does not.
+The prompt itself is unchanged. The line is `$.ui.log`. Claude Code shows that log. It does not send the log to the model, and this mod does not read the transcript to write the note. The note is saved before the log. If the save throws, the log is not shown. The hook's `.catch` records the failure with `next.error` and forwards the original prompt with `next(e)`. It does not rethrow. The saved flag is still unset, so a later prompt can show the line. A second prompt does not log it again until another main-loop turn ends. A subagent's turn does not.
 
 A real Claude Code session has shown the `Back?` line after a turn that finished. It has not been checked in a real session after a turn you interrupt. The engine flow tests run an aborted turn, but a test does not replace that check.
 
@@ -53,9 +53,11 @@ The key comes from the project root and the session id the host reports. The val
 
 Every session of this plugin on the machine shares that store. The key is what keeps two sessions apart, including two directories with the same name. A missing session id or a missing project root does not pick a shorter key. Nothing is saved, and the reply says so. The process id and the folder name are not keys.
 
-A set or delete replaces one key. It does not read every note and write them back. The mods API still says a get and a later set of the same key can drop another write that lands in between. Two different session ids are the isolation case. Two processes on one session id are one key with two writers.
+A set or delete replaces one key. It does not read every note and write them back. The mods API says a get and a later set of the same key can drop another write that lands in between. Two different session ids are separate keys, whether or not they share a project directory. Two directories with the same name are also separate keys, because the project root differs. Two processes on one session id are two writers of one key. That case is not settled: a foreground session was kept open and a second foreground `--resume` of the same id exited 0, returned that same id, and read the note. That shows the second process can attach. It does not show the two writes are safe.
 
-`claude --help` says `--bg --resume <session-id>` continues that session, or starts a copy and says so when the session is already running. A copy is a different session. Concurrent `--resume` of one id is not a supported way to edit one note from two processes. `demo/real-store-race.sh` is the real-host check for two different sessions. A stand-in for `$.store` is not that check. The script exits 2 when Claude Code is not logged in, and that exit is not a pass.
+`claude --help` for `--bg` says `--bg --resume <session-id>` continues that session, or starts a copy and says so when the session is already running. That sentence is about background mode.
+
+`demo/real-store-race.sh` asks the real `$.store` to wait until both writes have entered `persistNote` before either calls `$.store`. It records arrival, release, and done times. A stand-in for `$.store` is not that check. Exit 2 means the opening probe failed, which includes not being logged in and any other probe failure. It is not a pass. Exit 0 requires the timing check and a new process reading each session. This VM cannot show that.
 
 Stop does not clear the note. `/anchor clear` does. What a new process still sees is whatever `$.store` still holds. This mod does not keep a second copy.
 
