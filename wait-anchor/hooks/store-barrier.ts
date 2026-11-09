@@ -68,11 +68,18 @@ async function waitForStamps($: EngineInterface, dir: string, prefix: string): P
   }
 }
 
+/** Gate handle: directory plus the session id already resolved for this writer. */
+export type StoreGate = { dir: string; sid: string }
+
 /**
  * Rendezvous only: both writers arrive and release before either store call.
- * Returns the gate directory, or undefined when the test flags are unset.
+ * Returns the gate handle, or undefined when the test flags are unset.
+ * The sid is resolved once here so start/done stamps do not await session id again.
  */
-export async function enterStoreGate($: EngineInterface, op: 'set' | 'delete'): Promise<string | undefined> {
+export async function enterStoreGate(
+  $: EngineInterface,
+  op: 'set' | 'delete',
+): Promise<StoreGate | undefined> {
   const dir = await barrierRoot($)
   if (dir === undefined) return undefined
   const sid = await sessionFileId($)
@@ -81,25 +88,25 @@ export async function enterStoreGate($: EngineInterface, op: 'set' | 'delete'): 
   await stampGate($, dir, 'release', sid, op)
   await waitForStamps($, dir, 'release-')
 
-  return dir
+  return { dir, sid }
 }
 
 /** Stamp immediately before `$.store.set` / `$.store.delete`. */
 export async function stampStoreStart(
   $: EngineInterface,
-  dir: string | undefined,
+  gate: StoreGate | undefined,
   op: 'set' | 'delete',
 ): Promise<void> {
-  if (dir === undefined) return
-  await stampGate($, dir, 'start', await sessionFileId($), op)
+  if (gate === undefined) return
+  await stampGate($, gate.dir, 'start', gate.sid, op)
 }
 
 /** Stamp after the store call returns. */
 export async function stampStoreDone(
   $: EngineInterface,
-  dir: string | undefined,
+  gate: StoreGate | undefined,
   op: 'set' | 'delete',
 ): Promise<void> {
-  if (dir === undefined) return
-  await stampGate($, dir, 'done', await sessionFileId($), op)
+  if (gate === undefined) return
+  await stampGate($, gate.dir, 'done', gate.sid, op)
 }
