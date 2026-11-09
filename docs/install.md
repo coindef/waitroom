@@ -112,19 +112,21 @@ line again.
 
 ## If waitroom fails after a marketplace update
 
-If you installed `waitroom@waitroom` when it still depended on `wait-review`, then ran a marketplace update after that plugin was removed, you may see:
+If you installed `waitroom@waitroom` when it still depended on the `wait-review` plugin, then ran a marketplace update after that plugin was removed, you may see:
 
 ```
 Dependency "wait-review@waitroom" is not installed
 ```
 
-wait-review was removed on purpose. Uninstall the leftover entry and `waitroom@waitroom`, then install it again:
+The `wait-review` plugin was removed on purpose. That is not the old marketplace once named `wait-review` (see [Coming from the old name](#coming-from-the-old-name)). Uninstall the leftover plugin entry and `waitroom@waitroom`, then install it again:
 
 ```bash
 claude plugin uninstall wait-review@waitroom
 claude plugin uninstall waitroom@waitroom
 claude plugin install waitroom@waitroom
 ```
+
+After step 2, Claude Code may print that three auto-installed dependencies are no longer needed and suggest `claude plugin prune`. Do not run prune before step 3, or it removes bet-on-your-agent, wait-ship, and wait-breathe, along with your bet records.
 
 Then restart Claude Code. Uninstalling only `waitroom@waitroom` and reinstalling it restores that plugin, but the failed `wait-review@waitroom` entry stays until you uninstall that too.
 
