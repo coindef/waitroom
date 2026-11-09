@@ -67,38 +67,44 @@ const stampGate = async (
   await $.fs.write(`${dir}/${kind}-${sid}`, `${op} ${now}\n`)
 }
 
-/** Both writes must have arrived before either one calls `$.store`. */
-const waitForPeer = async ($: EngineInterface, dir: string): Promise<void> => {
+/** Count files whose names start with `prefix` (`arrive-` or `release-`). */
+const countStamps = async ($: EngineInterface, dir: string, prefix: string): Promise<number> => {
+  const listed = await $.fs.list(dir)
+  let count = 0
+  if (!Array.isArray(listed)) return 0
+  for (const row of listed) {
+    const name = typeof row === 'object' && row !== null && 'name' in row ? row.name : undefined
+    if (typeof name === 'string' && name.startsWith(prefix)) count += 1
+  }
+
+  return count
+}
+
+const waitForStamps = async ($: EngineInterface, dir: string, prefix: string): Promise<void> => {
   const deadline = (await $.clock.now()) + BARRIER_WAIT_MS
   while (true) {
-    const listed = await $.fs.list(dir)
-    let arrivals = 0
-    if (Array.isArray(listed)) {
-      for (const row of listed) {
-        const name = typeof row === 'object' && row !== null && 'name' in row ? row.name : undefined
-        if (typeof name === 'string' && name.startsWith('arrive-')) arrivals += 1
-      }
-    }
-    if (arrivals >= 2) return
+    if ((await countStamps($, dir, prefix)) >= 2) return
     if ((await $.clock.now()) >= deadline) {
-      throw new Error('wait-anchor: store barrier timed out before both writes arrived')
+      throw new Error(`wait-anchor: store barrier timed out waiting for ${prefix}`)
     }
     await $.clock.sleep(50)
   }
 }
 
 /**
- * When the barrier directory is set, record arrival, wait until the other
- * write has arrived, then record release. The `$.store` call comes after this
- * returns. Unset, this returns immediately.
+ * When the barrier directory is set: stamp arrival, wait until both writes
+ * have arrived, stamp release, then wait until both releases exist. The
+ * `$.store` call is after this returns, so neither store call starts before
+ * both writers have released. Unset, this returns immediately.
  */
 const enterStoreGate = async ($: EngineInterface, op: 'set' | 'delete'): Promise<string | undefined> => {
   const dir = await barrierRoot($)
   if (dir === undefined) return undefined
   const sid = await sessionFileId($)
   await stampGate($, dir, 'arrive', sid, op)
-  await waitForPeer($, dir)
+  await waitForStamps($, dir, 'arrive-')
   await stampGate($, dir, 'release', sid, op)
+  await waitForStamps($, dir, 'release-')
 
   return dir
 }
@@ -237,8 +243,11 @@ export const register: Register = on => {
 
     return next(e)
   }).catch(($, e, next) => {
-    // Record the failure, then forward the original prompt. This does not rethrow.
-    next.error('wait-anchor: the return line was not saved')
+    // next.error is the HookFailure the engine already recorded. It is not a
+    // function. Reading it and returning next(e) forwards the original prompt.
+    // This does not rethrow, and it does not pass the failure out of the hook.
+    const failure = next.error
+    void failure
 
     return next(e)
   })

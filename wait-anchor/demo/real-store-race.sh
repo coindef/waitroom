@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # Real Claude Code check for wait-anchor's $.store.
 #
-# Not claude plugin test, and not demo/host.ts. The plugin waits inside
-# persistNote, before $.store.set or $.store.delete, when
-# WAIT_ANCHOR_STORE_BARRIER is a directory. Each process writes:
+# Not claude plugin test, and not demo/host.ts. When
+# WAIT_ANCHOR_STORE_BARRIER is a directory, persistNote stamps arrival, waits
+# until both arrivals exist, stamps release, waits until both releases exist,
+# and only then calls $.store. It stamps done after $.store returns.
 #   arrive-<session-id>   entered persistNote
-#   release-<session-id>  both arrivals are present; about to call $.store
+#   release-<session-id>  both arrivals exist; about to wait for the other release
 #   done-<session-id>     $.store returned
 # Times are milliseconds from $.clock.now(). Exit 0 requires both arrivals
-# before either release, the two [release, done] intervals to overlap, and a
-# new process to read each session. Exit 1 is a logged-in run that missed
-# that. Exit 2 is a failed opening probe, including "Not logged in" and any
-# other probe failure. Exit 2 is not a pass.
+# before either release, overlapping [release, done] intervals, and a new
+# process reading each session. The overlap is the two critical sections in
+# time. It is not proof that two writers of one key are safe.
+# Exit 1 is a logged-in run that missed that. Exit 2 is a failed opening
+# probe (not logged in, or any other probe failure). Exit 2 is not a pass.
 #
 # Cases:
 #   1. Two directories named app, different parents, different session ids.
@@ -134,7 +136,8 @@ a_done, b_done = done[0][2], done[1][2]
 if not (a_rel < b_done and b_rel < a_done):
     print('barrier: the two $.store intervals did not overlap')
     sys.exit(1)
-print('barrier: both arrived before either release, and the store intervals overlapped')
+print('barrier: both arrived before either release; [release, done] overlapped')
+print('not proven: two writers of one session id')
 PY
 }
 
@@ -178,5 +181,5 @@ require "$work/same-b-after.txt" "/anchor what you're doing · check: what to ve
 forbid "$work/same-b-after.txt" 'same-b goal'
 forbid "$work/same-b-after.txt" 'same-a again'
 
-say "real-store-race: barrier held at persistNote; fresh readers matched"
+say "real-store-race: store calls waited for both releases; fresh readers matched"
 say "workdir $work"

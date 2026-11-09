@@ -16,10 +16,12 @@ export type Installed = {
   logs: string[]
   /** `set`, `delete`, `log`, `status`, in the order the stand-in saw them. */
   order: string[]
-  /** How many hook failures the stand-in forwarded with `next`. The error does not leave `dispatch`. */
+  /** How many hook failures the stand-in forwarded with `next(e)`. The error does not leave `dispatch`. */
   recovered: { count: number }
-  /** Diagnostics passed to `next.error`. The original prompt is still forwarded. */
-  reported: unknown[]
+  /** Values of the readonly `next.error` property. Not a function. */
+  failures: { message: string }[]
+  /** How many times the hook read `next.error`. */
+  errorReads: { count: number }
   /** The next N store sets throw and do not change the map. */
   fail: { sets: number }
   calls: HostCalls
@@ -48,7 +50,8 @@ export const install = (options: {
   const logs: string[] = []
   const order: string[] = []
   const recovered = { count: 0 }
-  const reported: unknown[] = []
+  const failures: { message: string }[] = []
+  const errorReads = { count: 0 }
   const fail = { sets: 0 }
   const prompts: unknown[] = []
   const calls: HostCalls = { http: 0, model: 0, messages: 0 }
@@ -156,23 +159,38 @@ export const install = (options: {
   const dispatch = async (event: string, payload: Record<string, unknown>): Promise<unknown> => {
     const hook = hooks.find(row => row.event === event && matches(row.filter, payload))
     if (hook === undefined) return payload
-    const next = Object.assign(async (inner: Record<string, unknown>) => inner, {
-      error(reason: unknown) {
-        reported.push(reason)
-      },
-    })
+    const makeNext = (failure: { message: string } | undefined) => {
+      const fn = async (inner: Record<string, unknown>) => inner
+      // Same shape as the generated catch contract: readonly data, not a function.
+      Object.defineProperty(fn, 'error', {
+        enumerable: true,
+        configurable: false,
+        get() {
+          errorReads.count += 1
+
+          return failure
+        },
+      })
+
+      return fn
+    }
+    const next = makeNext(undefined)
     try {
       return await hook.fn($, payload, next)
     } catch (error) {
       if (hook.recover !== undefined) {
         recovered.count += 1
-        return hook.recover($, payload, next)
+        const message = error instanceof Error ? error.message : String(error)
+        const failure = { message }
+        failures.push(failure)
+
+        return hook.recover($, payload, makeNext(failure))
       }
       throw error
     }
   }
 
-  return { status, logs, order, recovered, reported, fail, calls, store, prompts, dispatch }
+  return { status, logs, order, recovered, failures, errorReads, fail, calls, store, prompts, dispatch }
 }
 
 export const storeToJson = (store: Map<string, unknown>): string => JSON.stringify([...store.entries()])
