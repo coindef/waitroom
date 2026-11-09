@@ -33,6 +33,10 @@ not loaded:`. What it can say:
 | `only managed plugins and built-in plugins run (allowManagedHooksOnly / disableAllHooks)` | Your organization's managed settings allow only its own plugins' hooks | Ask whoever manages Claude Code for you |
 | `… load no hooks module in this mode (--bare)` | Claude Code was started with `--bare` | Start it without `--bare` |
 
+### Dependency "wait-review@waitroom" is not installed
+
+That error after a marketplace update means a leftover install from before wait-review was removed. wait-review was removed on purpose. Follow the three uninstall/install commands in [If waitroom fails after a marketplace update](install.md#if-waitroom-fails-after-a-marketplace-update).
+
 No error anywhere, and no `mods active` line at all, means `disableAllHooks` is
 on in your settings. It turns off every hook, these included.
 

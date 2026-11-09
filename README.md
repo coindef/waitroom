@@ -39,7 +39,7 @@ claude plugin install wait-anchor@waitroom
 
 wait-ping is the legacy notifier. It sends a desktop notification when a long turn ends or a permission prompt is waiting. wait-anchor keeps a note you set, the goal and what to check when you come back, and stays quiet until you set one.
 
-Restart Claude Code once you're done. To update, or to install the three core rooms in one command, see [docs/install.md](docs/install.md).
+Restart Claude Code once you're done. If `waitroom@waitroom` fails to load with `Dependency "wait-review@waitroom" is not installed` after a marketplace update, see the migration note in [docs/install.md](docs/install.md#if-waitroom-fails-after-a-marketplace-update). To update, or to install the three core rooms in one command, see [docs/install.md](docs/install.md).
 
 </details>
 

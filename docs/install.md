@@ -110,6 +110,24 @@ has not changed. What changed, and in which mod, is in
 the latest version, the marketplace was not refreshed yet, so run the first
 line again.
 
+## If waitroom fails after a marketplace update
+
+If you installed `waitroom@waitroom` when it still depended on `wait-review`, then ran a marketplace update after that plugin was removed, you may see:
+
+```
+Dependency "wait-review@waitroom" is not installed
+```
+
+wait-review was removed on purpose. Uninstall the leftover entry and the umbrella, then install the umbrella again:
+
+```bash
+claude plugin uninstall wait-review@waitroom
+claude plugin uninstall waitroom@waitroom
+claude plugin install waitroom@waitroom
+```
+
+Then restart Claude Code. Uninstalling only the umbrella and reinstalling it restores `waitroom@waitroom`, but the failed `wait-review@waitroom` entry stays until you uninstall that too.
+
 ## Coming from the old name
 
 The repository was called `Plugin`, and the marketplace `wait-mods` (in the
