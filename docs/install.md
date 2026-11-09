@@ -118,9 +118,9 @@ If you installed `waitroom@waitroom` when it still depended on the `wait-review`
 Dependency "wait-review@waitroom" is not installed
 ```
 
-The `wait-review` plugin was removed on purpose. That is not the old marketplace once named `wait-review` (see [Coming from the old name](#coming-from-the-old-name)). Uninstall the leftover plugin entry and `waitroom@waitroom`, then install it again:
+The `wait-review` plugin was removed on purpose. That is not the old marketplace once named `wait-review` (see [Coming from the old name](#coming-from-the-old-name)). Uninstall the leftover plugin entry and `waitroom@waitroom`, then install it again.
 
-After the second command, Claude Code may suggest `claude plugin prune`. Don't run it. It would remove bet-on-your-agent, wait-ship, and wait-breathe. The third command brings them back as dependencies.
+After the second command, Claude Code may suggest `claude plugin prune`. Don't run it. It would remove bet-on-your-agent, wait-ship, and wait-breathe and delete their saved data; the third command reinstalls them as dependencies but not that data.
 
 ```bash
 claude plugin uninstall wait-review@waitroom
