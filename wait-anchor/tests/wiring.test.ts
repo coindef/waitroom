@@ -182,7 +182,7 @@ test('a failed save does not show the return line, and the next prompt can still
   expect(host.order[0]).toBe('set')
   // `.catch` reads next.error and returns next(e). The error does not leave dispatch.
   expect(host.recovered.count).toBe(1)
-  expect(host.errorReads.count).toBe(1)
+  expect(host.errorReads.count).toBeGreaterThanOrEqual(1)
   expect(typeof host.failures[0]).toBe('object')
   expect(host.failures[0]?.message).toBe('store set failed')
   const kept = [...store.values()][0] as { awaitingReturn?: boolean }

@@ -13,6 +13,7 @@ import {
   type IdentityGap,
   type Note,
 } from './anchor'
+import { enterStoreGate, stampStoreDone, stampStoreStart } from './store-barrier'
 
 type Loaded = { gap: IdentityGap } | { key: string; note: Note | null }
 
@@ -34,96 +35,24 @@ const load = async ($: EngineInterface): Promise<Loaded> => {
   return { key, note: noteFromStore(raw) }
 }
 
-/** How long two store writes may wait for each other inside the hook. */
-const BARRIER_WAIT_MS = 30_000
-
-/**
- * Set only for `demo/real-store-race.sh`. Empty in normal use, so a note
- * writes straight through. The directory is a rendezvous, not the note store.
- */
-const barrierRoot = async ($: EngineInterface): Promise<string | undefined> => {
-  const raw = await $.env.get('WAIT_ANCHOR_STORE_BARRIER').catch(() => undefined)
-  if (typeof raw !== 'string') return undefined
-  const dir = raw.trim().replace(/[\\/]+$/, '')
-
-  return dir === '' ? undefined : dir
-}
-
-const sessionFileId = async ($: EngineInterface): Promise<string> => {
-  const id = await $.session.id().catch(() => undefined)
-  if (typeof id !== 'string' || id.trim() === '') throw new Error('wait-anchor: store barrier has no session id')
-
-  return id.trim()
-}
-
-const stampGate = async (
-  $: EngineInterface,
-  dir: string,
-  kind: 'arrive' | 'release' | 'done',
-  sid: string,
-  op: 'set' | 'delete',
-): Promise<void> => {
-  const now = await $.clock.now()
-  await $.fs.write(`${dir}/${kind}-${sid}`, `${op} ${now}\n`)
-}
-
-/** Count files whose names start with `prefix` (`arrive-` or `release-`). */
-const countStamps = async ($: EngineInterface, dir: string, prefix: string): Promise<number> => {
-  const listed = await $.fs.list(dir)
-  let count = 0
-  if (!Array.isArray(listed)) return 0
-  for (const row of listed) {
-    const name = typeof row === 'object' && row !== null && 'name' in row ? row.name : undefined
-    if (typeof name === 'string' && name.startsWith(prefix)) count += 1
-  }
-
-  return count
-}
-
-const waitForStamps = async ($: EngineInterface, dir: string, prefix: string): Promise<void> => {
-  const deadline = (await $.clock.now()) + BARRIER_WAIT_MS
-  while (true) {
-    if ((await countStamps($, dir, prefix)) >= 2) return
-    if ((await $.clock.now()) >= deadline) {
-      throw new Error(`wait-anchor: store barrier timed out waiting for ${prefix}`)
-    }
-    await $.clock.sleep(50)
-  }
-}
-
-/**
- * When the barrier directory is set: stamp arrival, wait until both writes
- * have arrived, stamp release, then wait until both releases exist. The
- * `$.store` call is after this returns, so neither store call starts before
- * both writers have released. Unset, this returns immediately.
- */
-const enterStoreGate = async ($: EngineInterface, op: 'set' | 'delete'): Promise<string | undefined> => {
-  const dir = await barrierRoot($)
-  if (dir === undefined) return undefined
-  const sid = await sessionFileId($)
-  await stampGate($, dir, 'arrive', sid, op)
-  await waitForStamps($, dir, 'arrive-')
-  await stampGate($, dir, 'release', sid, op)
-  await waitForStamps($, dir, 'release-')
-
-  return dir
-}
-
-const leaveStoreGate = async ($: EngineInterface, dir: string | undefined, op: 'set' | 'delete'): Promise<void> => {
-  if (dir === undefined) return
-  await stampGate($, dir, 'done', await sessionFileId($), op)
-}
-
 /**
  * One key, replaced or removed as a whole. Other sessions' keys are not read.
  * A failed `set` or `delete` throws and leaves the previous value in place.
+ * The test-only store barrier (see store-barrier.ts) may rendezvous first; it
+ * is off unless both WAIT_ANCHOR_STORE_BARRIER and WAIT_ANCHOR_STORE_BARRIER_OK=1
+ * are set. Never set those in production.
  */
 const persistNote = async ($: EngineInterface, key: string, note: Note | null): Promise<void> => {
   const op = note === null ? 'delete' : 'set'
   const gate = await enterStoreGate($, op)
-  if (note === null) await $.store.delete(key)
-  else await $.store.set(key, toStored(note))
-  await leaveStoreGate($, gate, op)
+  // `start` is stamped immediately before the store call; `done` after it returns.
+  await stampStoreStart($, gate, op)
+  try {
+    if (note === null) await $.store.delete(key)
+    else await $.store.set(key, toStored(note))
+  } finally {
+    await stampStoreDone($, gate, op)
+  }
 }
 
 /** Persist, then show the status line. The status call is not the save. */
@@ -242,12 +171,21 @@ export const register: Register = on => {
     await remind($, e, claim)
 
     return next(e)
-  }).catch(($, e, next) => {
+  }).catch(async ($, e, next) => {
     // next.error is the HookFailure the engine already recorded. It is not a
     // function. Reading it and returning next(e) forwards the original prompt.
     // This does not rethrow, and it does not pass the failure out of the hook.
     const failure = next.error
-    void failure
+    const message =
+      typeof failure === 'object' && failure !== null && 'message' in failure
+        ? String((failure as { message: unknown }).message)
+        : 'unknown'
+    // Diagnostic only when WAIT_ANCHOR_DEBUG=1. Never swallow without a read.
+    const debug = await $.env.get('WAIT_ANCHOR_DEBUG').catch(() => undefined)
+    if (typeof debug === 'string' && debug.trim() !== '') {
+      const dir = debug.trim().replace(/[\\/]+$/, '')
+      await $.fs.write(`${dir}/prompt-submit-catch.txt`, `${message}\n`).catch(() => undefined)
+    }
 
     return next(e)
   })
