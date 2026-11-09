@@ -161,6 +161,42 @@ test('a missing project root saves nothing', async () => {
   expect(host.status.at(-1)).toBeUndefined()
 })
 
+test('a failed save does not show the return line, and the next prompt can still show it once', async () => {
+  const store = new Map<string, unknown>()
+  const host = install({ root: '/work/app', sessionId: 'sess-a', store })
+  await start(host)
+  await host.dispatch('command.run', {
+    command: 'anchor',
+    args: 'ship login fix · check: redirect works',
+  })
+  await host.dispatch('turn.complete', { turnId: 'turn-1', isAborted: true })
+  host.order.length = 0
+  host.fail.sets = 1
+
+  const prompt = person('where was I')
+  const returned = await host.dispatch('prompt.submit', prompt)
+
+  expect(returned).toEqual(prompt)
+  expect(host.logs).toEqual([])
+  expect(host.order.includes('log')).toBe(false)
+  expect(host.order[0]).toBe('set')
+  // `.catch` reads next.error and returns next(e). The error does not leave dispatch.
+  expect(host.recovered.count).toBe(1)
+  expect(host.errorReads.count).toBeGreaterThanOrEqual(1)
+  expect(typeof host.failures[0]).toBe('object')
+  expect(host.failures[0]?.message).toBe('store set failed')
+  const kept = [...store.values()][0] as { awaitingReturn?: boolean }
+  expect(kept.awaitingReturn).toBe(true)
+
+  const again = await host.dispatch('prompt.submit', person('still here'))
+  expect(again).toEqual(person('still here'))
+  expect(host.logs).toEqual(['Back? You said: redirect works.'])
+  const setAt = host.order.lastIndexOf('set')
+  const logAt = host.order.lastIndexOf('log')
+  expect(setAt < logAt).toBe(true)
+  expect(host.recovered.count).toBe(1)
+})
+
 test('an empty anchor prints the help and draws no status line', async () => {
   const host = install({ root: '/work/app', sessionId: 'sess-a' })
   await start(host)

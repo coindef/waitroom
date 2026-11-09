@@ -9,8 +9,9 @@ First release: a note you set for yourself, the goal and what to check when you 
 - **`/anchor`.** `ship login fix · check: redirect works` sets or replaces the note. `/anchor` shows it. `/anchor clear` clears it. With no note, the reply is `/anchor what you're doing · check: what to verify`. The reply does not start a turn.
 - **Status line.** `⚓ ship login fix → redirect works`. The check words stay as written. Past 48 columns the line ends in `…`. Claude Code chooses where that line sits among the other mods' lines. No note, no line. It does not take the row above the prompt.
 - **After Stop.** The next prompt you type logs `Back? You said: redirect works.` once. The prompt is unchanged. A later prompt does not repeat it until another main-loop turn ends.
-- **Kept in `$.store`.** Plugin-scoped JSON under Claude's configuration directory. One value per project root and session id. Stop does not clear it. `/anchor clear` does. This mod does not choose the file name. A missing session id or project root saves nothing.
-- **No summary, no transcript, no model, no network.** The text is stored as text.
+- **Kept as plugin-scoped JSON** under Claude's configuration directory. One value per project root and session id. Stop does not clear it. `/anchor clear` does. This mod does not choose the file name. A missing session id or project root saves nothing.
+- **No transcript reads.** The note never comes from your transcript. The Back? line is shown to you, not sent to the model. No summary, no model, no network. The note is stored as text.
+- If the note can't be saved, the Back? line waits for your next prompt.
 
 ### wait-notify 0.1.0
 

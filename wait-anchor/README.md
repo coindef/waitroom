@@ -41,19 +41,21 @@ Stop a turn, or let it finish. The note stays. The next prompt you type logs one
 Back? You said: redirect works.
 ```
 
-The prompt itself is unchanged. The line is `$.ui.log`. Claude Code does not send that log to the model. A second prompt does not log it again. The next Stop arms it once more. A subagent's turn does not.
+The prompt itself is unchanged. The Back? line is shown to you, not sent to the model. If saving the note fails, the line is skipped and shows on your next prompt instead. A second prompt does not log it again until another main-loop turn ends. A subagent's turn does not count.
 
 A real Claude Code session has shown the `Back?` line after a turn that finished. It has not been checked in a real session after a turn you interrupt. The engine flow tests run an aborted turn, but a test does not replace that check.
 
 ## Where it is kept
 
-The note is one JSON value in `$.store`. That store is this plugin's. Claude keeps it under its configuration directory. This mod does not choose the file name.
+The note is one JSON value in this plugin's store. Claude keeps it under its configuration directory. This mod does not choose the file name.
 
 The key comes from the project root and the session id the host reports. The value is the goal, the check, and whether the return line is still owed.
 
 Every session of this plugin on the machine shares that store. The key is what keeps two sessions apart, including two directories with the same name. A missing session id or a missing project root does not pick a shorter key. Nothing is saved, and the reply says so. The process id and the folder name are not keys.
 
-Stop does not clear the note. `/anchor clear` does. What a new process still sees is whatever `$.store` still holds. This mod does not keep a second copy.
+A set or delete replaces one key. It does not read every note and write them back. Two different session ids are separate keys, whether or not they share a project directory. Two directories with the same name are also separate keys, because the project root differs. Two Claude Code processes on the same session id may overwrite each other's note.
+
+Stop does not clear the note. `/anchor clear` does. A new process sees whatever the store still holds. This mod does not keep a second copy.
 
 The text is stored as text. Control characters and color codes are stripped before it is stored. It is not an instruction.
 
@@ -61,24 +63,40 @@ The text is stored as text. Control characters and color codes are stripped befo
 
 - It does not ask you to set a note each turn.
 - It does not summarize the session.
-- It does not read the transcript, call a model, or open a connection.
+- **No transcript reads.** The note never comes from your transcript. The Back? line is shown to you, not sent to the model.
+- If the note can't be saved, the Back? line waits for your next prompt.
+- It does not call a model or open a connection.
 - It does not take the bet's row.
 
 ## Developing
 
 ```sh
 claude plugin validate ./wait-anchor
-claude plugin test     ./wait-anchor   # 33 tests
+claude plugin test     ./wait-anchor   # 34 tests
 ```
 
-`hooks/anchor.ts` has the note, the command, the 48-column line, and the store key, with no engine. `hooks/register.ts` is the hooks. `tests/flow.test.ts` is the engine run. `tests/wiring.test.ts` drives `register` through a stand-in for `$`. That file is not a Claude Code session, and a pass there does not mean the hooks module loaded. `demo/leave-and-return.ts` is the same stand-in across processes. `tests/load-shape.test.ts` checks that `$` is only passed to a top-level helper, which is the rule that kept the module from loading on Claude Code 2.1.318.
+`hooks/anchor.ts` has the note, the command, the 48-column line, and the store key, with no engine. `hooks/register.ts` is the hooks. `hooks/store-barrier.ts` is the test-only store rendezvous used by `demo/real-store-race.sh`. `tests/flow.test.ts` is the engine run. `tests/wiring.test.ts` drives `register` through a stand-in for `$`. That file is not a Claude Code session, and a pass there does not mean the hooks module loaded. `demo/leave-and-return.ts` is the same stand-in across processes. `tests/load-shape.test.ts` checks that `$` is only passed to a top-level helper, which is the rule that kept the module from loading on Claude Code 2.1.318.
 
-`claude plugin test` runs 33 tests:
+`claude plugin test` runs 34 tests:
 
 - 17 pure tests
-- 8 wiring tests against the stand-in for `$`
+- 9 wiring tests against the stand-in for `$`. Those are not evidence about the real store.
 - 5 engine flow tests, with the identity, the store, and the UI mocked
 - 3 load-shape tests
+
+### Real store check
+
+```sh
+bash wait-anchor/demo/real-store-race.sh
+```
+
+Exit 2 means the opening probe failed. Not being logged in is one such failure. Exit 2 is not a pass.
+
+Exit 0 means every attempt passed fresh-process readback isolation. The script runs each of three cases many times (default 20) and prints an overlap count `k/N` per case. Overlap here means both writers stamped `start` immediately before their store call and `done` after it, with `max(start) < min(done)`. Isolation is the pass criterion. A positive `k` shows those store intervals overlapped in time; it is still not proof that two writers of one key are safe.
+
+The rendezvous is test-only. Both `WAIT_ANCHOR_STORE_BARRIER` (a directory) and `WAIT_ANCHOR_STORE_BARRIER_OK=1` must be set, or the gate is off and notes write straight through. **Never set either in production.**
+
+`claude --help` for `--bg` says `--bg --resume <session-id>` continues that session, or starts a copy and says so when the session is already running. That help text is about background mode only.
 
 Separately from the tests, real Claude Code sessions in a terminal confirmed four things:
 
@@ -87,4 +105,4 @@ Separately from the tests, real Claude Code sessions in a terminal confirmed fou
 - After a turn that finished, the `Back?` line appeared on screen once. Running `/anchor` next did not add a second one.
 - After `/anchor clear` in each session, the status line was gone and `/anchor` printed its no-note reply.
 
-Tested on Claude Code 2.1.318 and 2.1.319. On 2.1.318, an earlier commit of this change passed `claude plugin validate` and `claude plugin test`. Every check of the final commit used 2.1.319: `validate`, the 33 tests, a full `tsc` run against the type declarations that 2.1.319 generated, and the real sessions above.
+Tested on Claude Code 2.1.318 and 2.1.319. `claude plugin test` runs 34 tests.

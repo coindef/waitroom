@@ -13,6 +13,7 @@ import {
   type IdentityGap,
   type Note,
 } from './anchor'
+import { enterStoreGate, stampStoreDone, stampStoreStart } from './store-barrier'
 
 type Loaded = { gap: IdentityGap } | { key: string; note: Note | null }
 
@@ -34,10 +35,29 @@ const load = async ($: EngineInterface): Promise<Loaded> => {
   return { key, note: noteFromStore(raw) }
 }
 
-/** One key, replaced or removed as a whole. Other sessions' keys are not read. */
+/**
+ * One key, replaced or removed as a whole. Other sessions' keys are not read.
+ * A failed `set` or `delete` throws and leaves the previous value in place.
+ * The test-only store barrier (see store-barrier.ts) may rendezvous first; it
+ * is off unless both WAIT_ANCHOR_STORE_BARRIER and WAIT_ANCHOR_STORE_BARRIER_OK=1
+ * are set. Never set those in production.
+ */
+const persistNote = async ($: EngineInterface, key: string, note: Note | null): Promise<void> => {
+  const op = note === null ? 'delete' : 'set'
+  const gate = await enterStoreGate($, op)
+  // `start` is stamped immediately before the store call; `done` after it returns.
+  await stampStoreStart($, gate, op)
+  try {
+    if (note === null) await $.store.delete(key)
+    else await $.store.set(key, toStored(note))
+  } finally {
+    await stampStoreDone($, gate, op)
+  }
+}
+
+/** Persist, then show the status line. The status call is not the save. */
 const write = async ($: EngineInterface, key: string, note: Note | null): Promise<void> => {
-  if (note === null) await $.store.delete(key)
-  else await $.store.set(key, toStored(note))
+  await persistNote($, key, note)
   $.ui.status(statusFor(note))
 }
 
@@ -69,9 +89,11 @@ const remind = async ($: EngineInterface, prompt: PromptLike, claim: Claim): Pro
     if ('gap' in found || found.note === null) return
     const taken = onPrompt(found.note, true)
     if (taken.line === undefined || taken.note === null) return
-    // A transcript line. It is not added to the prompt, so the model is not told.
+    // Save first. A failed set must not print the line and then show it again
+    // on the next prompt. The log is not part of the saved state.
+    await persistNote($, found.key, taken.note)
     $.ui.log(taken.line)
-    await write($, found.key, taken.note)
+    $.ui.status(statusFor(taken.note))
   } finally {
     claim.current = false
   }
@@ -146,12 +168,25 @@ export const register: Register = on => {
    * reminder is a log line, once, and a task notice does not spend it.
    */
   on('prompt.submit', async ($, e, next) => {
-    try {
-      await remind($, e, claim)
-    } catch {
-      // The prompt still goes through.
+    await remind($, e, claim)
+
+    return next(e)
+  }).catch(async ($, e, next) => {
+    // next.error is the HookFailure the engine already recorded. It is not a
+    // function. Reading it and returning next(e) forwards the original prompt.
+    // This does not rethrow, and it does not pass the failure out of the hook.
+    const failure = next.error
+    const message =
+      typeof failure === 'object' && failure !== null && 'message' in failure
+        ? String((failure as { message: unknown }).message)
+        : 'unknown'
+    // Diagnostic only when WAIT_ANCHOR_DEBUG=1. Never swallow without a read.
+    const debug = await $.env.get('WAIT_ANCHOR_DEBUG').catch(() => undefined)
+    if (typeof debug === 'string' && debug.trim() !== '') {
+      const dir = debug.trim().replace(/[\\/]+$/, '')
+      await $.fs.write(`${dir}/prompt-submit-catch.txt`, `${message}\n`).catch(() => undefined)
     }
 
     return next(e)
-  }).catch(($, e, next) => next(e))
+  })
 }
