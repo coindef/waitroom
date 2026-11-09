@@ -41,7 +41,7 @@ Stop a turn, or let it finish. The note stays. The next prompt you type logs one
 Back? You said: redirect works.
 ```
 
-The prompt itself is unchanged. The Back? line is shown to you, not sent to the model. If saving the note fails, the line is skipped and shows on your next prompt instead. A second prompt does not log it again until another main-loop turn ends. A subagent's turn does not count.
+The prompt itself is unchanged. The `Back?` line is shown to you, not sent to the model. If saving the note fails, the line is skipped and shows on your next prompt instead. A second prompt does not log it again until another main-loop turn ends. A subagent's turn does not count.
 
 A real Claude Code session has shown the `Back?` line after a turn that finished. It has not been checked in a real session after a turn you interrupt. The engine flow tests run an aborted turn, but a test does not replace that check.
 
@@ -63,8 +63,8 @@ The text is stored as text. Control characters and color codes are stripped befo
 
 - It does not ask you to set a note each turn.
 - It does not summarize the session.
-- **No transcript reads.** The note never comes from your transcript. The Back? line is shown to you, not sent to the model.
-- If the note can't be saved, the Back? line waits for your next prompt.
+- **No transcript reads.** The note never comes from your transcript. The `Back?` line is shown to you, not sent to the model.
+- If the note can't be saved, the `Back?` line waits for your next prompt.
 - It does not call a model or open a connection.
 - It does not take the bet's row.
 
@@ -96,8 +96,6 @@ Exit 0 means every attempt passed fresh-process readback isolation. The script r
 
 The rendezvous is test-only. Both `WAIT_ANCHOR_STORE_BARRIER` (a directory) and `WAIT_ANCHOR_STORE_BARRIER_OK=1` must be set, or the gate is off and notes write straight through. **Never set either in production.**
 
-`claude --help` for `--bg` says `--bg --resume <session-id>` continues that session, or starts a copy and says so when the session is already running. That help text is about background mode only.
-
 Separately from the tests, real Claude Code sessions in a terminal confirmed four things:
 
 - Two sessions ran at the same time in two project directories with the same name. Each kept its own note. Clearing one did not change the other.
@@ -105,4 +103,4 @@ Separately from the tests, real Claude Code sessions in a terminal confirmed fou
 - After a turn that finished, the `Back?` line appeared on screen once. Running `/anchor` next did not add a second one.
 - After `/anchor clear` in each session, the status line was gone and `/anchor` printed its no-note reply.
 
-Tested on Claude Code 2.1.318 and 2.1.319. `claude plugin test` runs 34 tests.
+Tested on Claude Code 2.1.319. `claude plugin test` runs 34 tests.

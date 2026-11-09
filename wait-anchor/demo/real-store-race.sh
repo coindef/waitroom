@@ -25,9 +25,10 @@
 #
 # Foreground --resume of one id can attach while that session is still open.
 # That was observed separately. This script does not claim two writers of one
-# key are safe. --bg help text is about background mode only.
+# key are safe.
 
 set -euo pipefail
+shopt -s inherit_errexit
 
 here=$(cd "$(dirname "$0")" && pwd)
 plugin=$(cd "$here/.." && pwd)
