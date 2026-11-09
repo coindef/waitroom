@@ -40,6 +40,10 @@ The same "holds the same plugin name" error appears if you run
 `claude --plugin-dir ./bet-on-your-agent` while the installed copy is enabled. Disable
 the installed one while you work on a clone.
 
+### Dependency "wait-review@waitroom" is not installed
+
+That error after a marketplace update means a leftover install of the `wait-review` plugin after it was removed. The plugin was removed on purpose. That is not the old marketplace once named `wait-review`. Follow the three uninstall/install commands in [If waitroom fails after a marketplace update](install.md#if-waitroom-fails-after-a-marketplace-update).
+
 ### The early-access switch
 
 Plugins that hook the engine's own events are **early access**, gated by a
