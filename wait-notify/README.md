@@ -25,7 +25,34 @@ wait-notify answers two kinds:
 | `permission_prompt`: a permission dialog has waited | `Waiting on a permission` |
 | `permission_prompt` while an `AskUserQuestion` call is open, or `elicitation_dialog` | `Asked you a question` |
 
-The title is `Claude needs you`.
+The title is `Claude needs you · api`, where `api` is the folder name of the
+session's project root. With two sessions open, you can tell which terminal to
+go back to.
+
+- **Same folder name, two sessions.** Two live sessions in `~/work/api` and
+  `~/client/api` would both say `api`. Then each title adds a short tag from
+  Claude Code's session id: `Claude needs you · api · 3f2a` and
+  `Claude needs you · api · 9b1c`. The tag starts at 4 characters and grows
+  (up to 8) only while the other session's id starts the same way.
+- **Only what Claude Code reports.** The project root and the session id come
+  from Claude Code. Never the process id, and never the folder name alone as
+  the key. If either one is missing, the title is the plain
+  `Claude needs you`. Nothing is guessed.
+- **Only the folder name.** No path above it, no prompt text, no tool
+  arguments, no transcript. Escape codes and control characters in the name
+  are dropped. Past 20 characters the name is cut and ends in `…`; the tag is
+  never cut.
+- **The reminder keeps its title.** It carries the same title as the
+  notification it follows. Each session has its own wait and its own reminder:
+  a prompt in one session does not cancel the other's.
+
+To spot a same-name session, each session keeps one record in the plugin's
+store (under Claude's configuration directory): `live/<session id>` with the
+folder name and when it was last seen. The session writes it when it starts
+and refreshes it on your prompts, the main turn's end and each notification.
+It removes it when the session ends, `/clear` included. A record not seen for
+24 hours is treated as a session that ended without saying so, and removed.
+A stale record can only add a tag you didn't need.
 
 - **You are at the terminal:** nothing is sent.
 - **You are away:** the notification goes out at once.
@@ -141,6 +168,8 @@ notification does not check whether you are at the terminal.
 
 - **No network, no sound, no shell.** The only programs it runs are `uname`,
   `ioreg -c IOHIDSystem` and `osascript`, each by argv.
+- **No click-to-focus.** Clicking the notification does not bring the right
+  terminal window forward.
 - **It never blocks, delays or rewrites** a tool call, a prompt or a turn. It
   watches tool calls only to know when one starts and ends.
 - **No notification while you are at the terminal**, and no reminder after a
@@ -151,14 +180,14 @@ notification does not check whether you are at the terminal.
 
 ```
 claude plugin validate ./wait-notify
-claude plugin test     ./wait-notify   # 48 tests
+claude plugin test     ./wait-notify   # 75 tests
 ```
 
 `hooks/notify.ts` has no engine dependency: the copy, the config, parsing
-`uname` / `ioreg` / `osascript` output, the argv, and the notifier that holds
-one wait at a time. Every command, the reminder's timer and the config file
+`uname` / `ioreg` / `osascript` output, the session label and its store
+records, the argv, and the notifier that holds one wait at a time. Every command, the reminder's timer and the config file
 reach it through a host, so `tests/notify.test.ts` drives it directly with a
 fake one. `hooks/register.ts` builds that host from `$` and wires it to the
 events. `tests/flow.test.ts` drives the whole loop through the engine, with
-`process.run`, `fs.read`, `HOME` and the clock answered by the test, so the
-suite never posts a real notification.
+`process.run`, `fs.read`, `HOME`, the session id and root, the store and the
+clock answered by the test, so the suite never posts a real notification.

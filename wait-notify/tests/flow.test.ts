@@ -6,6 +6,7 @@ import {
   FRONTMOST_ARGV,
   FRONTMOST_SCRIPT,
   IOREG_ARGV,
+  LIVE_TTL_MS,
   notifyArgv,
   PERMISSION_BODY,
   QUESTION_BODY,
@@ -16,16 +17,25 @@ import {
 /**
  * The whole loop through the engine: Notification events, tool calls, prompts
  * and turn ends raised as Claude Code raises them, `process.run` answered by
- * a pretend Mac, the config file by the test's `fs.read`, and the reminder's
- * timer by the mock clock. Nothing here is spawned or posted for real.
+ * a pretend Mac, the config file by the test's `fs.read`, the session's id and
+ * root by the test's host, the plugin store by the mock store, and the
+ * reminder's timer by the mock clock. Nothing here is spawned or posted for real.
  */
 
 const HOME = '/Users/ada'
 const CONFIG = `${HOME}/.waitroom/notify.json`
 const MIN = 60_000
+const HOUR = 60 * MIN
+/** Where the mock clock starts: 2026-11-10 09:00 UTC. */
+const NOW = 1_794_301_200_000
 
 const SAFARI = '/Applications/Safari.app/'
 const ITERM = '/Applications/iTerm.app/'
+
+/** Host session ids, as Claude Code names a session: a uuid. */
+const ID_A = '3f2a6c1e-8d4b-4f0a-9e2d-5b7c1a0e9f31'
+const ID_B = '9b1c0d2e-4a5f-4c3b-8e7d-1f2a3b4c5d6e'
+const ID_C = 'c4d5e6f7-0a1b-4c2d-8e3f-9a8b7c6d5e4f'
 
 type Mac = {
   /** What `uname` prints. */
@@ -60,15 +70,60 @@ const ioregOutput = (idleSeconds: number) =>
     '',
   ].join('\n')
 
-/** Nothing sits beneath the plugin in a test, so the test stands in for the engine and the Mac. */
-const engineBottom = (on: On, start: Partial<Mac> = {}) => {
+/** What the host says about the session. Each answer can change mid-test, as after a `/clear`. */
+type Session = {
+  /** What `$.session.id()` answers; undefined: the call fails. */
+  id?: string
+  /** What `$.session.root()` answers; undefined: the call fails. */
+  root?: string
+}
+
+/**
+ * Nothing sits beneath the plugin in a test, so the test stands in for the
+ * engine and the Mac.
+ *
+ * By default the host gives no session id and no project root, so the title
+ * is the plain `Claude needs you` the first tests below were written against.
+ * The tests of the session label give both, and the store's starting records.
+ */
+const engineBottom = (
+  on: On,
+  start: Partial<Mac> = {},
+  given: Session & { store?: Record<string, unknown> } = {},
+) => {
   const mac: Mac = { uname: 'Darwin', idleSeconds: 1, front: SAFARI, ...start }
-  const clock = mock.clock(on)
+  const session: Session = { id: given.id, root: given.root }
+  const clock = mock.clock(on, { now: NOW })
   mock.env(on, mac.noHome ? {} : { HOME })
+  /** The plugin store, one object the test reads and writes as the other session would. JSON in and out, as the host keeps it. */
+  const store: Record<string, unknown> = given.store ?? {}
+  on('store.get', ($, e) => ({ value: store[e.key] === undefined ? undefined : JSON.parse(JSON.stringify(store[e.key])) }))
+  on('store.set', ($, e) => {
+    store[e.key] = JSON.parse(JSON.stringify(e.value))
+
+    return { value: undefined }
+  })
+  on('store.delete', ($, e) => {
+    delete store[e.key]
+
+    return { value: undefined }
+  })
+  on('store.keys', () => ({ value: Object.keys(store) }))
   const ran: string[][] = []
   const read: string[] = []
   /** Tool calls held open this long on the clock: a dialog answered that much later. */
   const holds: Partial<Record<string, number>> = {}
+  on('session.id', () => {
+    if (session.id === undefined) throw new Error('no session id')
+
+    return { value: session.id }
+  })
+  on('session.root', () => {
+    if (session.root === undefined) throw new Error('no project root')
+
+    return { value: session.root }
+  })
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('classic.Notification', () => ({}))
   on('classic.ElicitationResult', () => ({}))
   on('prompt.submit', ($, e) => ({ text: e.text }))
@@ -100,7 +155,7 @@ const engineBottom = (on: On, start: Partial<Mac> = {}) => {
     throw new Error(`wait-notify runs no such command: ${e.argv.join(' ')}`)
   })
 
-  return { clock, mac, ran, read, holds }
+  return { clock, mac, ran, read, holds, session, store }
 }
 
 const permission = ($: Engine) =>
@@ -481,4 +536,169 @@ test('/clear cancels a pending reminder', async ($, on) => {
 
   await clock.advance(60 * MIN)
   expect(ran).toEqual(NOTIFIED)
+})
+
+const START = { cwd: '/work/api', surface: 'terminal', isInteractive: true } as const
+
+/** The AppleScript of the last notification posted. */
+const lastScript = (ran: readonly string[][]) => posted(ran).at(-1)?.[2]
+
+const live = (name: string, seenAt = NOW) => ({ v: 1, name, seenAt })
+
+test('a single session in /work/api: the notification, its reminder and the stop notification all say `Claude needs you · api`', async ($, on) => {
+  const { clock, ran } = engineBottom(on, { config: '{ "notify_on_stop": true }' }, { id: ID_A, root: '/work/api' })
+  await $.session.start(START)
+  await permission($)
+  expect(ran).toEqual([['uname'], IOREG_ARGV, FRONTMOST_ARGV, notifyArgv(PERMISSION_BODY, 'api')])
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api"')
+
+  await clock.advance(3 * MIN)
+  expect(lastScript(ran)).toBe('display notification "Still waiting · 3 min" with title "Claude needs you · api"')
+
+  await $.turn.complete(finish('turn-1'))
+  expect(lastScript(ran)).toBe('display notification "Finished · your turn" with title "Claude needs you · api"')
+  expect(posted(ran)).toHaveLength(3)
+})
+
+test('two live sessions in /a/api and /b/api, one store: each title adds its own tag from its session id', async ($, on) => {
+  const { ran, session, store } = engineBottom(on, {}, { id: ID_A, root: '/a/api', store: { [`live/${ID_B}`]: live('api') } })
+  await $.session.start(START)
+  await permission($)
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api · 3f2a"')
+
+  // One test is one session, so the other session's host answers stand in for it, on the same store.
+  session.id = ID_B
+  session.root = '/b/api'
+  await permission($)
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api · 9b1c"')
+  expect(Object.keys(store)).toEqual([`live/${ID_B}`, `live/${ID_A}`])
+})
+
+test('a live session whose folder has another name adds no tag', async ($, on) => {
+  const { ran } = engineBottom(on, {}, { id: ID_A, root: '/a/api', store: { [`live/${ID_B}`]: live('web') } })
+  await permission($)
+
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api"')
+})
+
+test('a same-name record not touched for over 24 hours is stale: no tag, and it is removed', async ($, on) => {
+  const { ran, store } = engineBottom(on, {}, {
+    id: ID_A,
+    root: '/a/api',
+    store: { [`live/${ID_B}`]: live('api', NOW - LIVE_TTL_MS - 1), [`live/${ID_C}`]: live('web', NOW - 2 * LIVE_TTL_MS) },
+  })
+  await permission($)
+
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api"')
+  expect(Object.keys(store)).toEqual([`live/${ID_A}`])
+})
+
+test('no session id, or no project root: the plain `Claude needs you`, and nothing written to the store', async ($, on) => {
+  const { clock, ran, session, store } = engineBottom(on, { config: '{ "notify_on_stop": true }' }, {
+    store: { [`live/${ID_B}`]: live('api') },
+  })
+  const missing: Session[] = [{ root: '/work/api' }, { id: ID_A }, { id: ID_A, root: '/' }, { id: '', root: '/work/api' }]
+  for (const host of missing) {
+    session.id = host.id
+    session.root = host.root
+    await $.session.start(START)
+    await $.prompt.submit(typed('carry on'))
+    await clock.settle()
+    await permission($)
+    expect(ran.at(-1)).toEqual(notifyArgv(PERMISSION_BODY))
+    await clock.advance(3 * MIN)
+    expect(ran.at(-1)).toEqual(notifyArgv(reminderBody(3)))
+    await $.turn.complete(finish('turn-1'))
+    expect(ran.at(-1)).toEqual(notifyArgv(STOP_BODY))
+  }
+
+  expect(posted(ran)).toHaveLength(3 * missing.length)
+  expect(Object.keys(store)).toEqual([`live/${ID_B}`])
+})
+
+test("the session's record: the folder name only, written at start, refreshed by your prompt and the main turn's end, removed at session end", async ($, on) => {
+  const { clock, store } = engineBottom(on, {}, {
+    id: ID_A,
+    root: '/Users/ada/clients/acme/api',
+    store: { [`live/${ID_B}`]: live('web') },
+  })
+  const own = { key: `live/${ID_A}` }
+  await $.session.start(START)
+  expect(store[own.key]).toEqual({ v: 1, name: 'api', seenAt: NOW })
+
+  await clock.advance(2 * HOUR)
+  await $.prompt.submit({ text: 'Background task done', wait: false, origin: { kind: 'task-notification' } })
+  await clock.settle()
+  expect(store[own.key]).toEqual(live('api', NOW))
+  await $.prompt.submit(typed('carry on'))
+  await clock.settle()
+  expect(store[own.key]).toEqual(live('api', NOW + 2 * HOUR))
+
+  await clock.advance(1 * HOUR)
+  await $.turn.complete(finish('turn-sub', { agentId: 'agent-1' }))
+  expect(store[own.key]).toEqual(live('api', NOW + 2 * HOUR))
+  await $.turn.complete(finish('turn-1', { isAborted: true }))
+  expect(store[own.key]).toEqual(live('api', NOW + 3 * HOUR))
+
+  await $.session.end({ reason: 'prompt_input_exit', sessionId: ID_A, resume: { id: ID_A } })
+  expect(Object.keys(store)).toEqual([`live/${ID_B}`])
+})
+
+test("/clear: the ending session's record goes, and the next prompt you send writes the new session's", async ($, on) => {
+  const { clock, session, store } = engineBottom(on, {}, { id: ID_A, root: '/work/api' })
+  await $.session.start(START)
+  expect(Object.keys(store)).toEqual([`live/${ID_A}`])
+
+  await $.session.end({ reason: 'clear', sessionId: ID_A, resume: { id: ID_A } })
+  expect(Object.keys(store)).toEqual([])
+
+  // The process goes on under a new id, and no session.start fires for it.
+  session.id = ID_C
+  await $.prompt.submit(typed('start over'))
+  await clock.settle()
+  expect(Object.keys(store)).toEqual([`live/${ID_C}`])
+})
+
+test('the reminder keeps the title of the notification it follows, even when a same-name session starts in between', async ($, on) => {
+  const { clock, ran, store } = engineBottom(on, {}, { id: ID_A, root: '/a/api' })
+  await permission($)
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api"')
+
+  store[`live/${ID_B}`] = live('api')
+  await clock.advance(3 * MIN)
+  expect(lastScript(ran)).toBe('display notification "Still waiting · 3 min" with title "Claude needs you · api"')
+
+  // The next wait looks again, and now there is a twin.
+  await permission($)
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api · 3f2a"')
+})
+
+test('only the folder name reaches a notification: not the path above it, your prompt, a tool call or the transcript', async ($, on) => {
+  const { clock, ran, store } = engineBottom(on, {}, { id: ID_A, root: '/Users/ada/clients/acme-payroll/api' })
+  const opened = { transcript: 0, fetch: 0 }
+  on('session.messages', () => {
+    opened.transcript += 1
+    throw new Error('wait-notify reads no transcript')
+  })
+  on('http.fetch', () => {
+    opened.fetch += 1
+    throw new Error('wait-notify opens no connection')
+  })
+  await $.session.start(START)
+  await $.prompt.submit(typed('rotate the acme payroll key'))
+  await clock.settle()
+  await $.tool.call({ tool: 'Bash', command: 'vault write secret/acme-payroll key=hunter2' })
+  await permission($)
+  await clock.advance(3 * MIN)
+
+  const scripts = posted(ran).map(argv => argv[2] ?? '')
+  expect(scripts).toHaveLength(2)
+  for (const script of scripts) {
+    expect(script.endsWith(' with title "Claude needs you · api"')).toBe(true)
+    for (const word of ['Users', 'ada', 'clients', 'acme', 'payroll', 'rotate', 'vault', 'hunter2']) {
+      expect(script.includes(word)).toBe(false)
+    }
+  }
+  expect(store[`live/${ID_A}`]).toEqual(live('api', NOW))
+  expect(opened).toEqual({ transcript: 0, fetch: 0 })
 })

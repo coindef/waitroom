@@ -1,6 +1,17 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import { configPathOf, createNotifier, isPersonPrompt, type NotifyHost, notificationTypeOf } from './notify'
+import {
+  configPathOf,
+  createNotifier,
+  isPersonPrompt,
+  LIVE_PREFIX,
+  liveKeyOf,
+  liveRecordOf,
+  type NotifyHost,
+  notificationTypeOf,
+  peersOf,
+  sessionLabel,
+} from './notify'
 
 /** `~/.waitroom/notify.json`, or undefined with no `HOME`, no file, or one that cannot be read. */
 const readConfig = async ($: EngineInterface): Promise<string | undefined> => {
@@ -8,6 +19,53 @@ const readConfig = async ($: EngineInterface): Promise<string | undefined> => {
   if (home === undefined || home === '') return undefined
 
   return $.fs.read(configPathOf(home)).catch(() => undefined)
+}
+
+/** The session id and project root as the host reports them. Either can be undefined: nothing is guessed. */
+const identityOf = async ($: EngineInterface): Promise<{ id: unknown; root: unknown }> => ({
+  id: await $.session.id().catch(() => undefined),
+  root: await $.session.root().catch(() => undefined),
+})
+
+/**
+ * Writes this session's record in the plugin store, `live/<session id>`: its
+ * folder name and the time now. Nothing without both an id and a root.
+ * Returns the identity it read. Never rejects.
+ */
+const touchLive = async ($: EngineInterface): Promise<{ id: unknown; root: unknown }> => {
+  const self = await identityOf($)
+  const record = liveRecordOf(self, await $.clock.now().catch(() => Date.now()))
+  if (record !== undefined) await $.store.set(record.key, record.entry).catch(() => undefined)
+
+  return self
+}
+
+/** Removes this session's record: the session ended, `/clear` included. Never rejects. */
+const dropLive = async ($: EngineInterface): Promise<void> => {
+  const key = liveKeyOf(await $.session.id().catch(() => undefined))
+  if (key !== undefined) await $.store.delete(key).catch(() => undefined)
+}
+
+/**
+ * The label for this session's title: refresh its own record, read the other
+ * live sessions' records, remove the stale ones, and tag the folder name when
+ * a live peer's has the same name. Undefined, for the plain title, without an
+ * id and a root, or when the store cannot be read.
+ */
+const labelOf = async ($: EngineInterface): Promise<string | undefined> => {
+  const self = await touchLive($)
+  if (liveRecordOf(self, 0) === undefined) return undefined
+  const own = liveKeyOf(self.id)
+  const keys = await $.store.keys().catch(() => [] as string[])
+  const records: { key: string; value: unknown }[] = []
+  for (const key of keys) {
+    if (key === own || !key.startsWith(LIVE_PREFIX)) continue
+    records.push({ key, value: await $.store.get(key).catch(() => undefined) })
+  }
+  const { peers, stale } = peersOf(records, await $.clock.now().catch(() => Date.now()))
+  for (const key of stale) await $.store.delete(key).catch(() => undefined)
+
+  return sessionLabel(self, peers)
 }
 
 /**
@@ -23,6 +81,7 @@ const hostOf = ($: EngineInterface): NotifyHost => ({
   run: (argv, timeoutMs) => $.process.run(argv, { timeoutMs }).catch(() => undefined),
   after: (ms, fn) => $.clock.after(ms, () => void fn().catch(() => undefined)),
   readConfig: () => readConfig($),
+  label: () => labelOf($).catch(() => undefined),
 })
 
 export const register: Register = on => {
@@ -57,9 +116,24 @@ export const register: Register = on => {
     }
   }).catch(($, e, next) => next(e))
 
-  /** A prompt you sent: you are back. A task notification or another session's message is not you. */
+  /** The session's record in the plugin store, so a same-name session elsewhere can tell the two apart. */
+  on('session.start', async ($, e, next) => {
+    const done = await next(e)
+    await touchLive($)
+
+    return done
+  }).catch(($, e, next) => next(e))
+
+  /**
+   * A prompt you sent: you are back. A task notification or another session's
+   * message is not you. It also refreshes the session's record, without holding
+   * the prompt: after `/clear` the session runs on under a new id.
+   */
   on('prompt.submit', ($, e, next) => {
-    if (isPersonPrompt(e.origin)) notifier.clear()
+    if (isPersonPrompt(e.origin)) {
+      notifier.clear()
+      void touchLive($)
+    }
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -81,14 +155,16 @@ export const register: Register = on => {
     const done = await next(e)
     if (e.agentId !== undefined) return done
     notifier.clear()
+    await touchLive($)
     if (!e.isAborted) await notifier.turnEnded(hostOf($))
 
     return done
   }).catch(($, e, next) => next(e))
 
-  /** Exit, `/clear`, resume: a reminder from before would be stale. */
-  on('session.end', ($, e, next) => {
+  /** Exit, `/clear`, resume: a reminder from before would be stale, and so would the session's record. */
+  on('session.end', async ($, e, next) => {
     notifier.clear()
+    await dropLive($)
 
     return next(e)
   }).catch(($, e, next) => next(e))
