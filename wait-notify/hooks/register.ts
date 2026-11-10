@@ -29,8 +29,9 @@ const identityOf = async ($: EngineInterface): Promise<{ id: unknown; root: unkn
 
 /**
  * Writes this session's record in the plugin store, `live/<session id>`: its
- * folder name and the time now. Nothing without both an id and a root.
- * Returns the identity it read. Never rejects.
+ * folder name, its parent folder's name when it has one, and the time now.
+ * Nothing without both an id and a root. Returns the identity it read. Never
+ * rejects.
  */
 const touchLive = async ($: EngineInterface): Promise<{ id: unknown; root: unknown }> => {
   const self = await identityOf($)
@@ -48,9 +49,10 @@ const dropLive = async ($: EngineInterface): Promise<void> => {
 
 /**
  * The label for this session's title: refresh its own record, read the other
- * live sessions' records, remove the stale ones, and tag the folder name when
- * a live peer's has the same name. Undefined, for the plain title, without an
- * id and a root, or when the store cannot be read.
+ * live sessions' records, remove the stale ones, and, when a live peer's
+ * folder has the same name, add the parent folder's name, or a tag when that
+ * is the same too. Undefined, for the plain title, without an id and a root,
+ * or when the store cannot be read.
  */
 const labelOf = async ($: EngineInterface): Promise<string | undefined> => {
   const self = await touchLive($)

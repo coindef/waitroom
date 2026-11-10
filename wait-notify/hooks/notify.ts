@@ -222,7 +222,7 @@ export const notifyArgv = (body: string, label?: string): readonly string[] => [
   `display notification ${appleString(body)} with title ${appleString(titleOf(label))}`,
 ]
 
-/** The most graphemes of a folder name a title shows. One more becomes `…`. */
+/** The most graphemes of a folder's name a title shows, the parent folder's too. One more becomes `…`. */
 export const MAX_FOLDER_GRAPHEMES = 20
 
 const ELLIPSIS = '…'
@@ -246,21 +246,47 @@ const ANSI = /\u001B(?:\][^\u0007]*(?:\u0007|\u001B\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\
 /** C0, DEL, C1, zero-width and byte-order marks, bidi overrides and isolates, line and paragraph separators. Not the emoji joiner. */
 const UNSHOWN = /[\u0000-\u001F\u007F-\u009F\u200B\u200C\u200E\u200F\u2028-\u202E\u2066-\u2069\uFEFF]/g
 
+/** The root's parts between separators, `/` or `\`, once those that end it are gone: `/x/work/api/` is `['', 'x', 'work', 'api']`. */
+const segmentsOf = (root: string): string[] => root.replace(/[\\/]+$/, '').split(/[\\/]+/)
+
+/**
+ * One folder's name as a title shows it, or undefined when there is none to
+ * show: `.`, `..`, or nothing left once escape codes and control characters
+ * are dropped. Past 20 graphemes it is cut on a grapheme boundary and ends in `…`.
+ */
+const shownNameOf = (segment: string): string | undefined => {
+  const name = segment.replace(ANSI, '').replace(UNSHOWN, '').normalize('NFC').trim()
+  if (name === '' || name === '.' || name === '..') return undefined
+  const parts = graphemes(name)
+  if (parts.length <= MAX_FOLDER_GRAPHEMES) return name
+
+  return `${parts.slice(0, MAX_FOLDER_GRAPHEMES - 1).join('').trimEnd()}${ELLIPSIS}`
+}
+
 /**
  * The project root's folder name as a title shows it, or undefined when there
  * is none to show: not a string, `/`, `.` or `..`, or nothing left once
  * escape codes and control characters are dropped. Never the path above it.
  * Past 20 graphemes it is cut on a grapheme boundary and ends in `…`.
  */
-export const folderNameOf = (root: unknown): string | undefined => {
-  if (typeof root !== 'string') return undefined
-  const last = root.replace(/[\\/]+$/, '').split(/[\\/]/).at(-1) ?? ''
-  const name = last.replace(ANSI, '').replace(UNSHOWN, '').normalize('NFC').trim()
-  if (name === '' || name === '.' || name === '..') return undefined
-  const parts = graphemes(name)
-  if (parts.length <= MAX_FOLDER_GRAPHEMES) return name
+export const folderNameOf = (root: unknown): string | undefined =>
+  typeof root === 'string' ? shownNameOf(segmentsOf(root).at(-1) ?? '') : undefined
 
-  return `${parts.slice(0, MAX_FOLDER_GRAPHEMES - 1).join('').trimEnd()}${ELLIPSIS}`
+/** A drive, `C:`: the root of a Windows path, not a folder with a name. */
+const DRIVE = /^[a-z]:$/i
+
+/**
+ * The name of the folder the project folder is in, cleaned and cut as the
+ * folder name is: `work` for `/Users/ada/work/api`. Undefined when there is
+ * none to show: a folder right under the root (`/api`, `C:\api`), a parent
+ * that is `.`, `..` or nothing once cleaned, or a root with no folder name.
+ * Never the path above it.
+ */
+export const parentNameOf = (root: unknown): string | undefined => {
+  if (typeof root !== 'string' || folderNameOf(root) === undefined) return undefined
+  const parent = shownNameOf(segmentsOf(root).at(-2) ?? '')
+
+  return parent === undefined || DRIVE.test(parent) ? undefined : parent
 }
 
 /** The session id's letters and digits, lowercased: what a tag is cut from. */
@@ -284,21 +310,28 @@ export const tagOf = (id: string, peerIds: readonly string[]): string => {
   return mine.slice(0, MAX_TAG)
 }
 
-/** Another live session, as its record in the plugin store has it. */
-export type Peer = { id: string; name: string }
+/** Another live session, as its record in the plugin store has it. No `parent`: none to show, or a record an older build wrote. */
+export type Peer = { id: string; name: string; parent?: string }
 
 /**
- * The session's label: the folder name, plus its tag while a live peer's
- * folder has the same name. Undefined when the host gave no session id or no
- * project root with a folder name: the title is then the plain one.
+ * The session's label: the folder name alone while no live peer's folder has
+ * the same name. With such a twin, the parent folder's name and the folder's,
+ * `work/api`, when no twin's parent has the same name. Otherwise, or with no
+ * parent to show, the folder name and this session's tag, `api · 3f2a`, cut
+ * against every twin. A twin whose parent is unknown never has the same one.
+ * Undefined when the host gave no session id or no project root with a folder
+ * name: the title is then the plain one.
  */
 export const sessionLabel = (self: { id: unknown; root: unknown }, peers: readonly Peer[]): string | undefined => {
   const name = folderNameOf(self.root)
   if (name === undefined || tagSource(self.id) === '' || typeof self.id !== 'string') return undefined
   const id = self.id.trim()
-  const twins = peers.filter(peer => peer.name === name && peer.id !== id).map(peer => peer.id)
+  const twins = peers.filter(peer => peer.name === name && peer.id !== id)
+  if (twins.length === 0) return name
+  const parent = parentNameOf(self.root)
+  if (parent !== undefined && !twins.some(twin => twin.parent === parent)) return `${parent}/${name}`
 
-  return twins.length === 0 ? name : `${name} · ${tagOf(id, twins)}`
+  return `${name} · ${tagOf(id, twins.map(twin => twin.id))}`
 }
 
 /** Where each live session keeps its record in the plugin store, by session id. */
@@ -307,8 +340,13 @@ export const LIVE_PREFIX = 'live/'
 /** A record not touched for a day is a session that ended without saying so. */
 export const LIVE_TTL_MS = 24 * 60 * 60 * 1000
 
-/** A live session's record: its folder name as titles show it, and when it was last seen. */
-export type LiveEntry = { v: 1; name: string; seenAt: number }
+/**
+ * A live session's record: its folder name and its parent folder's name as
+ * titles show them, and when it was last seen. No `parent` when there is none
+ * to show. An older build wrote none either, so a record without one is
+ * still a record, its parent unknown.
+ */
+export type LiveEntry = { v: 1; name: string; parent?: string; seenAt: number }
 
 export const liveKeyOf = (id: unknown): string | undefined => {
   const trimmed = typeof id === 'string' ? id.trim() : ''
@@ -316,17 +354,24 @@ export const liveKeyOf = (id: unknown): string | undefined => {
   return trimmed === '' ? undefined : `${LIVE_PREFIX}${trimmed}`
 }
 
-/** A stored value as a record, or undefined for anything else. Fields it does not know are dropped. */
+/**
+ * A stored value as a record, or undefined for anything else. A `parent` that
+ * is missing or not a name counts as unknown, and the record still counts.
+ * Fields it does not know are dropped.
+ */
 export const liveEntryOf = (raw: unknown): LiveEntry | undefined => {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
-  const { v, name, seenAt } = raw as Record<string, unknown>
+  const { v, name, parent, seenAt } = raw as Record<string, unknown>
   if (v !== 1 || typeof name !== 'string' || name === '') return undefined
   if (typeof seenAt !== 'number' || !Number.isFinite(seenAt)) return undefined
 
-  return { v: 1, name, seenAt }
+  return typeof parent === 'string' && parent !== '' ? { v: 1, name, parent, seenAt } : { v: 1, name, seenAt }
 }
 
-/** This session's record and its key, or undefined when the host gave no id or no folder name. */
+/**
+ * This session's record and its key, or undefined when the host gave no id or
+ * no folder name. `parent` only when there is one to show.
+ */
 export const liveRecordOf = (
   self: { id: unknown; root: unknown },
   now: number,
@@ -334,9 +379,14 @@ export const liveRecordOf = (
   const name = folderNameOf(self.root)
   const key = tagSource(self.id) === '' ? undefined : liveKeyOf(self.id)
   if (name === undefined || key === undefined) return undefined
+  const parent = parentNameOf(self.root)
 
-  return { key, entry: { v: 1, name, seenAt: now } }
+  return { key, entry: parent === undefined ? { v: 1, name, seenAt: now } : { v: 1, name, parent, seenAt: now } }
 }
+
+/** A record's session as a peer. Its parent comes along only when the record has one. */
+const peerOf = (id: string, { name, parent }: LiveEntry): Peer =>
+  parent === undefined ? { id, name } : { id, name, parent }
 
 /**
  * The live sessions in the store: every valid record under `live/` seen within
@@ -353,7 +403,7 @@ export const peersOf = (
     const entry = liveEntryOf(value)
     if (entry === undefined) continue
     if (now - entry.seenAt > LIVE_TTL_MS) stale.push(key)
-    else peers.push({ id: key.slice(LIVE_PREFIX.length), name: entry.name })
+    else peers.push(peerOf(key.slice(LIVE_PREFIX.length), entry))
   }
 
   return { peers, stale }
@@ -370,7 +420,7 @@ export type NotifyHost = {
   after: (ms: number, fn: () => Promise<void>) => { cancel: () => void }
   /** The config file's text, or undefined when there is none or it cannot be read. */
   readConfig: () => Promise<string | undefined>
-  /** This session's label for the title, `api` or `api · 3f2a`; undefined for the plain title. */
+  /** This session's label for the title, `api`, `work/api` or `api · 3f2a`; undefined for the plain title. */
   label: () => Promise<string | undefined>
 }
 

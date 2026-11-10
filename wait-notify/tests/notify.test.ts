@@ -27,6 +27,7 @@ import {
   notifyArgv,
   NOTIFY_TITLE,
   type NotifyHost,
+  parentNameOf,
   peersOf,
   PERMISSION_BODY,
   platformOfUname,
@@ -44,9 +45,10 @@ import {
 const SAFARI = '/Applications/Safari.app/'
 const ITERM = '/Applications/iTerm.app/'
 
-/** Two host session ids, as Claude Code names a session: a uuid. */
+/** Host session ids, as Claude Code names a session: a uuid. */
 const ID_A = '3f2a6c1e-8d4b-4f0a-9e2d-5b7c1a0e9f31'
 const ID_B = '9b1c0d2e-4a5f-4c3b-8e7d-1f2a3b4c5d6e'
+const ID_C = 'c4d5e6f7-0a1b-4c2d-8e3f-9a8b7c6d5e4f'
 
 type Timer = { ms: number; fn: () => Promise<void>; isCancelled: boolean }
 
@@ -458,6 +460,76 @@ test('truncation: past 20 graphemes the folder name is cut on a grapheme boundar
   expect(folderNameOf(`/work/${family.repeat(21)}`)).toBe(`${family.repeat(19)}…`)
 })
 
+test('the parent folder name is the part of the root before the folder name, and nothing above it', () => {
+  expect(parentNameOf('/Users/ada/work/api')).toBe('work')
+  expect(parentNameOf('/Users/ada/work/api/')).toBe('work')
+  expect(parentNameOf('/Users/ada/work/api//')).toBe('work')
+  // A doubled separator is one separator, as the file system reads it.
+  expect(parentNameOf('/Users/ada/work//api')).toBe('work')
+  expect(parentNameOf('/Users/ada/Client Work/my app')).toBe('Client Work')
+  expect(parentNameOf('/x/api')).toBe('x')
+  expect(parentNameOf('C:\\Users\\ada\\work\\api')).toBe('work')
+  expect(parentNameOf('C:\\Users\\ada\\work\\api\\')).toBe('work')
+  expect(parentNameOf('D:/work/api')).toBe('work')
+})
+
+test('no parent folder name: a folder right under the root, a parent that is . or .. or blank, or a root with no folder name', () => {
+  for (const root of [
+    // Right under the root, which has no name to show: `/` and a drive.
+    '/api',
+    '/api/',
+    '//api',
+    'C:\\api',
+    'C:\\api\\',
+    'c:/api',
+    'api',
+    // A parent with nothing to show.
+    '/./api',
+    '/x/../api',
+    '/x/   /api',
+    '/x/\u001b[2J\u0007\u200b/api',
+    // No folder name, so no parent either.
+    '/',
+    '//',
+    '',
+    '   ',
+    '/work/.',
+    '/work/..',
+    '/work/\u0007',
+    undefined,
+    null,
+    42,
+    {},
+    ['/x/work/api'],
+  ]) {
+    expect(parentNameOf(root)).toBeUndefined()
+  }
+})
+
+test('control characters in a parent folder name are dropped as in the folder name, never shown', () => {
+  expect(parentNameOf('/x/\u001b[31mwork\u001b[0m/api')).toBe('work')
+  expect(parentNameOf('/x/\u001b]0;pwned\u0007work/api')).toBe('work')
+  expect(parentNameOf('/x/w\u0000o\u0007rk/api')).toBe('work')
+  expect(parentNameOf('/x/work\nprod\r\t/api')).toBe('workprod')
+  expect(parentNameOf('/x/work\u007f\u0085\u009b/api')).toBe('work')
+  expect(parentNameOf('/x/w\u200bo\u200crk\ufeff/api')).toBe('work')
+  expect(parentNameOf('/x/\u202ekrow\u2066/api')).toBe('krow')
+  expect(parentNameOf('/x/work\u2028two/api')).toBe('worktwo')
+  expect(parentNameOf('/x/  work  /api')).toBe('work')
+  expect(parentNameOf('/x/👩‍💻 tools/api')).toBe('👩‍💻 tools')
+  expect(parentNameOf('/x/cafe\u0301/api')).toBe('caf\u00e9')
+})
+
+test('truncation: past 20 graphemes the parent folder name is cut on a grapheme boundary and ends in …', () => {
+  const twenty = 'abcdefghijklmnopqrst'
+  expect(parentNameOf(`/x/${twenty}/api`)).toBe(twenty)
+  expect(parentNameOf(`/x/${twenty}u/api`)).toBe('abcdefghijklmnopqrs…')
+  expect(parentNameOf('/x/my project name is long/api')).toBe('my project name is…')
+  const family = '👨‍👩‍👧‍👦'
+  expect(parentNameOf(`/x/${'a'.repeat(18)}${family}xyz/api`)).toBe(`${'a'.repeat(18)}${family}…`)
+  expect(parentNameOf(`/x/${family.repeat(21)}/api`)).toBe(`${family.repeat(19)}…`)
+})
+
 test("the tag: the id's first 4 letters and digits, longer only while a same-name peer's id starts the same, at most 8", () => {
   expect(tagOf(ID_A, [])).toBe('3f2a')
   expect(tagOf(ID_A, [ID_B])).toBe('3f2a')
@@ -469,18 +541,81 @@ test("the tag: the id's first 4 letters and digits, longer only while a same-nam
   expect(tagOf('ab', [])).toBe('ab')
 })
 
-test("same-name collision: the label is the folder name, with this session's tag while a live peer's folder has the same name", () => {
-  const self = { id: ID_A, root: '/a/api' }
+test('case 1, no live peer with the same folder name: the folder name alone, with no parent and no tag', () => {
+  const self = { id: ID_A, root: '/x/work/api' }
   expect(sessionLabel(self, [])).toBe('api')
+  // A peer in a parent folder of the same name, with another folder name, changes nothing.
+  expect(sessionLabel(self, [{ id: ID_B, name: 'web', parent: 'work' }])).toBe('api')
   expect(sessionLabel(self, [{ id: ID_B, name: 'web' }])).toBe('api')
-  expect(sessionLabel(self, [{ id: ID_B, name: 'api' }])).toBe('api · 3f2a')
-  expect(sessionLabel({ id: ID_B, root: '/b/api' }, [{ id: ID_A, name: 'api' }])).toBe('api · 9b1c')
   // Its own record is not a peer.
-  expect(sessionLabel(self, [{ id: ID_A, name: 'api' }])).toBe('api')
+  expect(sessionLabel(self, [{ id: ID_A, name: 'api', parent: 'fork' }])).toBe('api')
+})
+
+test('case 2, same folder name in a parent folder of another name: the parent and the folder, `work/api` and `fork/api`', () => {
+  expect(sessionLabel({ id: ID_A, root: '/x/work/api' }, [{ id: ID_B, name: 'api', parent: 'fork' }])).toBe('work/api')
+  expect(sessionLabel({ id: ID_B, root: '/x/fork/api' }, [{ id: ID_A, name: 'api', parent: 'work' }])).toBe('fork/api')
+})
+
+test("case 3, same folder name and same parent folder name: the folder name and this session's tag", () => {
+  const self = { id: ID_A, root: '/a/work/api' }
+  expect(sessionLabel(self, [{ id: ID_B, name: 'api', parent: 'work' }])).toBe('api · 3f2a')
+  expect(sessionLabel({ id: ID_B, root: '/b/work/api' }, [{ id: ID_A, name: 'api', parent: 'work' }])).toBe('api · 9b1c')
   // Ids that start the same: a longer tag on each side, never the same one.
   const near = '3f2a7b40-0000-4000-8000-000000000000'
-  expect(sessionLabel(self, [{ id: near, name: 'api' }])).toBe('api · 3f2a6')
-  expect(sessionLabel({ id: near, root: '/b/api' }, [{ id: ID_A, name: 'api' }])).toBe('api · 3f2a7')
+  expect(sessionLabel(self, [{ id: near, name: 'api', parent: 'work' }])).toBe('api · 3f2a6')
+  expect(sessionLabel({ id: near, root: '/b/work/api' }, [{ id: ID_A, name: 'api', parent: 'work' }])).toBe('api · 3f2a7')
+})
+
+test('trailing separators, a deep path or a Windows path: still the parent and the folder, never more', () => {
+  const fork = [{ id: ID_B, name: 'api', parent: 'fork' }]
+  for (const root of [
+    '/x/work/api/',
+    '/x/work/api//',
+    '/x/work//api',
+    '/Users/ada/clients/acme/work/api',
+    'C:\\Users\\ada\\work\\api',
+    'C:\\Users\\ada\\work\\api\\',
+  ]) {
+    expect(sessionLabel({ id: ID_A, root }, fork)).toBe('work/api')
+  }
+})
+
+test('a folder right under the root has no parent to name: /api takes the tag, and its twin in /x/api says `x/api`', () => {
+  // The record of /api has no parent: there is none to show.
+  expect(sessionLabel({ id: ID_A, root: '/api' }, [{ id: ID_B, name: 'api', parent: 'x' }])).toBe('api · 3f2a')
+  expect(sessionLabel({ id: ID_B, root: '/x/api' }, [{ id: ID_A, name: 'api' }])).toBe('x/api')
+  expect(sessionLabel({ id: ID_A, root: 'C:\\api' }, [{ id: ID_B, name: 'api', parent: 'x' }])).toBe('api · 3f2a')
+})
+
+test('three sessions named api: the two whose parent folders share a name take tags, the third shows its parent', () => {
+  // /a/work/api, /b/work/api and /c/fork/api, each as its record has it.
+  const a = { id: ID_A, name: 'api', parent: 'work' }
+  const b = { id: ID_B, name: 'api', parent: 'work' }
+  const c = { id: ID_C, name: 'api', parent: 'fork' }
+  expect(sessionLabel({ id: ID_A, root: '/a/work/api' }, [b, c])).toBe('api · 3f2a')
+  expect(sessionLabel({ id: ID_B, root: '/b/work/api' }, [a, c])).toBe('api · 9b1c')
+  expect(sessionLabel({ id: ID_C, root: '/c/fork/api' }, [a, b])).toBe('fork/api')
+  // The tag is cut against every same-name peer, the one in fork/ included.
+  const near = { id: '3f2a7b40-0000-4000-8000-000000000000', name: 'api', parent: 'fork' }
+  expect(sessionLabel({ id: ID_A, root: '/a/work/api' }, [b, near])).toBe('api · 3f2a6')
+})
+
+test("a same-name peer's record from an older build has no parent: unknown matches no parent, so this session shows its own", () => {
+  const self = { id: ID_A, root: '/x/work/api' }
+  expect(sessionLabel(self, [{ id: ID_B, name: 'api' }])).toBe('work/api')
+  // Another peer in a parent folder of the same name still means the tag.
+  expect(sessionLabel(self, [{ id: ID_B, name: 'api' }, { id: ID_C, name: 'api', parent: 'work' }])).toBe('api · 3f2a')
+})
+
+test('a long parent folder name is cut on its own, and parents are compared as a title shows them', () => {
+  const long = 'payments-service-frontend'
+  const cut = 'payments-service-fr…'
+  expect(sessionLabel({ id: ID_A, root: `/x/${long}/api` }, [{ id: ID_B, name: 'api', parent: 'fork' }])).toBe(`${cut}/api`)
+  expect(sessionLabel({ id: ID_A, root: `/x/${long}/${long}` }, [{ id: ID_B, name: cut, parent: 'fork' }])).toBe(
+    `${cut}/${cut}`,
+  )
+  // Two parents that differ only past the cut look the same in a title, so the tag.
+  expect(sessionLabel({ id: ID_A, root: `/x/${long}/api` }, [{ id: ID_B, name: 'api', parent: cut }])).toBe('api · 3f2a')
 })
 
 test('missing id or missing root: no label and no live record, never a guess', () => {
@@ -499,19 +634,25 @@ test('a long folder name with a tag: the name is cut, the tag never', () => {
   const long = 'payments-service-frontend'
   const cut = 'payments-service-fr…'
   expect(folderNameOf(`/a/${long}`)).toBe(cut)
-  expect(sessionLabel({ id: ID_A, root: `/a/${long}` }, [{ id: ID_B, name: cut }])).toBe(`${cut} · 3f2a`)
+  expect(sessionLabel({ id: ID_A, root: `/a/${long}` }, [{ id: ID_B, name: cut, parent: 'a' }])).toBe(`${cut} · 3f2a`)
   // Two names that differ only past the cut look the same in a title, so they get tags too.
-  expect(sessionLabel({ id: ID_A, root: '/a/payments-service-fridge' }, [{ id: ID_B, name: cut }])).toBe(`${cut} · 3f2a`)
-  expect(sessionLabel({ id: '3f2a6c1e00', root: `/a/${long}` }, [{ id: '3f2a6c1e11', name: cut }])).toBe(
+  expect(sessionLabel({ id: ID_A, root: '/a/payments-service-fridge' }, [{ id: ID_B, name: cut, parent: 'a' }])).toBe(
+    `${cut} · 3f2a`,
+  )
+  expect(sessionLabel({ id: '3f2a6c1e00', root: `/a/${long}` }, [{ id: '3f2a6c1e11', name: cut, parent: 'a' }])).toBe(
     `${cut} · 3f2a6c1e`,
   )
 })
 
-test('a cleaned folder name is what the label shows, what the record keeps, and what a twin is matched on', () => {
-  const dirty = { id: ID_A, root: '/a/\u001b[31mapi\u001b[0m\u0007' }
+test('cleaned folder and parent names are what the label shows, what the record keeps, and what a twin is matched on', () => {
+  const dirty = { id: ID_A, root: '/x/\u001b[32mwork\u001b[0m\u0007/\u001b[31mapi\u001b[0m\u0007' }
   expect(sessionLabel(dirty, [])).toBe('api')
-  expect(sessionLabel(dirty, [{ id: ID_B, name: 'api' }])).toBe('api · 3f2a')
-  expect(liveRecordOf(dirty, 5)).toEqual({ key: `live/${ID_A}`, entry: { v: 1, name: 'api', seenAt: 5 } })
+  expect(sessionLabel(dirty, [{ id: ID_B, name: 'api', parent: 'fork' }])).toBe('work/api')
+  expect(sessionLabel(dirty, [{ id: ID_B, name: 'api', parent: 'work' }])).toBe('api · 3f2a')
+  expect(liveRecordOf(dirty, 5)).toStrictEqual({
+    key: `live/${ID_A}`,
+    entry: { v: 1, name: 'api', parent: 'work', seenAt: 5 },
+  })
 })
 
 test('the title is `Claude needs you`, then the label when there is one', () => {
@@ -540,18 +681,36 @@ test('with a label the title is still one AppleScript string: quotes and backsla
   )
 })
 
-test('a live record is { v: 1, name, seenAt } under live/ and the session id; anything else is no record', () => {
+test('a live record is { v: 1, name, parent, seenAt } under live/ and the session id; anything else is no record', () => {
   expect(LIVE_PREFIX).toBe('live/')
   expect(LIVE_TTL_MS).toBe(24 * 60 * 60 * 1000)
   expect(liveKeyOf(ID_A)).toBe(`live/${ID_A}`)
   expect(liveKeyOf(` ${ID_A}\n`)).toBe(`live/${ID_A}`)
   expect(liveKeyOf('')).toBeUndefined()
-  expect(liveRecordOf({ id: ID_A, root: '/a/api/' }, 1234)).toEqual({
+  expect(liveRecordOf({ id: ID_A, root: '/x/work/api/' }, 1234)).toStrictEqual({
     key: `live/${ID_A}`,
-    entry: { v: 1, name: 'api', seenAt: 1234 },
+    entry: { v: 1, name: 'api', parent: 'work', seenAt: 1234 },
   })
-  expect(liveEntryOf({ v: 1, name: 'api', seenAt: 5 })).toEqual({ v: 1, name: 'api', seenAt: 5 })
-  expect(liveEntryOf({ v: 1, name: 'api', seenAt: 5, path: '/a/api' })).toEqual({ v: 1, name: 'api', seenAt: 5 })
+  // No parent to name: no parent field at all.
+  for (const root of ['/api', 'C:\\api']) {
+    expect(liveRecordOf({ id: ID_A, root }, 1234)).toStrictEqual({
+      key: `live/${ID_A}`,
+      entry: { v: 1, name: 'api', seenAt: 1234 },
+    })
+  }
+  expect(liveEntryOf({ v: 1, name: 'api', parent: 'work', seenAt: 5 })).toStrictEqual({
+    v: 1,
+    name: 'api',
+    parent: 'work',
+    seenAt: 5,
+  })
+  // An older build's record has no parent: still a record, its parent unknown.
+  expect(liveEntryOf({ v: 1, name: 'api', seenAt: 5 })).toStrictEqual({ v: 1, name: 'api', seenAt: 5 })
+  // A parent that is not a name counts as unknown too. The record still counts, so its name still does.
+  for (const parent of ['', 7, null, ['work'], { name: 'work' }]) {
+    expect(liveEntryOf({ v: 1, name: 'api', parent, seenAt: 5 })).toStrictEqual({ v: 1, name: 'api', seenAt: 5 })
+  }
+  expect(liveEntryOf({ v: 1, name: 'api', seenAt: 5, path: '/a/api' })).toStrictEqual({ v: 1, name: 'api', seenAt: 5 })
   for (const raw of [
     undefined,
     null,
@@ -575,7 +734,8 @@ test('peers: every other live record; one not touched for more than a day is sta
   const now = 10 * LIVE_TTL_MS
   const { peers, stale } = peersOf(
     [
-      { key: `live/${ID_B}`, value: { v: 1, name: 'api', seenAt: now - LIVE_TTL_MS } },
+      { key: `live/${ID_B}`, value: { v: 1, name: 'api', parent: 'work', seenAt: now - LIVE_TTL_MS } },
+      { key: `live/${ID_C}`, value: { v: 1, name: 'api', seenAt: now } },
       { key: 'live/gone', value: { v: 1, name: 'api', seenAt: now - LIVE_TTL_MS - 1 } },
       { key: 'live/broken', value: { v: 1, name: '', seenAt: now } },
       { key: 'other', value: { v: 1, name: 'api', seenAt: now } },
@@ -583,7 +743,11 @@ test('peers: every other live record; one not touched for more than a day is sta
     now,
   )
 
-  expect(peers).toEqual([{ id: ID_B, name: 'api' }])
+  // A peer keeps its parent when its record has one, and has none when not.
+  expect(peers).toStrictEqual([
+    { id: ID_B, name: 'api', parent: 'work' },
+    { id: ID_C, name: 'api' },
+  ])
   expect(stale).toEqual(['live/gone'])
 })
 

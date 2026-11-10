@@ -543,7 +543,20 @@ const START = { cwd: '/work/api', surface: 'terminal', isInteractive: true } as 
 /** The AppleScript of the last notification posted. */
 const lastScript = (ran: readonly string[][]) => posted(ran).at(-1)?.[2]
 
+/** A live record with no parent folder: an older build's, or a folder right under the root. */
 const live = (name: string, seenAt = NOW) => ({ v: 1, name, seenAt })
+
+/** A live record as this build writes it for a folder with a parent: `liveIn('work', 'api')` for `…/work/api`. */
+const liveIn = (parent: string, name: string, seenAt = NOW) => ({ v: 1, name, parent, seenAt })
+
+/**
+ * From here on the host answers as another session. One test is one session,
+ * so each session's answers stand in for it in turn, on the same store.
+ */
+const answerAs = (session: Session, id: string, root: string) => {
+  session.id = id
+  session.root = root
+}
 
 test('a single session in /work/api: the notification, its reminder and the stop notification all say `Claude needs you · api`', async ($, on) => {
   const { clock, ran } = engineBottom(on, { config: '{ "notify_on_stop": true }' }, { id: ID_A, root: '/work/api' })
@@ -560,28 +573,93 @@ test('a single session in /work/api: the notification, its reminder and the stop
   expect(posted(ran)).toHaveLength(3)
 })
 
-test('two live sessions in /a/api and /b/api, one store: each title adds its own tag from its session id', async ($, on) => {
-  const { ran, session, store } = engineBottom(on, {}, { id: ID_A, root: '/a/api', store: { [`live/${ID_B}`]: live('api') } })
+test('case 1, two live sessions in /x/work/api and /x/work/web: no folder name is shared, so each title is its folder name alone', async ($, on) => {
+  const { ran, session, store } = engineBottom(on, {}, { id: ID_A, root: '/x/work/api' })
+  await $.session.start(START)
+  answerAs(session, ID_B, '/x/work/web')
   await $.session.start(START)
   await permission($)
-  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api · 3f2a"')
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · web"')
 
-  // One test is one session, so the other session's host answers stand in for it, on the same store.
-  session.id = ID_B
-  session.root = '/b/api'
+  answerAs(session, ID_A, '/x/work/api')
   await permission($)
-  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api · 9b1c"')
-  expect(Object.keys(store)).toEqual([`live/${ID_B}`, `live/${ID_A}`])
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api"')
+  expect(store).toEqual({ [`live/${ID_A}`]: liveIn('work', 'api'), [`live/${ID_B}`]: liveIn('work', 'web') })
 })
 
-test('a live session whose folder has another name adds no tag', async ($, on) => {
+test('case 2, two live sessions in /x/work/api and /x/fork/api: the parent folders differ, so the titles say `work/api` and `fork/api`', async ($, on) => {
+  const { clock, ran, session, store } = engineBottom(on, {}, { id: ID_A, root: '/x/work/api' })
+  await $.session.start(START)
+  answerAs(session, ID_B, '/x/fork/api')
+  await $.session.start(START)
+  await permission($)
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · fork/api"')
+
+  answerAs(session, ID_A, '/x/work/api')
+  await permission($)
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · work/api"')
+  await clock.advance(3 * MIN)
+  expect(lastScript(ran)).toBe('display notification "Still waiting · 3 min" with title "Claude needs you · work/api"')
+  expect(store).toEqual({ [`live/${ID_A}`]: liveIn('work', 'api'), [`live/${ID_B}`]: liveIn('fork', 'api') })
+})
+
+test('case 3, two live sessions in /a/work/api and /b/work/api: the parent folders share a name too, so each title adds its own tag', async ($, on) => {
+  const { ran, session, store } = engineBottom(on, {}, { id: ID_A, root: '/a/work/api' })
+  await $.session.start(START)
+  answerAs(session, ID_B, '/b/work/api')
+  await $.session.start(START)
+  await permission($)
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api · 9b1c"')
+
+  answerAs(session, ID_A, '/a/work/api')
+  await permission($)
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api · 3f2a"')
+  expect(store).toEqual({ [`live/${ID_A}`]: liveIn('work', 'api'), [`live/${ID_B}`]: liveIn('work', 'api') })
+})
+
+test('three live sessions in /a/work/api, /b/work/api and /c/fork/api: two tags, and `fork/api`', async ($, on) => {
+  const { ran, session } = engineBottom(on, {}, { id: ID_A, root: '/a/work/api' })
+  const sessions = [
+    [ID_A, '/a/work/api'],
+    [ID_B, '/b/work/api'],
+    [ID_C, '/c/fork/api'],
+  ] as const
+  for (const [id, root] of sessions) {
+    answerAs(session, id, root)
+    await $.session.start(START)
+  }
+  const titles: (string | undefined)[] = []
+  for (const [id, root] of sessions) {
+    answerAs(session, id, root)
+    await permission($)
+    titles.push(lastScript(ran))
+  }
+
+  expect(titles).toEqual([
+    'display notification "Waiting on a permission" with title "Claude needs you · api · 3f2a"',
+    'display notification "Waiting on a permission" with title "Claude needs you · api · 9b1c"',
+    'display notification "Waiting on a permission" with title "Claude needs you · fork/api"',
+  ])
+})
+
+test('a same-name record from an older build has no parent: it matches no parent, so this title says `work/api`', async ($, on) => {
+  const { ran, store } = engineBottom(on, {}, { id: ID_A, root: '/x/work/api', store: { [`live/${ID_B}`]: live('api') } })
+  await $.session.start(START)
+  await permission($)
+
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · work/api"')
+  // The older record is still a live session's: kept, as it was.
+  expect(store).toEqual({ [`live/${ID_B}`]: live('api'), [`live/${ID_A}`]: liveIn('work', 'api') })
+})
+
+test('a live session whose folder has another name: the folder name alone', async ($, on) => {
   const { ran } = engineBottom(on, {}, { id: ID_A, root: '/a/api', store: { [`live/${ID_B}`]: live('web') } })
   await permission($)
 
   expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api"')
 })
 
-test('a same-name record not touched for over 24 hours is stale: no tag, and it is removed', async ($, on) => {
+test('a same-name record not touched for over 24 hours is stale: the folder name alone, and the record is removed', async ($, on) => {
   const { ran, store } = engineBottom(on, {}, {
     id: ID_A,
     root: '/a/api',
@@ -616,7 +694,7 @@ test('no session id, or no project root: the plain `Claude needs you`, and nothi
   expect(Object.keys(store)).toEqual([`live/${ID_B}`])
 })
 
-test("the session's record: the folder name only, written at start, refreshed by your prompt and the main turn's end, removed at session end", async ($, on) => {
+test("the session's record: the folder's name and its parent's only, written at start, refreshed by your prompt and the main turn's end, removed at session end", async ($, on) => {
   const { clock, store } = engineBottom(on, {}, {
     id: ID_A,
     root: '/Users/ada/clients/acme/api',
@@ -624,21 +702,21 @@ test("the session's record: the folder name only, written at start, refreshed by
   })
   const own = { key: `live/${ID_A}` }
   await $.session.start(START)
-  expect(store[own.key]).toEqual({ v: 1, name: 'api', seenAt: NOW })
+  expect(store[own.key]).toEqual({ v: 1, name: 'api', parent: 'acme', seenAt: NOW })
 
   await clock.advance(2 * HOUR)
   await $.prompt.submit({ text: 'Background task done', wait: false, origin: { kind: 'task-notification' } })
   await clock.settle()
-  expect(store[own.key]).toEqual(live('api', NOW))
+  expect(store[own.key]).toEqual(liveIn('acme', 'api', NOW))
   await $.prompt.submit(typed('carry on'))
   await clock.settle()
-  expect(store[own.key]).toEqual(live('api', NOW + 2 * HOUR))
+  expect(store[own.key]).toEqual(liveIn('acme', 'api', NOW + 2 * HOUR))
 
   await clock.advance(1 * HOUR)
   await $.turn.complete(finish('turn-sub', { agentId: 'agent-1' }))
-  expect(store[own.key]).toEqual(live('api', NOW + 2 * HOUR))
+  expect(store[own.key]).toEqual(liveIn('acme', 'api', NOW + 2 * HOUR))
   await $.turn.complete(finish('turn-1', { isAborted: true }))
-  expect(store[own.key]).toEqual(live('api', NOW + 3 * HOUR))
+  expect(store[own.key]).toEqual(liveIn('acme', 'api', NOW + 3 * HOUR))
 
   await $.session.end({ reason: 'prompt_input_exit', sessionId: ID_A, resume: { id: ID_A } })
   expect(Object.keys(store)).toEqual([`live/${ID_B}`])
@@ -660,20 +738,20 @@ test("/clear: the ending session's record goes, and the next prompt you send wri
 })
 
 test('the reminder keeps the title of the notification it follows, even when a same-name session starts in between', async ($, on) => {
-  const { clock, ran, store } = engineBottom(on, {}, { id: ID_A, root: '/a/api' })
+  const { clock, ran, store } = engineBottom(on, {}, { id: ID_A, root: '/x/work/api' })
   await permission($)
   expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api"')
 
-  store[`live/${ID_B}`] = live('api')
+  store[`live/${ID_B}`] = liveIn('fork', 'api')
   await clock.advance(3 * MIN)
   expect(lastScript(ran)).toBe('display notification "Still waiting · 3 min" with title "Claude needs you · api"')
 
-  // The next wait looks again, and now there is a twin.
+  // The next wait looks again, and now there is a twin in another parent folder.
   await permission($)
-  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · api · 3f2a"')
+  expect(lastScript(ran)).toBe('display notification "Waiting on a permission" with title "Claude needs you · work/api"')
 })
 
-test('only the folder name reaches a notification: not the path above it, your prompt, a tool call or the transcript', async ($, on) => {
+test('with no same-name session, only the folder name reaches a notification: not its parent or the path above, your prompt, a tool call or the transcript', async ($, on) => {
   const { clock, ran, store } = engineBottom(on, {}, { id: ID_A, root: '/Users/ada/clients/acme-payroll/api' })
   const opened = { transcript: 0, fetch: 0 }
   on('session.messages', () => {
@@ -699,6 +777,37 @@ test('only the folder name reaches a notification: not the path above it, your p
       expect(script.includes(word)).toBe(false)
     }
   }
-  expect(store[`live/${ID_A}`]).toEqual(live('api', NOW))
+  // The record keeps the parent's name for the next session named api, and nothing above it.
+  expect(store[`live/${ID_A}`]).toEqual(liveIn('acme-payroll', 'api', NOW))
   expect(opened).toEqual({ transcript: 0, fetch: 0 })
+})
+
+test("with a same-name session in another parent folder, the parent folder's name reaches the title, and nothing above it", async ($, on) => {
+  const { clock, ran, store } = engineBottom(on, {}, {
+    id: ID_A,
+    root: '/Users/ada/clients/acme-payroll/api',
+    store: { [`live/${ID_B}`]: liveIn('web-team', 'api') },
+  })
+  await $.session.start(START)
+  await $.prompt.submit(typed('rotate the acme payroll key'))
+  await clock.settle()
+  await $.tool.call({ tool: 'Bash', command: 'vault write secret/acme-payroll key=hunter2' })
+  await permission($)
+  await clock.advance(3 * MIN)
+
+  const calls = posted(ran)
+  expect(calls.map(argv => argv[2])).toEqual([
+    'display notification "Waiting on a permission" with title "Claude needs you · acme-payroll/api"',
+    'display notification "Still waiting · 3 min" with title "Claude needs you · acme-payroll/api"',
+  ])
+  // Every part of every osascript call, not only the script: nothing above the parent folder.
+  for (const part of calls.flat()) {
+    for (const word of ['Users', 'ada', 'clients', 'rotate', 'vault', 'hunter2']) {
+      expect(part.includes(word)).toBe(false)
+    }
+  }
+  expect(store[`live/${ID_A}`]).toEqual(liveIn('acme-payroll', 'api', NOW))
+  for (const word of ['Users', 'ada', 'clients']) {
+    expect(JSON.stringify(store).includes(word)).toBe(false)
+  }
 })
