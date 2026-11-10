@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### wait-cards 0.1.0
+
+First release: one flashcard from a deck you write, one card per wait.
+
+- **Deck.** `~/.waitroom/cards.md`, a `Q:` line and then an `A:` line per card. This mod reads the file and never writes it. It does not make cards for you.
+- **While Claude works.** The status line shows `Q: ` and the question. Past 48 columns it ends in `…`, on a character boundary.
+- **When the turn ends.** One log line, `A: 429 · /card got or /card miss`. It is shown to you, not sent to Claude. An interrupted turn gets its answer too. A subagent's turn does not count.
+- **`/card got` and `/card miss`.** Optional. `got` moves the card up one of five boxes, `miss` sends it back to box 1, and a missed card comes back on the next wait. A card you don't mark keeps its box. `/card` counts the deck.
+- **No deck.** One log line, `Add cards to ~/.waitroom/cards.md`, and then quiet. No sample cards.
+- **Kept in `$.store`.** Each card's box and a count of waits, under Claude's configuration directory. No model, no network, no keypress capture.
+
 ### wait-anchor 0.1.0
 
 First release: a note you set for yourself, the goal and what to check when you come back.

@@ -35,9 +35,10 @@ claude plugin install wait-secret@waitroom
 claude plugin install wait-scope@waitroom
 claude plugin install wait-ping@waitroom
 claude plugin install wait-anchor@waitroom
+claude plugin install wait-cards@waitroom
 ```
 
-wait-ping is the legacy notifier. It sends a desktop notification when a long turn ends or a permission prompt is waiting. wait-anchor keeps a note you set, the goal and what to check when you come back, and stays quiet until you set one.
+wait-ping is the legacy notifier. It sends a desktop notification when a long turn ends or a permission prompt is waiting. wait-anchor keeps a note you set, the goal and what to check when you come back, and stays quiet until you set one. wait-cards shows one flashcard from a deck you write in `~/.waitroom/cards.md`, and stays quiet until that file has cards.
 
 Restart Claude Code once you're done. If `waitroom@waitroom` fails to load with `Dependency "wait-review@waitroom" is not installed` after a marketplace update, see the migration note in [docs/install.md](docs/install.md#if-waitroom-fails-after-a-marketplace-update).
 
@@ -77,6 +78,7 @@ You run long Claude Code turns. You alt-tab. Now you call the turn instead.
 | <img src="docs/brand/plugin-icons/secret.png" width="52" alt="wait-secret icon"><br>[wait-secret](./wait-secret) | Flags lines a turn wrote that look like a key or a token. Local only, and it only warns. The status row, after the turn ends. |
 | <img src="docs/brand/plugin-icons/scope.png" width="52" alt="wait-scope icon"><br>[wait-scope](./wait-scope) | Flags files a turn edited outside the scope you set, and never blocks them. The status row, on by default. |
 | <img src="docs/brand/plugin-icons/anchor.png" width="52" alt="wait-anchor icon"><br>[wait-anchor](./wait-anchor) | **Leave a note for future you.**<br>You set the goal and what to check when you come back. The status line, only while a note is set. |
+| <img src="docs/brand/plugin-icons/cards.png" width="52" alt="wait-cards icon"><br>[wait-cards](./wait-cards) | **Learn something while it cooks.**<br>A question from your own deck while Claude works, the answer when the turn ends. Mark it with `/card got` or `/card miss`. The status line, only while you have cards. |
 
 How the rooms share the screen is in [docs/design.md](docs/design.md).
 
