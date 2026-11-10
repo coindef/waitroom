@@ -97,7 +97,13 @@ const engineBottom = (
   mock.env(on, mac.noHome ? {} : { HOME })
   /** The plugin store, one object the test reads and writes as the other session would. JSON in and out, as the host keeps it. */
   const store: Record<string, unknown> = given.store ?? {}
-  on('store.get', ($, e) => ({ value: store[e.key] === undefined ? undefined : JSON.parse(JSON.stringify(store[e.key])) }))
+  /** Set by a test to make the next keys() or get() throw, as a real store failure would. */
+  const storeFail: { keys?: Error; get?: Error } = {}
+  on('store.get', ($, e) => {
+    if (storeFail.get !== undefined) throw storeFail.get
+
+    return { value: store[e.key] === undefined ? undefined : JSON.parse(JSON.stringify(store[e.key])) }
+  })
   on('store.set', ($, e) => {
     store[e.key] = JSON.parse(JSON.stringify(e.value))
 
@@ -108,7 +114,11 @@ const engineBottom = (
 
     return { value: undefined }
   })
-  on('store.keys', () => ({ value: Object.keys(store) }))
+  on('store.keys', () => {
+    if (storeFail.keys !== undefined) throw storeFail.keys
+
+    return { value: Object.keys(store) }
+  })
   const ran: string[][] = []
   const read: string[] = []
   /** Tool calls held open this long on the clock: a dialog answered that much later. */
@@ -155,7 +165,7 @@ const engineBottom = (
     throw new Error(`wait-notify runs no such command: ${e.argv.join(' ')}`)
   })
 
-  return { clock, mac, ran, read, holds, session, store }
+  return { clock, mac, ran, read, holds, session, store, storeFail }
 }
 
 const permission = ($: Engine) =>
@@ -692,6 +702,24 @@ test('no session id, or no project root: the plain `Claude needs you`, and nothi
 
   expect(posted(ran)).toHaveLength(3 * missing.length)
   expect(Object.keys(store)).toEqual([`live/${ID_B}`])
+})
+
+test('when the store keys cannot be read: the plain `Claude needs you`, not the folder name', async ($, on) => {
+  const { ran, storeFail } = engineBottom(on, {}, { id: ID_A, root: '/work/api' })
+  storeFail.keys = new Error('store keys failed')
+  await permission($)
+  expect(ran.at(-1)).toEqual(notifyArgv(PERMISSION_BODY))
+})
+
+test('when a live record cannot be read: the plain `Claude needs you`, not the folder name', async ($, on) => {
+  const { ran, storeFail } = engineBottom(on, {}, {
+    id: ID_A,
+    root: '/work/api',
+    store: { [`live/${ID_B}`]: live('api') },
+  })
+  storeFail.get = new Error('store get failed')
+  await permission($)
+  expect(ran.at(-1)).toEqual(notifyArgv(PERMISSION_BODY))
 })
 
 test("the session's record: the folder's name and its parent's only, written at start, refreshed by your prompt and the main turn's end, removed at session end", async ($, on) => {

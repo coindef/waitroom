@@ -42,8 +42,8 @@ const touchLive = async ($: EngineInterface): Promise<{ id: unknown; root: unkno
 }
 
 /** Removes this session's record: the session ended, `/clear` included. Never rejects. */
-const dropLive = async ($: EngineInterface): Promise<void> => {
-  const key = liveKeyOf(await $.session.id().catch(() => undefined))
+const dropLive = async ($: EngineInterface, sessionId: unknown): Promise<void> => {
+  const key = liveKeyOf(sessionId)
   if (key !== undefined) await $.store.delete(key).catch(() => undefined)
 }
 
@@ -58,11 +58,16 @@ const labelOf = async ($: EngineInterface): Promise<string | undefined> => {
   const self = await touchLive($)
   if (liveRecordOf(self, 0) === undefined) return undefined
   const own = liveKeyOf(self.id)
-  const keys = await $.store.keys().catch(() => [] as string[])
+  const keys = await $.store.keys().catch(() => undefined)
+  if (keys === undefined) return undefined
   const records: { key: string; value: unknown }[] = []
   for (const key of keys) {
     if (key === own || !key.startsWith(LIVE_PREFIX)) continue
-    records.push({ key, value: await $.store.get(key).catch(() => undefined) })
+    try {
+      records.push({ key, value: await $.store.get(key) })
+    } catch {
+      return undefined
+    }
   }
   const { peers, stale } = peersOf(records, await $.clock.now().catch(() => Date.now()))
   for (const key of stale) await $.store.delete(key).catch(() => undefined)
@@ -166,7 +171,7 @@ export const register: Register = on => {
   /** Exit, `/clear`, resume: a reminder from before would be stale, and so would the session's record. */
   on('session.end', async ($, e, next) => {
     notifier.clear()
-    await dropLive($)
+    await dropLive($, e.sessionId)
 
     return next(e)
   }).catch(($, e, next) => next(e))

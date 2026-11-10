@@ -25,40 +25,13 @@ wait-notify answers two kinds:
 | `permission_prompt`: a permission dialog has waited | `Waiting on a permission` |
 | `permission_prompt` while an `AskUserQuestion` call is open, or `elicitation_dialog` | `Asked you a question` |
 
-The title is `Claude needs you · api`, where `api` is the folder name of the
-session's project root. With two sessions open, you can tell which terminal to
-go back to.
+The title says which session it is: `Claude needs you · api`, where `api` is the project folder's name.
 
-- **Same folder name, two sessions.** Two live sessions in `~/work/api` and
-  `~/fork/api` would both say `api`. Then each title adds its parent folder's
-  name: `Claude needs you · work/api` and `Claude needs you · fork/api`.
-- **Same parent folder's name too.** In `~/a/work/api` and `~/b/work/api` the
-  parent folder's name doesn't help, so each title adds a short tag from
-  Claude Code's session id instead: `Claude needs you · api · 3f2a` and
-  `Claude needs you · api · 9b1c`. The tag starts at 4 characters and grows
-  (up to 8) only while the other session's id starts the same way. A folder
-  right under `/` has no parent folder to name, so it gets the tag too.
-- **Only what Claude Code reports.** The project root and the session id come
-  from Claude Code. Never the process id, and never the folder name alone as
-  the key. If either one is missing, the title is the plain
-  `Claude needs you`. Nothing is guessed.
-- **At most two folder names.** The folder's name, and its parent folder's
-  name only while another session's folder has the same name. No path above
-  them, no prompt text, no tool arguments, no transcript. Escape codes and
-  control characters in the names are dropped. Past 20 characters a name is
-  cut and ends in `…`; the tag is never cut.
-- **The reminder keeps its title.** It carries the same title as the
-  notification it follows. Each session has its own wait and its own reminder:
-  a prompt in one session does not cancel the other's.
-
-To spot a same-name session, each session keeps one record in the plugin's
-store (under Claude's configuration directory): `live/<session id>` with the
-folder's name, its parent folder's name, and when it was last seen. The
-session writes it when it starts and refreshes it on your prompts, the main
-turn's end and each notification. It removes it when the session ends,
-`/clear` included. A record not seen for 24 hours is treated as a session that
-ended without saying so, and removed. A stale record can only add a parent
-folder's name or a tag you didn't need.
+- Two sessions in folders with the same name also show the parent folder: `work/api` and `fork/api`.
+- If the parent folders match too, each gets a short tag from its session id: `api · 3f2a`.
+- If Claude Code doesn't report a session id or project root, the title stays `Claude needs you`.
+- The title never shows more than those two folder names. No full path, no prompt text.
+- Each session has its own reminder. Answering one doesn't cancel the other.
 
 - **You are at the terminal:** nothing is sent.
 - **You are away:** the notification goes out at once.
@@ -186,7 +159,7 @@ notification does not check whether you are at the terminal.
 
 ```
 claude plugin validate ./wait-notify
-claude plugin test     ./wait-notify   # 91 tests
+claude plugin test     ./wait-notify   # 93 tests
 ```
 
 `hooks/notify.ts` has no engine dependency: the copy, the config, parsing
@@ -197,3 +170,7 @@ fake one. `hooks/register.ts` builds that host from `$` and wires it to the
 events. `tests/flow.test.ts` drives the whole loop through the engine, with
 `process.run`, `fs.read`, `HOME`, the session id and root, the store and the
 clock answered by the test, so the suite never posts a real notification.
+
+The store keys a live session as `live/<session id>` and never as the
+folder name alone, drops a record after 24 hours unseen, and strips
+escape codes from each folder name and cuts it at 20 graphemes.
