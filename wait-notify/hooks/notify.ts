@@ -5,12 +5,12 @@
  * The functions read what `uname`, `ioreg` and `osascript` print and build the
  * argv to run. They never build a shell command and never name a network
  * client. `createNotifier` holds the one wait being watched and decides when
- * those commands run. Every command, the reminder's timer and the config file
- * reach it through a host the hooks module builds from `$`; a test hands it
- * its own.
+ * those commands run. Every command, the reminder's timer, the config file and
+ * the session's label reach it through a host the hooks module builds from
+ * `$`; a test hands it its own.
  */
 
-/** The notification's title. Locked copy. */
+/** The notification's title, before the session's label. Locked copy. */
 export const NOTIFY_TITLE = 'Claude needs you'
 
 /** Locked copy: a permission dialog is waiting on you. */
@@ -208,12 +208,206 @@ export const isPersonPrompt = (origin: { readonly kind: string } | undefined): b
 export const appleString = (text: string): string =>
   `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, ' ')}"`
 
-/** The argv for one native notification. `display notification` without `sound name` is silent. */
-export const notifyArgv = (body: string): readonly string[] => [
+/** The title: `Claude needs you`, then the session's label when there is one, `Claude needs you · api · 3f2a`. */
+export const titleOf = (label: string | undefined): string =>
+  label === undefined || label === '' ? NOTIFY_TITLE : `${NOTIFY_TITLE} · ${label}`
+
+/**
+ * The argv for one native notification. `display notification` without `sound
+ * name` is silent. With no label, the title is the plain `Claude needs you`.
+ */
+export const notifyArgv = (body: string, label?: string): readonly string[] => [
   'osascript',
   '-e',
-  `display notification ${appleString(body)} with title ${appleString(NOTIFY_TITLE)}`,
+  `display notification ${appleString(body)} with title ${appleString(titleOf(label))}`,
 ]
+
+/** The most graphemes of a folder's name a title shows, the parent folder's too. One more becomes `…`. */
+export const MAX_FOLDER_GRAPHEMES = 20
+
+const ELLIPSIS = '…'
+
+type SegmenterCtor = new (
+  locales?: string,
+  options?: { granularity: 'grapheme' },
+) => { segment: (input: string) => Iterable<{ segment: string }> }
+
+/** User-perceived characters: Intl.Segmenter where the host has it, else code points. */
+const graphemes = (text: string): string[] => {
+  const Segmenter = (Intl as unknown as { Segmenter?: SegmenterCtor }).Segmenter
+  if (Segmenter === undefined) return [...text]
+
+  return [...new Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(part => part.segment)
+}
+
+/** CSI, OSC, and a lone ESC-Fe sequence. Stripped before control characters, so a color code leaves no letters behind. */
+const ANSI = /\u001B(?:\][^\u0007]*(?:\u0007|\u001B\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/g
+
+/** C0, DEL, C1, zero-width and byte-order marks, bidi overrides and isolates, line and paragraph separators. Not the emoji joiner. */
+const UNSHOWN = /[\u0000-\u001F\u007F-\u009F\u200B\u200C\u200E\u200F\u2028-\u202E\u2066-\u2069\uFEFF]/g
+
+/** The root's parts between separators, `/` or `\`, once those that end it are gone: `/x/work/api/` is `['', 'x', 'work', 'api']`. */
+const segmentsOf = (root: string): string[] => root.replace(/[\\/]+$/, '').split(/[\\/]+/)
+
+/**
+ * One folder's name as a title shows it, or undefined when there is none to
+ * show: `.`, `..`, or nothing left once escape codes and control characters
+ * are dropped. Past 20 graphemes it is cut on a grapheme boundary and ends in `…`.
+ */
+const shownNameOf = (segment: string): string | undefined => {
+  const name = segment.replace(ANSI, '').replace(UNSHOWN, '').normalize('NFC').trim()
+  if (name === '' || name === '.' || name === '..') return undefined
+  const parts = graphemes(name)
+  if (parts.length <= MAX_FOLDER_GRAPHEMES) return name
+
+  return `${parts.slice(0, MAX_FOLDER_GRAPHEMES - 1).join('').trimEnd()}${ELLIPSIS}`
+}
+
+/**
+ * The project root's folder name as a title shows it, or undefined when there
+ * is none to show: not a string, `/`, `.` or `..`, or nothing left once
+ * escape codes and control characters are dropped. Never the path above it.
+ * Past 20 graphemes it is cut on a grapheme boundary and ends in `…`.
+ */
+export const folderNameOf = (root: unknown): string | undefined =>
+  typeof root === 'string' ? shownNameOf(segmentsOf(root).at(-1) ?? '') : undefined
+
+/** A drive, `C:`: the root of a Windows path, not a folder with a name. */
+const DRIVE = /^[a-z]:$/i
+
+/**
+ * The name of the folder the project folder is in, cleaned and cut as the
+ * folder name is: `work` for `/Users/ada/work/api`. Undefined when there is
+ * none to show: a folder right under the root (`/api`, `C:\api`), a parent
+ * that is `.`, `..` or nothing once cleaned, or a root with no folder name.
+ * Never the path above it.
+ */
+export const parentNameOf = (root: unknown): string | undefined => {
+  if (typeof root !== 'string' || folderNameOf(root) === undefined) return undefined
+  const parent = shownNameOf(segmentsOf(root).at(-2) ?? '')
+
+  return parent === undefined || DRIVE.test(parent) ? undefined : parent
+}
+
+/** The session id's letters and digits, lowercased: what a tag is cut from. */
+const tagSource = (id: unknown): string => (typeof id === 'string' ? id.replace(/[^0-9a-z]/gi, '').toLowerCase() : '')
+
+const MIN_TAG = 4
+const MAX_TAG = 8
+
+/**
+ * A short tag from the host's session id: its first 4 letters and digits,
+ * longer while a same-name peer's id starts the same way, at most 8.
+ */
+export const tagOf = (id: string, peerIds: readonly string[]): string => {
+  const mine = tagSource(id)
+  const theirs = peerIds.map(tagSource)
+  for (let length = MIN_TAG; length < MAX_TAG; length += 1) {
+    const tag = mine.slice(0, length)
+    if (!theirs.some(other => other.startsWith(tag))) return tag
+  }
+
+  return mine.slice(0, MAX_TAG)
+}
+
+/** Another live session, as its record in the plugin store has it. No `parent`: none to show, or a record an older build wrote. */
+export type Peer = { id: string; name: string; parent?: string }
+
+/**
+ * The session's label: the folder name alone while no live peer's folder has
+ * the same name. With such a twin, the parent folder's name and the folder's,
+ * `work/api`, when no twin's parent has the same name. Otherwise, or with no
+ * parent to show, the folder name and this session's tag, `api · 3f2a`, cut
+ * against every twin. A twin whose parent is unknown never has the same one.
+ * Undefined when the host gave no session id or no project root with a folder
+ * name: the title is then the plain one.
+ */
+export const sessionLabel = (self: { id: unknown; root: unknown }, peers: readonly Peer[]): string | undefined => {
+  const name = folderNameOf(self.root)
+  if (name === undefined || tagSource(self.id) === '' || typeof self.id !== 'string') return undefined
+  const id = self.id.trim()
+  const twins = peers.filter(peer => peer.name === name && peer.id !== id)
+  if (twins.length === 0) return name
+  const parent = parentNameOf(self.root)
+  if (parent !== undefined && !twins.some(twin => twin.parent === parent)) return `${parent}/${name}`
+
+  return `${name} · ${tagOf(id, twins.map(twin => twin.id))}`
+}
+
+/** Where each live session keeps its record in the plugin store, by session id. */
+export const LIVE_PREFIX = 'live/'
+
+/** A record not touched for a day is a session that ended without saying so. */
+export const LIVE_TTL_MS = 24 * 60 * 60 * 1000
+
+/**
+ * A live session's record: its folder name and its parent folder's name as
+ * titles show them, and when it was last seen. No `parent` when there is none
+ * to show. An older build wrote none either, so a record without one is
+ * still a record, its parent unknown.
+ */
+export type LiveEntry = { v: 1; name: string; parent?: string; seenAt: number }
+
+export const liveKeyOf = (id: unknown): string | undefined => {
+  const trimmed = typeof id === 'string' ? id.trim() : ''
+
+  return trimmed === '' ? undefined : `${LIVE_PREFIX}${trimmed}`
+}
+
+/**
+ * A stored value as a record, or undefined for anything else. A `parent` that
+ * is missing or not a name counts as unknown, and the record still counts.
+ * Fields it does not know are dropped.
+ */
+export const liveEntryOf = (raw: unknown): LiveEntry | undefined => {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
+  const { v, name, parent, seenAt } = raw as Record<string, unknown>
+  if (v !== 1 || typeof name !== 'string' || name === '') return undefined
+  if (typeof seenAt !== 'number' || !Number.isFinite(seenAt)) return undefined
+
+  return typeof parent === 'string' && parent !== '' ? { v: 1, name, parent, seenAt } : { v: 1, name, seenAt }
+}
+
+/**
+ * This session's record and its key, or undefined when the host gave no id or
+ * no folder name. `parent` only when there is one to show.
+ */
+export const liveRecordOf = (
+  self: { id: unknown; root: unknown },
+  now: number,
+): { key: string; entry: LiveEntry } | undefined => {
+  const name = folderNameOf(self.root)
+  const key = tagSource(self.id) === '' ? undefined : liveKeyOf(self.id)
+  if (name === undefined || key === undefined) return undefined
+  const parent = parentNameOf(self.root)
+
+  return { key, entry: parent === undefined ? { v: 1, name, seenAt: now } : { v: 1, name, parent, seenAt: now } }
+}
+
+/** A record's session as a peer. Its parent comes along only when the record has one. */
+const peerOf = (id: string, { name, parent }: LiveEntry): Peer =>
+  parent === undefined ? { id, name } : { id, name, parent }
+
+/**
+ * The live sessions in the store: every valid record under `live/` seen within
+ * a day, and the keys of the stale ones, to remove. The caller drops its own.
+ */
+export const peersOf = (
+  records: readonly { key: string; value: unknown }[],
+  now: number,
+): { peers: Peer[]; stale: string[] } => {
+  const peers: Peer[] = []
+  const stale: string[] = []
+  for (const { key, value } of records) {
+    if (!key.startsWith(LIVE_PREFIX)) continue
+    const entry = liveEntryOf(value)
+    if (entry === undefined) continue
+    if (now - entry.seenAt > LIVE_TTL_MS) stale.push(key)
+    else peers.push(peerOf(key.slice(LIVE_PREFIX.length), entry))
+  }
+
+  return { peers, stale }
+}
 
 /** What a command left that this mod reads. */
 export type RunResult = { exitCode: number; stdout: string }
@@ -226,7 +420,12 @@ export type NotifyHost = {
   after: (ms: number, fn: () => Promise<void>) => { cancel: () => void }
   /** The config file's text, or undefined when there is none or it cannot be read. */
   readConfig: () => Promise<string | undefined>
+  /** This session's label for the title, `api`, `work/api` or `api · 3f2a`; undefined for the plain title. */
+  label: () => Promise<string | undefined>
 }
+
+/** The label, or undefined when looking it up failed: a notification still goes out, under the plain title. */
+const labelOf = (host: NotifyHost): Promise<string | undefined> => host.label().catch(() => undefined)
 
 /** Local commands return quickly. A hang must not hold the event it rides on. */
 export const UNAME_TIMEOUT_MS = 2_000
@@ -250,8 +449,11 @@ export const checkPresence = async (host: NotifyHost, presentIdleSecs: number): 
   return isPresent(idleSeconds, frontmostAppOf(front.stdout), presentIdleSecs)
 }
 
-/** The wait being watched: when it began, in the notifier's own order, and its reminder once armed. */
-type Wait = { since: number; reminder?: { cancel: () => void } }
+/**
+ * The wait being watched: when it began, in the notifier's own order, its
+ * reminder once armed, and the label its notification went out under.
+ */
+type Wait = { since: number; reminder?: { cancel: () => void }; label?: string }
 
 export type Notifier = {
   /** A tool call starts. The stamp it returns goes back to `toolSettled` when the call ends. */
@@ -301,7 +503,8 @@ export const createNotifier = (): Notifier => {
     // One check, one reminder at most: the wait is done either way.
     wait = null
     if (isHere) return
-    await host.run(notifyArgv(reminderBody(config.remindAfterMin)), NOTIFY_TIMEOUT_MS)
+    // The title the notification had: a session that started since does not change it.
+    await host.run(notifyArgv(reminderBody(config.remindAfterMin), mine.label), NOTIFY_TIMEOUT_MS)
   }
 
   return {
@@ -341,7 +544,9 @@ export const createNotifier = (): Notifier => {
 
         return
       }
-      await host.run(notifyArgv(bodyOf(kind)), NOTIFY_TIMEOUT_MS)
+      mine.label = await labelOf(host)
+      if (!isMine()) return
+      await host.run(notifyArgv(bodyOf(kind), mine.label), NOTIFY_TIMEOUT_MS)
       if (!isMine()) return
       mine.reminder = host.after(config.remindAfterMin * 60_000, () => remind(host, mine, config))
     },
@@ -353,7 +558,7 @@ export const createNotifier = (): Notifier => {
       if (!config.notifyOnStop) return
       if (!(await onMac(host))) return
       if (await checkPresence(host, config.presentIdleSecs)) return
-      await host.run(notifyArgv(STOP_BODY), NOTIFY_TIMEOUT_MS)
+      await host.run(notifyArgv(STOP_BODY, await labelOf(host)), NOTIFY_TIMEOUT_MS)
     },
   }
 }

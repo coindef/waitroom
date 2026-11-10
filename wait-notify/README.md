@@ -25,7 +25,13 @@ wait-notify answers two kinds:
 | `permission_prompt`: a permission dialog has waited | `Waiting on a permission` |
 | `permission_prompt` while an `AskUserQuestion` call is open, or `elicitation_dialog` | `Asked you a question` |
 
-The title is `Claude needs you`.
+The title says which session it is: `Claude needs you · api`, where `api` is the project folder's name.
+
+- Two sessions in folders with the same name also show the parent folder: `work/api` and `fork/api`.
+- If the parent folders match too, each gets a short tag from its session id: `api · 3f2a`.
+- If Claude Code doesn't report a session id or project root, the title stays `Claude needs you`.
+- The title never shows more than those two folder names. No full path, no prompt text.
+- Each session has its own reminder. Answering one doesn't cancel the other.
 
 - **You are at the terminal:** nothing is sent.
 - **You are away:** the notification goes out at once.
@@ -141,6 +147,8 @@ notification does not check whether you are at the terminal.
 
 - **No network, no sound, no shell.** The only programs it runs are `uname`,
   `ioreg -c IOHIDSystem` and `osascript`, each by argv.
+- **No click-to-focus.** Clicking the notification does not bring the right
+  terminal window forward.
 - **It never blocks, delays or rewrites** a tool call, a prompt or a turn. It
   watches tool calls only to know when one starts and ends.
 - **No notification while you are at the terminal**, and no reminder after a
@@ -151,14 +159,18 @@ notification does not check whether you are at the terminal.
 
 ```
 claude plugin validate ./wait-notify
-claude plugin test     ./wait-notify   # 48 tests
+claude plugin test     ./wait-notify   # 93 tests
 ```
 
 `hooks/notify.ts` has no engine dependency: the copy, the config, parsing
-`uname` / `ioreg` / `osascript` output, the argv, and the notifier that holds
-one wait at a time. Every command, the reminder's timer and the config file
+`uname` / `ioreg` / `osascript` output, the session label and its store
+records, the argv, and the notifier that holds one wait at a time. Every command, the reminder's timer and the config file
 reach it through a host, so `tests/notify.test.ts` drives it directly with a
 fake one. `hooks/register.ts` builds that host from `$` and wires it to the
 events. `tests/flow.test.ts` drives the whole loop through the engine, with
-`process.run`, `fs.read`, `HOME` and the clock answered by the test, so the
-suite never posts a real notification.
+`process.run`, `fs.read`, `HOME`, the session id and root, the store and the
+clock answered by the test, so the suite never posts a real notification.
+
+The store keys a live session as `live/<session id>` and never as the
+folder name alone, drops a record after 24 hours unseen, and strips
+escape codes from each folder name and cuts it at 20 graphemes.
