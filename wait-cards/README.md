@@ -51,7 +51,7 @@ A: Where HEAD has been, so you can find a commit you lost. · /card got or /card
 
 Marking is optional. A card you don't mark keeps its place.
 
-If two sessions mark the same card, the last mark wins. A card you edit or delete keeps its old progress, so pasting it back keeps its box.
+If two sessions mark the same card, the last mark wins. Editing an answer keeps the card's progress. Editing a question starts a new card; paste the old question back and its box returns.
 
 With no deck, the first turn shows `Add cards to ~/.waitroom/cards.md` once, then it stays quiet.
 
