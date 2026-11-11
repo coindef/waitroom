@@ -1,0 +1,13 @@
+{
+  "name": "wait-cards",
+  "version": "0.1.0",
+  "description": "One flashcard from your own deck per wait: the question on the status line while Claude works, the answer once the turn ends. Optional. Quiet until ~/.waitroom/cards.md has cards, and it never writes that file.",
+  "author": {
+    "name": "coindef"
+  },
+  "homepage": "https://github.com/coindef/waitroom/tree/master/wait-cards",
+  "repository": "https://github.com/coindef/waitroom",
+  "license": "MIT",
+  "icon": "./.claude-plugin/icon.png",
+  "types": "./types/index.d.ts"
+}

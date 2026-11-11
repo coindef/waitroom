@@ -54,6 +54,11 @@
       "name": "wait-anchor",
       "source": "./wait-anchor",
       "description": "Leave a note for future you: the goal you are on, and what to check when you come back. Optional. Nothing is written until you set one with /anchor."
+    },
+    {
+      "name": "wait-cards",
+      "source": "./wait-cards",
+      "description": "One flashcard from your own deck per wait: the question on the status line while Claude works, the answer once the turn ends. Optional. Quiet until ~/.waitroom/cards.md has cards, and it never writes that file."
     }
   ]
 }
