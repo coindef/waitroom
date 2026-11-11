@@ -9,7 +9,7 @@ claude plugin marketplace add coindef/waitroom
 claude plugin install wait-cards@waitroom
 ```
 
-Needs Claude Code 2.1.318 or later. Restart after installing.
+Needs Claude Code 2.1.319 or later. Restart after installing.
 
 ## Your deck
 
@@ -32,8 +32,6 @@ A: 429
 - `Q:` and `A:` can be any case, and can follow a `- ` or `* ` list marker.
 - Lines after the `A:` line join the answer until a blank line, a heading, or the next `Q:`.
 - Headings, other text, fenced code blocks and `<!-- comments -->` are skipped, so you can keep notes in the same file.
-- A `Q:` with no `A:`, an `A:` with no `Q:`, an empty side, and a question that is already in the deck are skipped. `/card` tells you how many lines it skipped. This mod never guesses a missing answer.
-- Color codes and control characters are stripped. A question or an answer keeps its first 500 characters. The first 256 KiB of the file and the first 1,000 cards are read.
 
 Edit the file whenever you like. It is read again at the start of each turn. Changing an answer keeps the card's box. Changing the question makes it a new card.
 
@@ -54,8 +52,6 @@ A: Where HEAD has been, so you can find a commit you lost. · /card got or /card
 ```
 
 The answer is logged once. It is shown to you and is not sent to Claude. An interrupted turn gets its answer too. A subagent's turn does not show a card.
-
-Claude Code draws one status line per mod and chooses the order. This mod does not use the row above the prompt, so the bet's question and its keys stay where they are.
 
 ## Commands
 
@@ -83,8 +79,6 @@ There are five boxes. A new card starts in box 1. The boxes count waits, not day
 
 `/card got` moves a card up one box, up to box 5. `/card miss` sends it to box 1, so a card you missed comes back sooner than one you got.
 
-Each wait shows a card that is due. When several are due, the one shown longest ago goes first, then the lower box, then deck order. If nothing is due, the card due soonest shows anyway.
-
 ## With no deck
 
 If `~/.waitroom/cards.md` does not exist, or `HOME` is not set, the first turn logs one line:
@@ -99,17 +93,7 @@ A deck with no valid cards is also quiet. `/card` tells you to write a `Q:` line
 
 ## Where it is kept
 
-This mod reads one file, `~/.waitroom/cards.md`, and does not write to it. It writes no other file either.
-
-It keeps three kinds of values in this plugin's `$.store`. Claude keeps the store under its configuration directory, and this mod does not choose the file name.
-
-| Key | Value |
-| --- | --- |
-| `card/<id>` | One card's box, the wait it is due on, and the wait it was last shown on. `<id>` is the first 16 hex characters of the SHA-256 of the question. The question and answer text are not stored |
-| `tick` | How many waits have shown a card |
-| `hint` | Present once the no-deck line has been shown |
-
-Every session on the machine shares these values, because they all share one deck. Each card is its own key, so two sessions that mark different cards don't overwrite each other. Two sessions that mark the same card at the same moment can: the last write wins. Two sessions that start a turn at the same moment can read the same `tick`, which only changes which card comes next.
+Your progress is kept by Claude Code, never in your deck file. If two sessions mark the same card at once, the last mark wins.
 
 ## What it does not do
 
@@ -123,15 +107,9 @@ Every session on the machine shares these values, because they all share one dec
 
 ```sh
 claude plugin validate ./wait-cards
-claude plugin test     ./wait-cards   # 41 tests
+claude plugin test     ./wait-cards   # 47 tests
 ```
 
-`hooks/cards.ts` has the deck parser, the boxes, the 48-column line and the replies, with no engine. `hooks/register.ts` is the hooks. `tests/cards.test.ts` tests the pure module. `tests/flow.test.ts` drives the hooks through the engine with the deck file, the store and the UI mocked. `tests/load-shape.test.ts` checks that `$` is only passed to top-level helpers, the rule that kept wait-anchor from loading on Claude Code 2.1.318.
-
-`claude plugin test` runs 41 tests:
-
-- 23 pure tests
-- 15 engine flow tests
-- 3 load-shape tests
+`hooks/cards.ts` needs no engine. It has the deck parser and its limits, the boxes, which card comes next, the 48-column line and the replies. `hooks/register.ts` has the hooks and the store keys.
 
 A real Claude Code session has not been run against this mod yet. The flow tests mock the engine, and a pass there is not that check.

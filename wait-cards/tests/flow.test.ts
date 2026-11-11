@@ -28,7 +28,14 @@ const finish = (turnId: string, extra: { isAborted?: boolean; agentId?: string }
 const begin = (turnId: string, agentId?: string) =>
   ({ text: 'fix the build', turnId, ...(agentId === undefined ? {} : { agentId }) }) as never
 
-type Given = { deck?: string; home?: boolean; store?: Record<string, unknown>; deckReads?: { count: number } }
+type Given = {
+  deck?: string
+  home?: boolean
+  store?: Record<string, unknown>
+  deckReads?: { count: number }
+  /** The deck path is there, but reading it fails, as with a folder or a file without read permission. */
+  unreadable?: boolean
+}
 
 const engineBottom = (on: On, given: Given = {}) => {
   const said: (string | undefined)[] = []
@@ -54,10 +61,12 @@ const engineBottom = (on: On, given: Given = {}) => {
   on('store.keys', () => ({ value: Object.keys(store) }))
   on('fs.read', ($, e) => {
     if (given.deckReads !== undefined) given.deckReads.count += 1
+    if (e.path === DECK_PATH && given.unreadable === true) throw new Error(`EACCES: permission denied, open '${e.path}'`)
     if (e.path !== DECK_PATH || disk.deck === undefined) throw new Error(`ENOENT: ${e.path}`)
 
     return { value: disk.deck }
   })
+  on('fs.exists', ($, e) => ({ value: e.path === DECK_PATH && (disk.deck !== undefined || given.unreadable === true) }))
   on('fs.write', ($, e) => {
     wrote.push(e.path)
     throw new Error(`wait-cards writes no file: ${e.path}`)
@@ -244,6 +253,17 @@ test('a deck with no valid cards is quiet, and /card says how to write one', asy
   expect(await card($, '')).toBe('no cards in ~/.waitroom/cards.md yet · write a Q: line, then an A: line')
 })
 
+test('a deck file that is there but cannot be read logs no hint and shows no card, and /card says so', async ($, on) => {
+  const { said, logged, store } = engineBottom(on, { unreadable: true })
+  await start($)
+  await $.turn.start(begin('turn-1'))
+  await $.turn.complete(finish('turn-1'))
+  expect(logged).toEqual([])
+  expect(said.every(text => text === undefined)).toBe(true)
+  expect(store.hint).toBeUndefined()
+  expect(await card($, '')).toBe("can't read ~/.waitroom/cards.md")
+})
+
 test('no HOME is the same as no deck', async ($, on) => {
   const { logged, said } = engineBottom(on, { home: false, deck: DECK })
   await start($)
@@ -274,9 +294,21 @@ test('a missed card comes back while the one you got waits its turn', async ($, 
   }
   expect(await wait('t1', 'got')).toBe('Q: one')
   expect(await wait('t2', 'miss')).toBe('Q: two')
-  expect(await wait('t3', 'got')).toBe('Q: one')
-  expect(await wait('t4', 'miss')).toBe('Q: two')
-  // one is in box 3 now, due on wait 6. two was missed on wait 3, so it is back on wait 4.
+  // two was missed on wait 1, so it is back on wait 2. one, got on wait 0, is due then too and waits.
+  expect(await wait('t3', 'got')).toBe('Q: two')
+  expect(await wait('t4', 'miss')).toBe('Q: one')
+  // one was missed on wait 3, so it is back on wait 4, ahead of two, which is due then too.
   await $.turn.start(begin('t5'))
-  expect(said.at(-1)).toBe('Q: two')
+  expect(said.at(-1)).toBe('Q: one')
+})
+
+test('/card miss says back next wait, and the next wait shows that card before the ones not seen yet', async ($, on) => {
+  const { said } = engineBottom(on, { deck: 'Q: one\nA: 1\n\nQ: two\nA: 2\n\nQ: three\nA: 3\n\nQ: four\nA: 4\n' })
+  await start($)
+  await $.turn.start(begin('turn-1'))
+  expect(said.at(-1)).toBe('Q: one')
+  await $.turn.complete(finish('turn-1'))
+  expect(await card($, 'miss')).toBe('missed · box 1 · back next wait')
+  await $.turn.start(begin('turn-2'))
+  expect(said.at(-1)).toBe('Q: one')
 })

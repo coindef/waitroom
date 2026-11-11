@@ -1,6 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import {
+  CANT_READ,
   HINT,
   NO_CARDS,
   NO_DECK,
@@ -46,14 +47,20 @@ const TICK_KEY = 'tick'
 const HINT_KEY = 'hint'
 const cardKey = (id: string): string => `card/${id}`
 
-/** The deck file as text, or undefined with no `HOME`, no file, or one that cannot be read. Read only. */
-const readDeck = async ($: EngineInterface): Promise<Deck | undefined> => {
+/**
+ * The parsed deck, read only. It is undefined with no `HOME` or no file, and
+ * `unreadable` when the file is there but can't be read, such as a folder or
+ * a file without read permission.
+ */
+const readDeck = async ($: EngineInterface): Promise<Deck | 'unreadable' | undefined> => {
   const home = await $.env.get('HOME').catch(() => undefined)
   if (home === undefined || home.trim() === '') return undefined
-  const text = await $.fs.read(deckPathOf(home.trim())).catch(() => undefined)
-  if (typeof text !== 'string') return undefined
+  const path = deckPathOf(home.trim())
+  const text = await $.fs.read(path).catch(() => undefined)
+  if (typeof text === 'string') return parseDeck(text)
+  const isThere = await $.fs.exists(path).catch(() => false)
 
-  return parseDeck(text)
+  return isThere ? 'unreadable' : undefined
 }
 
 /** Waits shown so far, across every session of this plugin. */
@@ -91,13 +98,14 @@ const forgetHint = async ($: EngineInterface, memory: Memory): Promise<void> => 
   if (said !== undefined) await $.store.delete(HINT_KEY).catch(() => undefined)
 }
 
-/** A main-loop turn started: put one question on the status line. */
+/** A main-loop turn started: put one question on the status line. A deck that is there but can't be read shows nothing. */
 const ask = async ($: EngineInterface, memory: Memory): Promise<void> => {
   const deck = await readDeck($)
   if (deck === undefined) {
     await hintOnce($, memory)
     return
   }
+  if (deck === 'unreadable') return
   await forgetHint($, memory)
   if (deck.cards.length === 0) return
   const tick = await readTick($)
@@ -135,6 +143,7 @@ const mark = async ($: EngineInterface, memory: Memory, kind: Mark): Promise<str
 const describe = async ($: EngineInterface): Promise<string> => {
   const deck = await readDeck($)
   if (deck === undefined) return NO_DECK
+  if (deck === 'unreadable') return CANT_READ
   if (deck.cards.length === 0) return NO_CARDS
   const tick = await readTick($)
   const records = await readRecords($, deck.cards)

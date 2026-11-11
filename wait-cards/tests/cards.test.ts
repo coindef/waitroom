@@ -20,8 +20,28 @@ import {
   shownRecord,
   statusFor,
   truncateColumns,
+  type Card,
   type CardRecord,
 } from '../hooks/cards'
+
+const FOUR = 'Q: a\nA: 1\n\nQ: b\nA: 2\n\nQ: c\nA: 3\n\nQ: d\nA: 4\n'
+
+/** One wait as the hooks run it. It picks a card, stamps it shown, and returns its question. */
+const showAt = (cards: readonly Card[], records: Map<string, CardRecord>, tick: number): string => {
+  const card = pickNext(cards, records, tick)
+  if (card === undefined) throw new Error('every wait has a card')
+  records.set(card.id, shownRecord(records.get(card.id) ?? newRecord(), tick))
+
+  return card.question
+}
+
+/** `/card got|miss` on a card that was shown, counted from the wait it was shown on, as the hooks do. */
+const markShown = (cards: readonly Card[], records: Map<string, CardRecord>, question: string, mark: 'got' | 'miss'): void => {
+  const card = cards.find(each => each.question === question)
+  const record = card === undefined ? undefined : records.get(card.id)
+  if (card === undefined || record === undefined) throw new Error(`${question} was not shown`)
+  records.set(card.id, markCard(record, mark, record.shown))
+}
 
 test('an empty deck, or one with only prose, has no cards and skips nothing', () => {
   expect(parseDeck('')).toEqual({ cards: [], skipped: 0 })
@@ -89,6 +109,15 @@ test('deck text is data: ANSI and control characters are stripped', () => {
   expect(sanitize(42)).toBe('')
 })
 
+test('bidi marks, overrides and isolates are stripped, line separators become spaces, and the emoji joiner stays', () => {
+  const deck = parseDeck('Q: \u2067which way?\u2069\nA: \u202Eleft\u202C\n')
+  expect(deck.cards[0]?.question).toBe('which way?')
+  expect(deck.cards[0]?.answer).toBe('left')
+  expect(sanitize('a\u200Eb\u200Fc\u202Ad\u202Be\u202Df\u2066g\u2068h')).toBe('abcdefgh')
+  expect(sanitize('red\u2028green\u2029blue')).toBe('red green blue')
+  expect(sanitize('👩\u200D👩\u200D👧')).toBe('👩\u200D👩\u200D👧')
+})
+
 test('a huge deck is capped, so reading it cannot hang a turn', () => {
   const many = Array.from({ length: 3000 }, (_, i) => `Q: q${i}\nA: a${i}\n`).join('\n')
   const deck = parseDeck(many)
@@ -138,7 +167,7 @@ test('showing a card stamps when it was shown and does not move its box', () => 
   expect(shownRecord(record, 7)).toEqual({ box: 2, due: record.due, shown: 7 })
 })
 
-test('next card: due cards first, then least recently shown, then lower box, then deck order', () => {
+test('next card: cards not shown yet in deck order, then unmarked ones shown longest ago, and the soonest due when none is due', () => {
   const cards = parseDeck('Q: a\nA: 1\n\nQ: b\nA: 2\n\nQ: c\nA: 3\n').cards
   const [a, b, c] = cards
   if (a === undefined || b === undefined || c === undefined) throw new Error('three cards')
@@ -173,6 +202,40 @@ test('missed cards come back before a got card in the same deck', () => {
   expect(pickNext(cards, records, 3)?.id).toBe(missedCard.id)
   expect(dueCount(cards, records, 3)).toBe(1)
   expect(dueCount(cards, records, 4)).toBe(2)
+})
+
+test('a card you missed is back on the next wait, ahead of cards you have not seen', () => {
+  const cards = parseDeck(FOUR).cards
+  const records = new Map<string, CardRecord>()
+  expect(showAt(cards, records, 0)).toBe('a')
+  markShown(cards, records, 'a', 'miss')
+  expect(showAt(cards, records, 1)).toBe('a')
+  // Left unmarked this time, it does not hold the front.
+  expect(showAt(cards, records, 2)).toBe('b')
+})
+
+test('two missed cards come back in the order they showed, the second one wait after the first', () => {
+  const cards = parseDeck(FOUR).cards
+  const records = new Map<string, CardRecord>()
+  expect(showAt(cards, records, 0)).toBe('a')
+  // The next turn starts before a is marked.
+  expect(showAt(cards, records, 1)).toBe('b')
+  markShown(cards, records, 'a', 'miss')
+  markShown(cards, records, 'b', 'miss')
+  expect(showAt(cards, records, 2)).toBe('a')
+  expect(showAt(cards, records, 3)).toBe('b')
+  expect(showAt(cards, records, 4)).toBe('c')
+})
+
+test('a card you got is back on the wait it is due, ahead of cards you have not seen', () => {
+  const cards = parseDeck(FOUR).cards
+  const records = new Map<string, CardRecord>()
+  expect(showAt(cards, records, 0)).toBe('a')
+  // Box 2: back in 2 waits.
+  markShown(cards, records, 'a', 'got')
+  expect(showAt(cards, records, 1)).toBe('b')
+  expect(showAt(cards, records, 2)).toBe('a')
+  expect(showAt(cards, records, 3)).toBe('c')
 })
 
 test('a stored record this mod did not write is a new card', () => {

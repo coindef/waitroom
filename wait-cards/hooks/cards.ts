@@ -75,11 +75,15 @@ const graphemes = (text: string): string[] => {
 const ANSI =
   /\u001B(?:\][^\u0007]*(?:\u0007|\u001B\\)|\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])/g
 
-/** C0, DEL, and C1. Newlines included: a note is one line. */
-const CONTROLS = /[\u0000-\u001F\u007F-\u009F]/g
+/** C0, DEL, C1, and the line and paragraph separators. Each becomes a space, so a card stays on one line. */
+const CONTROLS = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g
 
-/** Invisible format characters that are not the joiner inside an emoji. */
-const INVISIBLE = /[\u200B\u200C\uFEFF]/g
+/**
+ * Zero-width and byte-order marks, and the bidi marks, embeddings, overrides
+ * and isolates that can reorder a line. The joiner inside an emoji stays.
+ * Together with CONTROLS this is the set wait-notify drops.
+ */
+const INVISIBLE = /[\u200B\u200C\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g
 
 /**
  * Deck text as text, nothing else.
@@ -374,20 +378,38 @@ const less = (a: readonly number[], b: readonly number[]): boolean => {
 const recordOf = (records: ReadonlyMap<string, CardRecord>, id: string): CardRecord => records.get(id) ?? newRecord()
 
 /**
- * The card for wait `tick`. Due cards come first and count as equal, so an
- * unmarked card does not hold the front. Then the one shown longest ago, then
- * the lower box, then deck order. With nothing due, the soonest due shows, so
- * every wait has a card.
+ * The sort key for wait `tick`. The lowest key shows. A mark sets `due` past
+ * `shown`, and showing a due card sets `shown` to `due` or later. So a due
+ * card with `shown < due` was marked after it last showed, or last showed
+ * early, when nothing was due.
+ */
+const rankOf = (record: CardRecord, tick: number): [number, number, number, number] => {
+  if (record.due > tick) return [1, record.due, record.box, record.shown]
+  if (record.shown < 0) return [0, 1, 0, 0]
+  if (record.shown < record.due) return [0, 0, record.box, record.shown]
+
+  return [0, 2, record.shown, 0]
+}
+
+/**
+ * The card for wait `tick`. A due card comes before one that is not.
+ *
+ * Among due cards, the ones you marked since they last showed go first, lower
+ * box first, so a card you missed is back on the next wait. Two you missed
+ * come back in the order they showed. Next come cards that have never shown,
+ * in deck order. Last come cards you left unmarked, the one shown longest ago
+ * first, so an unmarked card does not hold the front. Deck order breaks a tie.
+ *
+ * With nothing due, the card due soonest shows, so every wait has a card.
  */
 export const pickNext = (
   cards: readonly Card[],
   records: ReadonlyMap<string, CardRecord>,
   tick: number,
 ): Card | undefined => {
-  let best: { card: Card; key: [number, number, number, number] } | undefined
+  let best: { card: Card; key: number[] } | undefined
   cards.forEach((card, index) => {
-    const record = recordOf(records, card.id)
-    const key: [number, number, number, number] = [Math.max(record.due, tick), record.shown, record.box, index]
+    const key = [...rankOf(recordOf(records, card.id), tick), index]
     if (best === undefined || less(key, best.key)) best = { card, key }
   })
 
@@ -419,6 +441,9 @@ export const NOTHING_TO_MARK = 'no card to mark yet · the answer shows when a t
 export const NO_DECK = `no deck yet · ${HINT}`
 
 export const NO_CARDS = 'no cards in ~/.waitroom/cards.md yet · write a Q: line, then an A: line'
+
+/** The `/card` reply when the deck file is there but can't be read. */
+export const CANT_READ = "can't read ~/.waitroom/cards.md"
 
 /** The `/card` reply to a mark. */
 export const markedLine = (mark: Mark, record: CardRecord): string => {
