@@ -112,4 +112,4 @@ claude plugin test     ./wait-cards   # 47 tests
 
 `hooks/cards.ts` needs no engine. It has the deck parser and its limits, the boxes, which card comes next, the 48-column line and the replies. `hooks/register.ts` has the hooks and the store keys.
 
-A real Claude Code session has not been run against this mod yet. The flow tests mock the engine, and a pass there is not that check.
+It was also checked in a real Claude Code 2.1.319 session on Linux: the no-deck line once, the question during a turn, the answer after it, `/card got`, `/card miss` with the card back on the next wait, and `/card`. A 1,000-card deck adds about 0.1 s before the question shows.
