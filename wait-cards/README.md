@@ -29,10 +29,10 @@ Headings and other notes in the file are skipped. Edit it whenever you like. It 
 
 ## What you see
 
-While Claude works, the status line shows the question. Claude Code puts the ⚠ in front, not this mod.
+While Claude works, the status line shows the question. Claude Code adds the ⚠ and the mod's name in front.
 
 ```text
-⚠ Q: What does `git reflog` show?
+⚠ wait-cards: Q: What does `git reflog` show?
 ```
 
 When the turn ends, one line shows the answer. Claude never sees it.
@@ -51,13 +51,15 @@ A: Where HEAD has been, so you can find a commit you lost. · /card got or /card
 
 Marking is optional. A card you don't mark keeps its place.
 
+If two sessions mark the same card, the last mark wins. Editing an answer keeps the card's progress. Editing a question starts a new card; paste the old question back and its box returns.
+
 With no deck, the first turn shows `Add cards to ~/.waitroom/cards.md` once, then it stays quiet.
 
 ## What it does not do
 
 - It does not call a model or open a connection.
 - Claude never sees your cards.
-- It never writes to your deck. Your progress is kept by Claude Code.
+- It never writes to your deck. Your progress is kept in Claude Code's plugin storage.
 
 ## Developing
 
