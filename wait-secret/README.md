@@ -17,10 +17,14 @@ This install stays on its own. The four rooms are `/plugin install waitroom@wait
 
 ## What it shows
 
-- **Once the turn ends.** The status line says `1 possible secret` (or
-  `3 possible secrets`). It never says what kind, so someone looking over your
-  shoulder learns nothing from it. Nothing at 0.
-- **The list.** The row above the prompt lists each line, one per row:
+- **Once the turn ends.** The status line says
+  `⚠ wait-secret: 1 possible secret` (or `3 possible secrets`). Claude Code
+  adds the ⚠ and the mod's name in front. It never says what kind, so someone
+  looking over your shoulder learns nothing from it. Nothing at 0.
+- **The list.** The row above the prompt is titled
+  `Possible secrets in what this turn wrote`, with
+  `Local pattern match, masked — nothing blocked, edited or uploaded` under it.
+  It lists each line, one per row:
 
   ```
   src/client.ts:12  sk-…3f9a  (OpenAI key?)
