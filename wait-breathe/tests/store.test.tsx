@@ -3,9 +3,10 @@ import type { Engine } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 
 /**
- * A failed or unreadable `$.store.get` must not be written back. These
- * tests are the inverse of that bug: the saved cooldown, rotation, and
- * history stay, and a raise that cannot read the cooldown shows nothing.
+ * A failed `$.store.get` is not written back: the saved cooldown, rotation,
+ * and history stay, and the raise shows nothing. A value that is present but
+ * not a record this mod wrote is expired. The next due nudge replaces it, so
+ * the nudges come back.
  */
 
 const BAND = {
@@ -122,25 +123,53 @@ test(
   },
 )
 
-test('a stored value that is not an object is not overwritten', SHORT_FUSE, async ($, on) => {
-  const { clock, store, writes } = wire(on, { seed: 'not-a-record' })
-  await $.turn.start({ text: 'long', turnId: 'bad-object' })
-  await clock.advance(5000)
-  const band = await mountBand($)
-  expect(await band.find({ text: NUDGE })).toBeUndefined()
-  await band.unmount()
-  expect(writes.count).toBe(0)
-  expect(store.state).toBe('not-a-record')
-})
+test(
+  'a stored value that is not an object is replaced the next time a nudge is due',
+  SHORT_FUSE,
+  async ($, on) => {
+    const { clock, store, writes } = wire(on, { seed: 'not-a-record' })
+    await $.turn.start({ text: 'long', turnId: 'bad-object' })
+    await clock.advance(5000)
+    const band = await mountBand($)
+    expect((await band.find({ text: NUDGE }))?.text).toContain('posture check: reset how you are sitting')
+    await band.unmount()
+    expect(store.state).toEqual({ rotation: 1, lastPromptAt: 5000, history: [] })
+    await $.turn.complete({
+      turnId: 'bad-object',
+      answer: 'done',
+      durationMs: 5000,
+      isAborted: false,
+      reason: 'answer',
+    })
+    expect(store.state).toEqual({
+      rotation: 1,
+      lastPromptAt: 5000,
+      history: [{ at: 5000, taken: false }],
+    })
+    // The fresh record's cooldown holds. The next long turn inside ten minutes is quiet.
+    await $.turn.start({ text: 'soon', turnId: 'bad-object-2' })
+    await clock.advance(5000)
+    const second = await mountBand($)
+    expect(await second.find({ text: NUDGE })).toBeUndefined()
+    await second.unmount()
+    expect(writes.count).toBe(2)
+  },
+)
 
-test('a stored history that is not an array is not overwritten', SHORT_FUSE, async ($, on) => {
-  const seed = { rotation: 3, lastPromptAt: null, history: { not: 'a list' } }
-  const { clock, store, writes } = wire(on, { seed })
-  await $.turn.start({ text: 'long', turnId: 'bad-history' })
-  await clock.advance(5000)
-  const band = await mountBand($)
-  expect(await band.find({ text: NUDGE })).toBeUndefined()
-  await band.unmount()
-  expect(writes.count).toBe(0)
-  expect(store.state).toEqual(seed)
-})
+test(
+  'a stored history that is not an array is replaced the next time a nudge is due',
+  SHORT_FUSE,
+  async ($, on) => {
+    // rotation 3 would be "stand up and stretch" if the bad record were trusted.
+    // It is not: the nudge starts fresh, and the bad value does not stay.
+    const seed = { rotation: 3, lastPromptAt: null, history: { not: 'a list' } }
+    const { clock, store, writes } = wire(on, { seed })
+    await $.turn.start({ text: 'long', turnId: 'bad-history' })
+    await clock.advance(5000)
+    const band = await mountBand($)
+    expect((await band.find({ text: NUDGE }))?.text).toContain('posture check: reset how you are sitting')
+    await band.unmount()
+    expect(writes.count).toBe(1)
+    expect(store.state).toEqual({ rotation: 1, lastPromptAt: 5000, history: [] })
+  },
+)

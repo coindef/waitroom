@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### wait-breathe 0.2.1
+
+- **If the cooldown cannot be read, no nudge is shown, and what is already saved is left alone.** Once the read works again, nudges come back on their usual ten-minute schedule. If the saved record itself cannot be read, the next due nudge starts a fresh one, so one bad value cannot turn the nudges off for good.
+
 ### wait-cards 0.1.0
 
 First release: one flashcard from a deck you write, one card per wait.
@@ -43,10 +47,6 @@ First release: while a turn runs, lists the shell commands it ran. wait-changed 
 - **Status line.** `N shell command(s)` while the turn runs, and after it until `Close` or the next turn. Hidden at 0.
 - **The row.** `$ git status`, one command per row, newest last: line breaks shown as `↵`, cut at 200 characters, up to eight rows under `N earlier commands…`. Last in the shared row.
 - **Only a list.** Never blocks, rewrites or reruns a command, and runs nothing of its own. No network, no telemetry. `Close` puts it away for the turn; `Don't show again` and `/wait-shell` turn it off and on.
-
-## wait-breathe 0.2.1
-
-- **A failed or unreadable store read is not written back.** The ten-minute cooldown, the message rotation, and the saved history stay as they were. No nudge is shown when that read cannot be trusted.
 
 ## wait-secret 0.1.0
 

@@ -27,13 +27,16 @@ const sessionStartedAt = atom(
 
 type Config = { enabled: boolean; longTurnSeconds: number }
 
+const emptyStore = (): BreatheStore => ({ rotation: 0, lastPromptAt: null, history: [] })
+
 /**
- * The saved record.
+ * The saved record, or undefined when the read itself fails.
  *
- * Undefined when the read fails or the value is not a record this mod wrote.
- * A missing key is an empty record: that is the first run, and it is safe to
- * write. Callers that write skip the write on undefined, so a failed read
- * never replaces the cooldown, the rotation, or the history.
+ * A missing key is an empty record: the first run. A value that is present
+ * but not a record this mod wrote is the same empty record, expired, so the
+ * next due nudge replaces it. One bad value cannot turn the nudges off for
+ * good. A failed read is neither. Callers skip the write, and whatever is
+ * already saved stays until a later read works.
  */
 const loadStore = async ($: EngineInterface): Promise<BreatheStore | undefined> => {
   const read = await $.store.get(STORE_KEY).then(
@@ -41,16 +44,16 @@ const loadStore = async ($: EngineInterface): Promise<BreatheStore | undefined> 
     () => undefined,
   )
   if (read === undefined) return undefined
-  if (read.value === undefined) return { rotation: 0, lastPromptAt: null, history: [] }
+  if (read.value === undefined) return emptyStore()
 
-  return storeFrom(read.value)
+  return storeFrom(read.value) ?? emptyStore()
 }
 
 /** The one check a long turn gets: past the threshold, cooldown allowing, show it. */
 const fire = async ($: EngineInterface, turnId: string) => {
   const store = await loadStore($)
-  // Unreadable cooldown: show nothing. A nudge here could be the second inside
-  // ten minutes, and writing would replace a record this read does not have.
+  // The read failed: show nothing. A nudge here could be the second inside ten
+  // minutes, and writing would replace a record this read does not have.
   if (store === undefined) return
   const now = await $.clock.now()
   if (!canPrompt(store.lastPromptAt, now)) return
@@ -71,7 +74,8 @@ const commitAndClear = async ($: EngineInterface, turnId: string) => {
   const current = await read($, activePrompt)
   if (current && current.turnId === turnId) {
     const store = await loadStore($)
-    // A record we could not read stays where it is, including on this path.
+    // A failed read skips the write. An unreadable value arrives empty, and
+    // this write replaces it.
     if (store !== undefined) {
       const event: PromptEvent = { at: current.shownAt, taken: current.takenAt !== null }
       await $.store.set(STORE_KEY, { ...store, history: keepHistory(store.history, event) })

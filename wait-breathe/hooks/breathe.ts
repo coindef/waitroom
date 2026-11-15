@@ -45,9 +45,9 @@ const isPromptEvent = (value: unknown): value is PromptEvent => {
 }
 
 /**
- * A stored record this mod can read back. Anything else — not an object, or a
- * history that is not a list of prompt events — is undefined. The caller does
- * not write over a value it cannot read.
+ * A stored record this mod wrote. Undefined when a value is present but is
+ * not that record: not an object, a missing field, or a history that is not
+ * a list of prompt events. A failed read is not this function's job.
  */
 export const storeFrom = (raw: unknown): BreatheStore | undefined => {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined

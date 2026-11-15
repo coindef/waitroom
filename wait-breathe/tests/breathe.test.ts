@@ -130,6 +130,7 @@ test('storeFrom keeps a record this mod wrote and rejects a value it cannot read
   expect(storeFrom({ rotation: 1, lastPromptAt: null, history: { not: 'a list' } })).toBeUndefined()
   expect(storeFrom({ rotation: 1, lastPromptAt: null, history: 'nope' })).toBeUndefined()
   expect(storeFrom({ rotation: '1', lastPromptAt: null, history: [] })).toBeUndefined()
+  expect(storeFrom({ lastPromptAt: null, history: [] })).toBeUndefined()
   expect(storeFrom({ rotation: 1, lastPromptAt: '1', history: [] })).toBeUndefined()
   expect(storeFrom({ rotation: Number.NaN, lastPromptAt: null, history: [] })).toBeUndefined()
   expect(storeFrom({ rotation: 1, lastPromptAt: null, history: [{ at: 1 }] })).toBeUndefined()
