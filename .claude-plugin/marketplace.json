@@ -59,6 +59,11 @@
       "name": "wait-cards",
       "source": "./wait-cards",
       "description": "One flashcard from your own deck per wait: the question on the status line while Claude works, the answer once the turn ends. Optional. Quiet until ~/.waitroom/cards.md has cards, and it never writes that file."
+    },
+    {
+      "name": "wait-focus",
+      "source": "./wait-focus",
+      "description": "Name one to three paths. After a turn, the status line says whether each one was touched. Files and folders. Optional. It only reports, and it never blocks an edit."
     }
   ]
 }

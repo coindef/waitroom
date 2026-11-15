@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### wait-focus 0.1.0
+
+First release: you name one to three paths, and after a turn the status line says whether the turn touched each one.
+
+- **`/wait-focus src/auth/ package.json`.** One, two, or three files or folders. Replaces the list. A fourth path is refused (`3 paths max · name one to three, like src/auth/ or package.json`) and the list you had stays. A path outside the project is refused and the list stays. A path that is not on disk yet is still watched. `/wait-focus` shows the list. `/wait-focus clear` clears it. The reply does not start a turn.
+- **Status line.** After a main-loop turn, `src/auth/ touched · package.json untouched`. A folder is touched when anything under it changed, including a rename or a delete. The line comes down while the next turn runs. Past 48 columns it ends in `…`. No list, no line. It does not take the row above the prompt.
+- **Read-only git.** `diff --name-status`, `ls-files`, and `hash-object`, from the project directory. A file that was already dirty counts when its contents change. A gitignored file is not counted. Each call gives up after 3 seconds.
+- **Fails open.** Outside a git repository, or when git fails, times out, or its output is cut off, the turn stays quiet: no line, no crash, and no guess. More than 40 changed files under the list does the same. Nothing is blocked, edited, or committed.
+- **Kept in `$.store`.** One value, keyed by the project root, under Claude's configuration directory. Two sessions in one project share it. A missing project root saves nothing.
+
 ### wait-cards 0.1.0
 
 First release: one flashcard from a deck you write, one card per wait.
