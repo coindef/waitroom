@@ -102,7 +102,10 @@ export const shouldPing = (input: PingInput): boolean => {
   return input.durationMs >= input.thresholdSeconds * 1000
 }
 
-/** `45s`, `1m`, `1m 30s`, and from an hour `2h`, `1h 5m`, `2h 1m 40s`. Whole seconds, rounded down. */
+/**
+ * `45s`, `1m`, `1m 30s`, and from an hour `1h`, `1h 5m`, `2h 1m`.
+ * Whole seconds, rounded down. From an hour the seconds stay off.
+ */
 export const formatDuration = (durationMs: number): string => {
   const total = Math.max(0, Math.floor(durationMs / 1000))
   const hours = Math.floor(total / 3600)
@@ -111,7 +114,8 @@ export const formatDuration = (durationMs: number): string => {
   const parts: string[] = []
   if (hours > 0) parts.push(`${hours}h`)
   if (minutes > 0) parts.push(`${minutes}m`)
-  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`)
+  // A minute past an hour is enough. `1h 0m 40s` is `1h`, not `1h 40s`.
+  if (hours === 0 && (seconds > 0 || parts.length === 0)) parts.push(`${seconds}s`)
 
   return parts.join(' ')
 }
@@ -121,8 +125,8 @@ export const formatDuration = (durationMs: number): string => {
  *
  * "Away" here is the turn's own wall-clock (`durationMs`), not a separate
  * tracker and not a network call. Under a minute it is `45s`. An exact
- * minute is `1m`. Anything between is `1m 30s`. From an hour it is `2h`,
- * `1h 5m`, or `2h 1m 40s`.
+ * minute is `1m`. Anything between is `1m 30s`. From an hour the seconds
+ * stay off: `1h`, `1h 5m`, or `2h 1m`.
  */
 export const stopBody = (durationMs: number): string => `You were away ${formatDuration(durationMs)}`
 
@@ -177,14 +181,35 @@ export const enabledRowKey = (rows: readonly { key: string }[]): string =>
   rows.find(row => ENABLED_ROW.test(row.key))?.key ?? 'wait-ping.enabled'
 
 /**
+ * A configured interval `wholePositive` will not keep, named beside the fallback it returns.
+ *
+ * `(0.5 isn't usable, using 30s)`. The number after `using` is that fallback, not a
+ * fixed 30. An unset value was not a choice, and a value that floors to at least 1
+ * is kept, so neither is named.
+ */
+export const unusableIntervalNote = (value: unknown, fallback: number): string | undefined => {
+  if (value === undefined) return undefined
+  const parsed = Number(value)
+  if (Number.isFinite(parsed) && Math.floor(parsed) >= 1) return undefined
+
+  return `(${String(value)} isn't usable, using ${wholePositive(value, fallback)}s)`
+}
+
+/**
  * What `/wait-ping` answers once it has turned notifications on.
  *
  * The engine prints it as `wait-ping: on · …`, so the line does not name the
  * plugin again. Sound is reported, not flipped: that switch is its own setting.
+ * `configured`, when it was set and cannot be used, is named at the end.
  */
-export const toggledOnLine = (thresholdSeconds: number, sound: boolean): string =>
-  `on · a local notification once a turn runs ${thresholdSeconds}s, or when a permission confirm is waiting · ` +
-  `sound ${sound ? 'on' : 'off'} · /wait-ping again turns it off`
+export const toggledOnLine = (thresholdSeconds: number, sound: boolean, configured?: unknown): string => {
+  const note = unusableIntervalNote(configured, thresholdSeconds)
+  const line =
+    `on · a local notification once a turn runs ${thresholdSeconds}s, or when a permission confirm is waiting · ` +
+    `sound ${sound ? 'on' : 'off'} · /wait-ping again turns it off`
+
+  return note === undefined ? line : `${line} ${note}`
+}
 
 /** What `/wait-ping` answers once notifications are off. */
 export const toggledOffLine = (): string => 'off · /wait-ping turns it on'
