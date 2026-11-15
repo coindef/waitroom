@@ -26,10 +26,20 @@ const finish = (turnId: string, extra: { agentId?: string } = {}) =>
 const begin = (turnId: string, agentId?: string) =>
   ({ text: 'edit the auth code', turnId, ...(agentId === undefined ? {} : { agentId }) }) as const
 
+const HEAD_A = 'a'.repeat(40)
+
 type Git = {
   /** When true, rev-parse and diff and ls-files fail the way they do outside a work tree. */
   notRepo?: boolean
+  /** `git rev-parse --verify HEAD`. The turn records this, then reads it again at the end. */
+  head?: string
   nameStatus: string
+  /** `git diff <start> HEAD -- <paths>` when HEAD moved. Empty means that commit touched nothing watched. */
+  rangeStatus?: string
+  /** The range diff exits non-zero. The line must stay blank, not say untouched. */
+  rangeFail?: boolean
+  /** `git ls-files -z --stage` for symlink (120000) and submodule (160000) paths. */
+  stage?: string
   untracked: string[]
   hashes: Record<string, string>
   /** `diff` throws. The hook has to finish the turn anyway. */
@@ -38,6 +48,11 @@ type Git = {
   truncateDiff?: boolean
   /** Paths `fs.exists` reports as missing. */
   missing?: string[]
+  /** The next working-tree diff waits until `release` is called. `held` resolves once that wait has started. */
+  holdNextDiff?: boolean
+  held?: Promise<void>
+  entered?: () => void
+  release?: () => void
 }
 
 const ran = (stdout: string, exitCode = 0, truncated = false) => ({
@@ -45,6 +60,9 @@ const ran = (stdout: string, exitCode = 0, truncated = false) => ({
 })
 
 const engineBottom = (on: On, git: Git, store: Record<string, unknown> = {}) => {
+  git.head ??= HEAD_A
+  git.rangeStatus ??= ''
+  git.stage ??= ''
   const said: (string | undefined)[] = []
   const argvs: string[][] = []
   const cwds: (string | undefined)[] = []
@@ -78,7 +96,7 @@ const engineBottom = (on: On, git: Git, store: Record<string, unknown> = {}) => 
     modeled.push('complete')
     throw new Error('wait-focus calls no model')
   })
-  on('process.run', ($, e) => {
+  on('process.run', async ($, e) => {
     argvs.push([...e.argv])
     cwds.push(e.init?.cwd)
     timeouts.push(e.init?.timeoutMs)
@@ -90,17 +108,38 @@ const engineBottom = (on: On, git: Git, store: Record<string, unknown> = {}) => 
     if (git.notRepo && (argv.includes('rev-parse') || argv.includes('diff') || argv.includes('ls-files'))) {
       return ran('fatal: not a git repository\n', 128)
     }
-    if (argv.includes('rev-parse')) return ran('true\n')
+    if (argv.includes('rev-parse')) {
+      if (argv.includes('--is-inside-work-tree')) return ran('true\n')
+      if (argv.includes('--verify') && argv.includes('HEAD')) return ran(`${git.head ?? HEAD_A}\n`)
+
+      return ran('', 1)
+    }
     if (argv.includes('diff')) {
       if (git.throwDiff) throw new Error('git diff failed')
       if (!argv.includes('--name-status') || !argv.includes('-z') || !argv.includes('-M')) {
         throw new Error(`diff is not name-status -z -M: ${argv}`)
+      }
+      const headAt = e.argv.indexOf('HEAD')
+      const dashAt = e.argv.indexOf('--')
+      const isRange = headAt !== -1 && dashAt > headAt
+      if (isRange) {
+        if (git.rangeFail) return ran('fatal: bad revision\n', 128)
+
+        return ran(git.rangeStatus ?? '')
+      }
+      if (git.holdNextDiff) {
+        git.holdNextDiff = false
+        git.entered?.()
+        await new Promise<void>(resolve => {
+          git.release = resolve
+        })
       }
 
       return ran(git.nameStatus, 0, git.truncateDiff === true)
     }
     if (argv.includes('ls-files')) {
       if (!e.argv.includes('-z')) throw new Error(`ls-files without -z: ${argv}`)
+      if (e.argv.includes('--stage')) return ran(git.stage ?? '')
 
       return ran(git.untracked.map(path => `${path}\0`).join(''))
     }
@@ -328,6 +367,87 @@ test('a subagent turn does not clear the line', async ($, on) => {
   await $.turn.start(begin('turn-sub', 'worker'))
   await $.turn.complete(finish('turn-sub', { agentId: 'worker' }))
   expect(said.at(-1)).toBe('package.json touched')
+})
+
+test('a commit during the turn is touched, and a range diff that fails shows nothing', async ($, on) => {
+  const git: Git = { head: HEAD_A, nameStatus: '', rangeStatus: '', untracked: [], hashes: {} }
+  const { said, argvs } = engineBottom(on, git)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'wait-focus', args: 'package.json' } as never)
+  await $.turn.start(begin('turn-commit'))
+  git.head = 'b'.repeat(40)
+  git.rangeStatus = 'M\0package.json\0'
+  const answer = await $.turn.complete(finish('turn-commit'))
+  expect(answer.text).toBe('done')
+  expect(said.at(-1)).toBe('package.json touched')
+  const range = argvs.find(argv => argv.includes(HEAD_A) && argv.includes('HEAD') && argv.includes('--'))
+  expect(range?.slice(range.indexOf('diff'))).toEqual([
+    'diff',
+    '--name-status',
+    '-z',
+    '-M',
+    '--relative',
+    '--no-color',
+    '--no-ext-diff',
+    HEAD_A,
+    'HEAD',
+    '--',
+    'package.json',
+  ])
+
+  git.head = HEAD_A
+  git.rangeStatus = ''
+  await $.turn.start(begin('turn-bad'))
+  git.head = 'c'.repeat(40)
+  git.rangeFail = true
+  const failed = await $.turn.complete(finish('turn-bad'))
+  expect(failed.text).toBe('done')
+  expect(said.at(-1)).toBeUndefined()
+})
+
+test('a watched symlink or submodule says so, instead of a blank line', async ($, on) => {
+  const git: Git = {
+    nameStatus: '',
+    untracked: [],
+    hashes: {},
+    stage: `120000 ${'d'.repeat(40)} 0\tlink.json\0`,
+  }
+  const { said } = engineBottom(on, git)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'wait-focus', args: 'link.json package.json' } as never)
+  await $.turn.start(begin('turn-link'))
+  await $.turn.complete(finish('turn-link'))
+  expect(said.at(-1)).toBe('link.json is a symlink · package.json untouched')
+
+  git.stage = `160000 ${'e'.repeat(40)} 0\tvendor\0`
+  git.nameStatus = 'M\0vendor\0'
+  await $.command.run({ command: 'wait-focus', args: 'vendor' } as never)
+  await $.turn.start(begin('turn-sub'))
+  await $.turn.complete(finish('turn-sub'))
+  expect(said.at(-1)).toBe('vendor is a submodule')
+})
+
+test('a slow read from the previous turn does not paint over the next one', async ($, on) => {
+  const git: Git = { nameStatus: '', untracked: [], hashes: {} }
+  const { said } = engineBottom(on, git)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'wait-focus', args: 'package.json' } as never)
+  await $.turn.start(begin('turn-old'))
+  git.holdNextDiff = true
+  git.held = new Promise<void>(resolve => {
+    git.entered = resolve
+  })
+  git.nameStatus = 'M\0package.json\0'
+  git.hashes['package.json'] = 'abc'
+  const pending = $.turn.complete(finish('turn-old'))
+  await git.held
+  await $.turn.start(begin('turn-new'))
+  git.release?.()
+  await pending
+  expect(shown(said)).not.toContain('package.json touched')
+  expect(said.at(-1)).toBeUndefined()
+  await $.turn.complete(finish('turn-new'))
+  expect(said.at(-1)).toBe('package.json untouched')
 })
 
 test('/wait-focus clear takes the line down', async ($, on) => {

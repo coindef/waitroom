@@ -56,12 +56,15 @@ The key is the project root. Two sessions in one project share the list. Two pro
 It sees what git sees, from the project directory.
 
 - `git diff --name-status -M --relative` for tracked changes, renames, and deletes.
+- `git diff <start> HEAD -- <paths>` when a commit moved HEAD during the turn. If that diff cannot be read, no line.
 - `git ls-files --others` for untracked files.
 - `git hash-object` for the contents, so a file that was already dirty still counts when this turn changes it.
 
+A symlink on the list says `is a symlink`. A submodule says `is a submodule`. Neither one is called untouched.
+
 A file git ignores is not counted. Outside a git repository, the list can still be saved, and the reply says a turn here stays quiet.
 
-Each git call gives up after 3 seconds. A failed call, a timeout, or output that was cut off draws no line. The turn is not failed and not slowed past that cap. The same thing happens when more than 40 changed files sit under your paths: no guess, no line.
+Each git call gives up after 3 seconds and counts as a failed read. The start of a turn makes those calls before the turn runs, so a slow start holds the turn, one call at a time. The answer is sent before the end reads, so those do not hold it. A failed call, a timeout, or output that was cut off draws no line. The same thing happens when more than 40 changed files sit under your paths: no guess, no line.
 
 A subagent's turn does not count and does not clear the line.
 
@@ -76,7 +79,7 @@ A subagent's turn does not count and does not clear the line.
 
 ```sh
 claude plugin validate ./wait-focus
-claude plugin test     ./wait-focus   # 34 tests
+claude plugin test     ./wait-focus   # 41 tests
 ```
 
 `hooks/focus.ts` is the list, the path checks, and the touched or untouched line, with no engine. `hooks/register.ts` is the hooks. `tests/flow.test.ts` is the engine run, with git answered by the test. `tests/load-shape.test.ts` checks that `$` is only passed to a top-level helper, which is the rule that kept a hooks module from loading on Claude Code 2.1.318.

@@ -54,12 +54,17 @@ export type Decision =
 export type Change = { kind: 'present' | 'absent'; path: string }
 
 export type StampPlan =
-  | { ok: true; present: string[]; absent: string[]; untracked: string[] }
+  | { ok: true; present: string[]; absent: string[]; untracked: string[]; linked: FileStamp[] }
   | { ok: false }
 
 export type FileStamp = { path: string; stamp: string }
 
-export type Verdict = { path: string; touched: boolean }
+export type SpecialKind = 'symlink' | 'submodule'
+
+/** A path git stores as a symlink (120000) or a gitlink (160000). */
+export type Special = { path: string; kind: SpecialKind; sha: string }
+
+export type Verdict = { path: string; touched: boolean; hint?: SpecialKind }
 
 type Normalized = { ok: true; path: string } | { ok: false; reason: 'outside' | 'empty' }
 
@@ -102,12 +107,20 @@ const relativeTo = (base: string, full: string): string | undefined => {
 
 const isAbsolute = (path: string): boolean => path.startsWith('/') || /^[A-Za-z]:\//.test(path)
 
-/** A path git printed that is safe to hand back to `git hash-object`. */
-const safePath = (path: string): boolean =>
+/**
+ * A path git printed that is safe to hand back to `git hash-object`.
+ * Empty, NUL, an absolute path, or a `..` segment fails the whole read.
+ */
+export const safeGitPath = (path: string): boolean =>
   path !== '' && !path.includes('\0') && !isAbsolute(path) && !path.split('/').includes('..')
 
-const displayToken = (token: string): string =>
-  token.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, 180)
+/** C0, DEL, C1, and the bidi marks that can reorder a displayed path. */
+const HIDDEN = /[\u0000-\u001F\u007F-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069]/g
+
+/** A path as shown. The stored path is unchanged, so the watch still matches git. */
+export const displayPath = (path: string): string => path.replace(HIDDEN, '')
+
+const displayToken = (token: string): string => displayPath(token).trim().slice(0, 180)
 
 /** `${token} is outside this repo · name a path inside it`. */
 export const outsideLine = (token: string): string => {
@@ -193,7 +206,13 @@ export const decide = (args: string, root: string | undefined): Decision => {
 /** The reply once the list is the one that will be watched. */
 export const watchingLine = (paths: readonly string[], missing: readonly string[], git: boolean): string => {
   const gone = new Set(missing)
-  const body = paths.map(path => (gone.has(path) ? `${path} (not on disk yet)` : path)).join(' · ')
+  const body = paths
+    .map(path => {
+      const shown = displayPath(path)
+
+      return gone.has(path) ? `${shown} (not on disk yet)` : shown
+    })
+    .join(' · ')
   const line = `watching ${body}`
 
   return git ? line : `${line} · not a git repo, so a turn here stays quiet`
@@ -353,6 +372,27 @@ export const parseNameStatusZ = (output: string): Change[] => {
 /** NUL-separated paths. Nothing is trimmed: a name may begin or end with a space. */
 export const splitNul = (output: string): string[] => output.split('\0').filter(path => path !== '')
 
+/**
+ * `git ls-files -z --stage` records. 120000 is a symlink, 160000 is a
+ * submodule. Anything else is an ordinary file and is left out.
+ */
+export const parseStageZ = (output: string): Special[] => {
+  const specials: Special[] = []
+  for (const record of output.split('\0')) {
+    if (record === '') continue
+    const tab = record.indexOf('\t')
+    if (tab === -1) continue
+    const mode = record.slice(0, tab).split(' ')[0]
+    const sha = record.slice(0, tab).split(' ')[1] ?? ''
+    const path = record.slice(tab + 1)
+    if (path === '' || sha === '') continue
+    if (mode === '120000') specials.push({ path, kind: 'symlink', sha })
+    else if (mode === '160000') specials.push({ path, kind: 'submodule', sha })
+  }
+
+  return specials
+}
+
 /** Whether a watched file or folder covers a path git reported. */
 export const covers = (watch: string, changed: string): boolean => {
   const base = watch === '.' ? '' : watch.replace(/\/+$/, '')
@@ -364,39 +404,46 @@ export const covers = (watch: string, changed: string): boolean => {
 /**
  * The changed paths a read will hash, limited to the watch list. An unsafe
  * path or a list past the cap fails the whole read: a partial hash would
- * report untouched for a file that was skipped.
+ * report untouched for a file that was skipped. A symlink or a submodule is
+ * not hashed: its gitlink sha is the stamp, so a directory there cannot
+ * fail the read.
  */
 export const planStamps = (
   changes: readonly Change[],
   untracked: readonly string[],
   watches: readonly string[],
+  specials: readonly Special[] = [],
 ): StampPlan => {
   const present: string[] = []
   const absent: string[] = []
   const extra: string[] = []
+  const linked: FileStamp[] = []
   const seen = new Set<string>()
+  const specialByPath = new Map(specials.map(one => [one.path, one]))
   const watched = (path: string): boolean => watches.some(watch => covers(watch, path))
   for (const change of changes) {
     if (!watched(change.path)) continue
-    if (!safePath(change.path)) return { ok: false }
+    if (!safeGitPath(change.path)) return { ok: false }
     if (change.kind === 'absent') {
       absent.push(change.path)
       continue
     }
     if (seen.has(change.path)) continue
     seen.add(change.path)
-    present.push(change.path)
+    const special = specialByPath.get(change.path)
+    if (special !== undefined) linked.push({ path: change.path, stamp: `${special.kind}:${special.sha}` })
+    else present.push(change.path)
   }
   for (const path of untracked) {
     if (!watched(path)) continue
-    if (!safePath(path)) return { ok: false }
+    if (!safeGitPath(path)) return { ok: false }
     if (seen.has(path)) continue
     seen.add(path)
     extra.push(path)
   }
   if (present.length + extra.length > MAX_STAMPED) return { ok: false }
 
-  return { ok: true, present, absent, untracked: extra }
+  return { ok: true, present, absent, untracked: extra, linked }
 }
 
 /**
@@ -405,7 +452,12 @@ export const planStamps = (
  * open instead of calling that file untouched.
  */
 export const stampsFor = (
-  plan: { present: readonly string[]; absent: readonly string[]; untracked: readonly string[] },
+  plan: {
+    present: readonly string[]
+    absent: readonly string[]
+    untracked: readonly string[]
+    linked?: readonly FileStamp[]
+  },
   hashes: ReadonlyMap<string, string>,
 ): FileStamp[] | undefined => {
   const stamps: FileStamp[] = []
@@ -420,6 +472,7 @@ export const stampsFor = (
     if (hash === undefined || hash === '') return undefined
     stamps.push({ path, stamp: `new:${hash}` })
   }
+  for (const link of plan.linked ?? []) stamps.push(link)
 
   return stamps
 }
@@ -443,11 +496,58 @@ export const touchedPaths = (before: readonly FileStamp[], after: readonly FileS
   return names.filter(name => (left.get(name) ?? []).join('\0') !== (right.get(name) ?? []).join('\0'))
 }
 
-/** One verdict per watched path, in the order you named them. */
-export const verdicts = (watches: readonly string[], changed: readonly string[]): Verdict[] =>
-  watches.map(path => ({ path, touched: changed.some(one => covers(path, one)) }))
+/**
+ * One verdict per watched path, in the order you named them.
+ * A symlink or a submodule is a hint, not touched or untouched.
+ */
+export const verdicts = (
+  watches: readonly string[],
+  changed: readonly string[],
+  hints: readonly { path: string; kind: SpecialKind }[] = [],
+): Verdict[] => {
+  const hintByPath = new Map(hints.map(hint => [watchId(hint.path), hint.kind]))
 
-const columns = (text: string): number => [...text].length
+  return watches.map(path => {
+    const hint = hintByPath.get(watchId(path))
+    const shown = displayPath(path)
+    if (hint !== undefined) return { path: shown, touched: false, hint }
+
+    return { path: shown, touched: changed.some(one => covers(path, one)) }
+  })
+}
+
+/** Wide or emoji code points take two columns. The ellipsis takes one. */
+const isWide = (code: number): boolean =>
+  (code >= 0x1100 && code <= 0x115f) ||
+  code === 0x2329 ||
+  code === 0x232a ||
+  (code >= 0x2e80 && code <= 0xa4cf) ||
+  (code >= 0xac00 && code <= 0xd7a3) ||
+  (code >= 0xf900 && code <= 0xfaff) ||
+  (code >= 0xfe10 && code <= 0xfe19) ||
+  (code >= 0xfe30 && code <= 0xfe6f) ||
+  (code >= 0xff00 && code <= 0xff60) ||
+  (code >= 0xffe0 && code <= 0xffe6) ||
+  (code >= 0x1f300 && code <= 0x1f64f) ||
+  (code >= 0x1f680 && code <= 0x1faff) ||
+  (code >= 0x20000 && code <= 0x3fffd)
+
+/** Visible columns. A CJK character counts as two, so a short string can still be wide. */
+export const columnWidth = (text: string): number => {
+  let width = 0
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0
+    width += isWide(code) ? 2 : 1
+  }
+
+  return width
+}
+
+const hasWide = (text: string): boolean => {
+  for (const char of text) if (isWide(char.codePointAt(0) ?? 0)) return true
+
+  return false
+}
 
 type ShownPath = { segments: string[]; folder: boolean; shortened: boolean }
 
@@ -474,32 +574,59 @@ const verdictWord = (touched: boolean): string => (touched ? 'touched' : 'untouc
  * Undefined when nothing is watched, so an empty list draws no line.
  *
  * Past 48 columns, folders come off the left (`…/LoginForm.tsx`) until every
- * verdict still fits. The words `touched` and `untouched` are never the part
- * that is cut. A final name that is itself too long stays whole.
+ * verdict still fits. Columns are display width, so a CJK name counts as two.
+ * The words `touched` and `untouched` are never the part that is cut. An ASCII
+ * final name that is itself too long stays whole. A wide final name is
+ * shortened from the left until the line fits in 48 columns.
  */
 export const statusLine = (rows: readonly Verdict[]): string | undefined => {
   if (rows.length === 0) return undefined
-  const shown = rows.map(row => shownPath(row.path))
-  const line = (): string =>
-    shown.map((path, index) => `${renderPath(path)} ${verdictWord(rows[index]?.touched === true)}`).join(' · ')
+  const shown = rows.map(row => shownPath(displayPath(row.path)))
+  const label = (row: Verdict | undefined): string => {
+    if (row?.hint === 'symlink') return 'is a symlink'
+    if (row?.hint === 'submodule') return 'is a submodule'
+
+    return verdictWord(row?.touched === true)
+  }
+  const line = (): string => shown.map((path, index) => `${renderPath(path)} ${label(rows[index])}`).join(' · ')
 
   let text = line()
-  while (columns(text) > STATUS_COLUMNS) {
+  while (columnWidth(text) > STATUS_COLUMNS) {
     let longest = -1
     let width = -1
     for (let index = 0; index < shown.length; index += 1) {
       const path = shown[index]
       if (path === undefined || path.segments.length <= 1) continue
-      const size = columns(renderPath(path))
+      const size = columnWidth(renderPath(path))
       if (size > width) {
         longest = index
         width = size
       }
     }
     const path = shown[longest]
-    if (path === undefined) break
-    path.segments.shift()
-    path.shortened = true
+    if (path !== undefined) {
+      path.segments.shift()
+      path.shortened = true
+      text = line()
+      continue
+    }
+    let wide = -1
+    let wideWidth = -1
+    for (let index = 0; index < shown.length; index += 1) {
+      const one = shown[index]
+      const name = one?.segments.at(-1)
+      if (one === undefined || name === undefined || !hasWide(name) || [...name].length <= 1) continue
+      const size = columnWidth(renderPath(one))
+      if (size > wideWidth) {
+        wide = index
+        wideWidth = size
+      }
+    }
+    const target = shown[wide]
+    const name = target?.segments.at(-1)
+    if (target === undefined || name === undefined) break
+    target.segments[target.segments.length - 1] = [...name].slice(1).join('')
+    target.shortened = true
     text = line()
   }
 

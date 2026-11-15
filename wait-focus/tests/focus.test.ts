@@ -3,7 +3,9 @@ import { expect, test } from 'claude-code/testing'
 import {
   CLEARED,
   covers,
+  columnWidth,
   decide,
+  displayPath,
   EMPTY_PATH,
   focusKey,
   globLine,
@@ -12,7 +14,9 @@ import {
   normalizeWatch,
   outsideLine,
   parseNameStatusZ,
+  parseStageZ,
   planStamps,
+  safeGitPath,
   showLine,
   stampsFor,
   statusLine,
@@ -135,13 +139,24 @@ test('an untracked file uses its own stamp, so adding it to the index still coun
   expect(touchedPaths(stamps ?? [], [{ path: 'src/auth/new.ts', stamp: 'hhh' }])).toEqual(['src/auth/new.ts'])
 })
 
+test('the four path checks refuse an empty path, a NUL, an absolute path, and a .. segment', () => {
+  expect(safeGitPath('src/auth/login.ts')).toBe(true)
+  expect(safeGitPath('')).toBe(false)
+  expect(safeGitPath('src/a\0b.ts')).toBe(false)
+  expect(safeGitPath('/etc/passwd')).toBe(false)
+  expect(safeGitPath('src/../../secret')).toBe(false)
+  expect(planStamps([{ kind: 'present', path: 'src/a\0b.ts' }], [], ['.']).ok).toBe(false)
+  expect(planStamps([{ kind: 'present', path: '/etc/passwd' }], [], ['.']).ok).toBe(false)
+  expect(planStamps([{ kind: 'present', path: 'src/../../secret' }], [], ['.']).ok).toBe(false)
+})
+
 test('a path that is not watched is not hashed, and an unsafe path fails the read', () => {
   const changes: Change[] = [
     { kind: 'present', path: 'src/auth/login.ts' },
     { kind: 'present', path: 'other.ts' },
   ]
   const plan = planStamps(changes, ['notes/a.txt'], ['src/auth/'])
-  expect(plan).toEqual({ ok: true, present: ['src/auth/login.ts'], absent: [], untracked: [] })
+  expect(plan).toEqual({ ok: true, present: ['src/auth/login.ts'], absent: [], untracked: [], linked: [] })
   expect(planStamps([{ kind: 'present', path: '../secret' }], [], ['.']).ok).toBe(false)
 })
 
@@ -184,6 +199,43 @@ test('a long path loses folders from the left, and every touched or untouched st
   const longName = statusLine([{ path: `src/${'a'.repeat(40)}.ts`, touched: true }])
   expect(longName).toBe(`…/${'a'.repeat(40)}.ts touched`)
   expect(longName?.endsWith('touched')).toBe(true)
+})
+
+test('bidi marks and C1 controls are stripped from a displayed path', () => {
+  expect(displayPath('src/\u200Eauth/\u202Elogin.ts')).toBe('src/auth/login.ts')
+  expect(displayPath('src/\u202Aauth\u202B/\u202C\u202D\u202E\u2066\u2067\u2068\u2069x')).toBe('src/auth/x')
+  expect(displayPath('src/\u0085auth\u009F.ts')).toBe('src/auth.ts')
+  expect(statusLine([{ path: 'src/\u202Eauth/login.ts', touched: true }])).toBe('src/auth/login.ts touched')
+  expect(watchingLine(['src/\u200Eauth'], [], true)).toBe('watching src/auth')
+})
+
+test('a CJK path is measured in display columns and stays within 48', () => {
+  const wide = `${'あ'.repeat(30)}.ts`
+  const line = statusLine([{ path: `src/${wide}`, touched: true }])
+  expect(line?.endsWith('touched')).toBe(true)
+  expect(line?.startsWith('…/')).toBe(true)
+  expect(columnWidth(line ?? '')).toBeLessThanOrEqual(48)
+  expect(line).not.toBe(`src/${wide} touched`)
+  expect(statusLine([{ path: '認証.ts', touched: false }])).toBe('認証.ts untouched')
+})
+
+test('a symlink and a submodule are hints, not untouched', () => {
+  expect(parseStageZ(`120000 ${'a'.repeat(40)} 0\tlink.json\0`)).toEqual([
+    { path: 'link.json', kind: 'symlink', sha: 'a'.repeat(40) },
+  ])
+  expect(parseStageZ(`160000 ${'b'.repeat(40)} 0\tvendor\0`)).toEqual([
+    { path: 'vendor', kind: 'submodule', sha: 'b'.repeat(40) },
+  ])
+  expect(verdicts(['link.json', 'package.json'], [], [{ path: 'link.json', kind: 'symlink' }])).toEqual([
+    { path: 'link.json', touched: false, hint: 'symlink' },
+    { path: 'package.json', touched: false },
+  ])
+  expect(
+    statusLine([
+      { path: 'link.json', touched: false, hint: 'symlink' },
+      { path: 'package.json', touched: false },
+    ]),
+  ).toBe('link.json is a symlink · package.json untouched')
 })
 
 test('a glob is refused and does not become a path that would always read untouched', () => {
