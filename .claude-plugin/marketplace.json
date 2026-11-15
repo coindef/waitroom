@@ -60,5 +60,10 @@
       "source": "./wait-cards",
       "description": "One flashcard from your own deck per wait: the question on the status line while Claude works, the answer once the turn ends. Optional. Quiet until ~/.waitroom/cards.md has cards, and it never writes that file."
     }
-  ]
+  ],
+  "renames": {
+    "wait-review": null,
+    "wait-changed": null,
+    "wait-shell": null
+  }
 }
