@@ -306,18 +306,30 @@ export const subjectOf = (
 ): string => {
   const actions = byVerb(files)
   if (actions.length > 1) {
-    const clauses = actions
-      .map(one => {
-        const word = style.kind !== 'conventional' && style.tense === 'past' ? pastTenseOf(one.verb) : one.verb
+    const wordOf = (verb: Verb): string =>
+      style.kind !== 'conventional' && style.tense === 'past' ? pastTenseOf(verb) : verb
+    const lineOf = (clauses: string): string => {
+      if (style.kind === 'conventional') return `${type}${scope ? `(${scope})` : ''}: ${clauses}`
 
-        return `${word} ${fileList(one.files)}`
+      return style.capitalized ? capitalize(clauses) : clauses
+    }
+    // Name the paths only while the whole subject fits. Past three files, or
+    // once a path would be cut, count each action instead — the subject is
+    // also the bold text on the Drafts ready row.
+    const named = lineOf(actions.map(one => `${wordOf(one.verb)} ${fileList(one.files)}`).join(', '))
+    if (files.length <= 3 && named.length <= SUBJECT_MAX) return named
+
+    const counted = actions
+      .map((one, index) => {
+        const n = one.files.length
+        const noun = index === 0 ? `${n} file${n === 1 ? '' : 's'}` : `${n}`
+
+        return `${wordOf(one.verb)} ${noun}`
       })
       .join(', ')
-    if (style.kind === 'conventional') {
-      return truncate(`${type}${scope ? `(${scope})` : ''}: ${clauses}`, SUBJECT_MAX)
-    }
+    const spread = scope === undefined && areasOf(files).size > 1 ? ' across several areas' : ''
 
-    return truncate(style.capitalized ? capitalize(clauses) : clauses, SUBJECT_MAX)
+    return truncate(lineOf(`${counted}${spread}`), SUBJECT_MAX)
   }
 
   const verb = verbFor(files)

@@ -354,6 +354,30 @@ test('a new file and a modified file in the same directory are not both called a
   expect(bodyOf([edited, created, elsewhere])).toContain('- src: add src/new.ts, update src/count.ts')
 })
 
+test('a mixed subject names paths only when three or fewer fit on the line', () => {
+  const style = inferStyle(['feat: a', 'fix: b', 'chore: c'])
+  const added = (path: string): FileChange => ({ path, added: 1, removed: 0, kind: 'added' })
+  const edited = (path: string): FileChange => ({ path, added: 1, removed: 0, kind: 'modified' })
+
+  // Three short paths fit, so the subject still names them.
+  expect(subjectOf([added('src/a.ts'), added('src/b.ts'), edited('src/c.ts')], style, 'feat', 'src')).toBe(
+    'feat(src): add src/a.ts, src/b.ts, update src/c.ts',
+  )
+
+  // Five files fit the character cap and still fall back to counts.
+  const five = [added('src/a.ts'), added('src/b.ts'), edited('src/c.ts'), edited('src/d.ts'), edited('src/e.ts')]
+  expect(subjectOf(five, style, 'feat', 'src')).toBe('feat(src): add 2 files, update 3')
+
+  // Three longer paths would be cut mid-path, so the subject counts instead.
+  const three = [added('src/api/users.ts'), added('tests/users.test.ts'), edited('src/api/routes.ts')]
+  expect(subjectOf(three, style, 'feat', undefined)).toBe('feat: add 2 files, update 1 across several areas')
+  // The same three paths fit a freeform subject, which has no type prefix.
+  // A fourth file does not, so that subject counts too.
+  const free = inferStyle(['Add a thing', 'Fix a thing'])
+  const four = [...three, edited('src/count.ts')]
+  expect(subjectOf(four, free, 'feat', undefined)).toBe('Add 2 files, update 2 across several areas')
+})
+
 // ---------------------------------------------------------------------------
 // The whole kit
 // ---------------------------------------------------------------------------
