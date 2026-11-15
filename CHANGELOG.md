@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### wait-ship 0.1.3
+
+- **The shared row is one row again on Claude Code 2.1.323 and later.** Those
+  versions ask every mod for its own row and stack the answers, and `next()`
+  no longer says who drew. This mod now leaves the other rows out of
+  `AbovePromptList`, in the same order as before: breathe, then this offer,
+  then the bet. On 2.1.319 and earlier it still yields from the stamp on
+  `next()`.
+
+### bet-on-your-agent 0.6.3
+
+- **The shared row is one row again on Claude Code 2.1.323 and later.** The
+  forecast still comes ahead of a ship offer while a turn runs, and still
+  waits behind a breathe nudge and, between turns, a ship offer. The yield
+  is done by leaving the other rows out of `AbovePromptList`. On 2.1.319 and
+  earlier the stamp on `next()` still decides.
+
+### wait-breathe 0.2.1
+
+- **The shared row is one row again on Claude Code 2.1.323 and later.** A due
+  nudge keeps the row ahead of a ship offer and a forecast instead of
+  stacking on them. On 2.1.319 and earlier a nudge still takes the row by
+  drawing it.
+
+### wait-scope 0.1.1
+
+- **The card yields the shared row again on Claude Code 2.1.323 and later.**
+  It was stacking on a wait-ship offer. It waits behind breathe, ship, and
+  the bet, and shows once they close. Returning the engine's own drawing is
+  not a yield: an empty row still shows this card. On 2.1.319 and earlier
+  the stamp on `next()` still decides.
+
+### wait-secret 0.1.1
+
+- **The card yields the shared row on Claude Code 2.1.323 and later.** It
+  waits behind breathe, ship, the bet, and scope, and shows once they close.
+  On 2.1.319 and earlier the stamp on `next()` still decides.
+
 ### bet-on-your-agent 0.6.2
 
 - **A failed read of the history no longer replaces it.** One error reading

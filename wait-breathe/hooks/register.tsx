@@ -12,6 +12,7 @@ import {
   sessionSummaryLine,
   toggledLine,
   toggleRefusedLine,
+  rowsKept,
   wholePositive,
 } from './breathe'
 
@@ -184,5 +185,15 @@ export const register: Register = (on, options) => {
         </Box>
       </Box>
     )
+  }).catch(($, e, next) => next(e))
+
+  // 2.1.325 stacks every plugin's row and `next(e)` there names nobody.
+  // Leaving rows out of AbovePromptList is how one mod yields. 2.1.319
+  // does not raise this event; the hook above still reads `part.plugin`.
+  on('ui.render', { component: 'AbovePromptList', plugin: '*' }, ($, e, next) => {
+    const kept = rowsKept(e.props.rows, e.props.isWorking)
+    if (kept.length === e.props.rows.length) return next(e)
+
+    return next({ ...e, props: { ...e.props, rows: kept } })
   }).catch(($, e, next) => next(e))
 }

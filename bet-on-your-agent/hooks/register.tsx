@@ -28,6 +28,7 @@ import {
   dailyChallengeDimFor,
   dailyOutcome,
   drawnBy,
+  rowsKept,
   extrasFromFor,
   extrasIn,
   FILE_BUCKETS,
@@ -819,9 +820,20 @@ export const register: Register = (on, options) => {
     // beneath keeps it, and so does a turn-end diff card or a ship offer
     // between turns; the bet waits its turn there.
     const beneath = await next(e).catch(() => undefined)
-
+    // `{ type: "engine" }` names nobody. Returning it would hide this row
+    // even when nothing else is there, so it is not a yield.
     return beneath !== undefined && betYields(drawnBy(beneath), e.props.isWorking) ? beneath : mine
   })
+
+  // 2.1.325 stacks every plugin's row and `next(e)` there names nobody.
+  // Leaving rows out of AbovePromptList is how one mod yields. 2.1.319
+  // does not raise this event; the hook above still reads `part.plugin`.
+  on('ui.render', { component: 'AbovePromptList', plugin: '*' }, ($, e, next) => {
+    const kept = rowsKept(e.props.rows, e.props.isWorking)
+    if (kept.length === e.props.rows.length) return next(e)
+
+    return next({ ...e, props: { ...e.props, rows: kept } })
+  }).catch(($, e, next) => next(e))
 
   // The pane is the record: what the band collects, read back. /bet opens it.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

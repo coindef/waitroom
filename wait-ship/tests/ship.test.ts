@@ -11,6 +11,7 @@ import {
   commitOf,
   DRAFTS_GITIGNORE,
   drawnBy,
+  rowsKept,
   type FileChange,
   fileList,
   fingerprintOf,
@@ -402,6 +403,28 @@ test('drawnBy reads the plugin the engine stamped on a tree, and nothing off any
   expect(drawnBy({ type: 'Box', part: { plugin: 7 } })).toBeUndefined()
   expect(drawnBy(undefined)).toBeUndefined()
   expect(drawnBy('text')).toBeUndefined()
+  // 2.1.325 names the row on AbovePromptList. The row's plugin wins over a stamp inside the tree.
+  expect(drawnBy({ plugin: 'wait-ship', tree: { type: 'Box', part: { plugin: 'wait-breathe' } } })).toBe('wait-ship')
+  // `{ type: "engine" }` is core's drawing and names nobody.
+  expect(drawnBy({ type: 'engine', ref: 1 })).toBeUndefined()
+  expect(drawnBy({ plugin: 'wait-ship' })).toBeUndefined()
+})
+
+test('AbovePromptList keeps one waitroom row, the same object, and leaves an outsider alone', () => {
+  const breathe = { plugin: 'wait-breathe', tree: { type: 'Box' } }
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const bet = { plugin: 'bet-on-your-agent', tree: { type: 'Box' } }
+  const scope = { plugin: 'wait-scope', tree: { type: 'Box' } }
+  const secret = { plugin: 'wait-secret', tree: { type: 'Box' } }
+  const other = { plugin: 'some-other-plugin', tree: { type: 'Box' } }
+  const outsiders = [other]
+
+  expect(rowsKept([ship, bet], false)[0]).toBe(ship)
+  expect(rowsKept([bet, ship], true)[0]).toBe(bet)
+  expect(rowsKept([bet, breathe, ship], true)[0]).toBe(breathe)
+  expect(rowsKept([secret, scope, ship], false).map(row => row.plugin)).toEqual(['wait-ship'])
+  expect(rowsKept(outsiders, false)).toBe(outsiders)
+  expect(rowsKept([other, ship], true).map(row => row.plugin)).toEqual(['wait-ship'])
 })
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import {
   DRAFTS_GITIGNORE,
   drawnBy,
   fingerprintOf,
+  rowsKept,
   formatSize,
   isOwnFolder,
   isUnder,
@@ -287,7 +288,18 @@ export const register: Register = (on, options) => {
       </Box>
     )
     const beneath = await next(e).catch(() => undefined)
-
+    // `{ type: "engine" }` names nobody. Returning it would hide this offer
+    // even when the row is empty, so it is not a yield.
     return beneath !== undefined && yieldsBand('wait-ship', drawnBy(beneath)) ? beneath : mine
+  }).catch(($, e, next) => next(e))
+
+  // 2.1.325 stacks every plugin's row and `next(e)` there names nobody.
+  // Leaving rows out of AbovePromptList is how one mod yields. 2.1.319
+  // does not raise this event; the hook above still reads `part.plugin`.
+  on('ui.render', { component: 'AbovePromptList', plugin: '*' }, ($, e, next) => {
+    const kept = rowsKept(e.props.rows, e.props.isWorking)
+    if (kept.length === e.props.rows.length) return next(e)
+
+    return next({ ...e, props: { ...e.props, rows: kept } })
   }).catch(($, e, next) => next(e))
 }
