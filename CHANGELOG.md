@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### wait-breathe 0.2.1
+
+- **If the cooldown cannot be read, no nudge is shown, and what is already saved is left alone.** Once the read works again, nudges come back on their usual ten-minute schedule. If the saved record itself cannot be read, the next due nudge starts a fresh one, so one bad value cannot turn the nudges off for good.
+
+### wait-anchor 0.1.1
+
+- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
+- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
+
 ### bet-on-your-agent 0.6.4
 
 - **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
@@ -18,25 +27,21 @@
   ended was written over every record. That turn is left unrecorded, and the
   status line is cleared instead of staying on the running-turn prompt.
 
-### wait-anchor 0.1.1
+### wait-ship 0.1.3
 
-- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
-- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
+- **Every path in the transcript receipt follows the folder the session is
+  in now.** From a subfolder that is the path after `Draft written:` and the
+  same path in `git commit -F`, `gh pr create --body-file`, and the changelog
+  paste line. Each command's path is one single-quoted word. A later `/cd`
+  or worktree, or a space in the drafts folder, no longer makes the command
+  miss the file. An absolute `shipDir` is still written under the repository,
+  and the receipt names that file.
 
-### wait-anchor 0.1.0
+### waitroom 0.1.2
 
-First release: a note you set for yourself, the goal and what to check when you come back.
+- **If you already have waitroom installed, update it.** Version 0.1.1 still asked for `wait-review` after that plugin left the catalog, so the bundle failed to load with `Dependency "wait-review@waitroom" is not installed`. This release is 0.1.2, so the update actually runs. Run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`. You should see `Plugin "waitroom" updated from 0.1.1 to 0.1.2 for scope user. Restart to apply changes.` Restart once. After that, waitroom loads again and keeps bet-on-your-agent, wait-ship, and wait-breathe.
 
-- **`/anchor`.** `ship login fix · check: redirect works` sets or replaces the note. `/anchor` shows it. `/anchor clear` clears it. With no note, the reply is `/anchor what you're doing · check: what to verify`. The reply does not start a turn.
-- **Status line.** `⚓ ship login fix → redirect works`. The check words stay as written. Past 48 columns the line ends in `…`. Claude Code chooses where that line sits among the other mods' lines. No note, no line. It does not take the row above the prompt.
-- **After Stop.** The next prompt you type logs `Back? You said: redirect works.` once. The prompt is unchanged. A later prompt does not repeat it until another main-loop turn ends.
-- **Kept as plugin-scoped JSON** under Claude's configuration directory. One value per project root and session id. Stop does not clear it. `/anchor clear` does. This mod does not choose the file name. A missing session id or project root saves nothing.
-- **No transcript reads.** The note never comes from your transcript. The Back? line is shown to you, not sent to the model. No summary, no model, no network. The note is stored as text.
-- If the note can't be saved, the Back? line waits for your next prompt.
-
-### wait-breathe 0.2.1
-
-- **If the cooldown cannot be read, no nudge is shown, and what is already saved is left alone.** Once the read works again, nudges come back on their usual ten-minute schedule. If the saved record itself cannot be read, the next due nudge starts a fresh one, so one bad value cannot turn the nudges off for good.
+- **Three old plugins are now disabled, and that is expected.** `wait-review`, `wait-changed`, and `wait-shell` are no longer in the catalog. After the update they stay installed locally and show as disabled (or "Removed from the waitroom marketplace"). While they are still installed, `claude plugin prune` refuses to run. Uninstall those three first. You don't need to install anything in their place.
 
 ### wait-cards 0.1.0
 
@@ -48,6 +53,17 @@ First release: one flashcard from a deck you write, one card per wait.
 - **`/card got` and `/card miss`.** Optional. `got` moves the card up one of five boxes, `miss` sends it back to box 1, and a missed card comes back on the next wait. A card you don't mark keeps its box. `/card` counts the deck.
 - **No deck.** One log line, `Add cards to ~/.waitroom/cards.md`, and then quiet. No sample cards.
 - **Kept in `$.store`.** Each card's box and a count of waits, under Claude's configuration directory. No model, no network, no keypress capture.
+
+### wait-anchor 0.1.0
+
+First release: a note you set for yourself, the goal and what to check when you come back.
+
+- **`/anchor`.** `ship login fix · check: redirect works` sets or replaces the note. `/anchor` shows it. `/anchor clear` clears it. With no note, the reply is `/anchor what you're doing · check: what to verify`. The reply does not start a turn.
+- **Status line.** `⚓ ship login fix → redirect works`. The check words stay as written. Past 48 columns the line ends in `…`. Claude Code chooses where that line sits among the other mods' lines. No note, no line. It does not take the row above the prompt.
+- **After Stop.** The next prompt you type logs `Back? You said: redirect works.` once. The prompt is unchanged. A later prompt does not repeat it until another main-loop turn ends.
+- **Kept as plugin-scoped JSON** under Claude's configuration directory. One value per project root and session id. Stop does not clear it. `/anchor clear` does. This mod does not choose the file name. A missing session id or project root saves nothing.
+- **No transcript reads.** The note never comes from your transcript. The Back? line is shown to you, not sent to the model. No summary, no model, no network. The note is stored as text.
+- If the note can't be saved, the Back? line waits for your next prompt.
 
 ### wait-notify 0.1.0
 
@@ -68,22 +84,6 @@ First release: while a turn runs, lists the shell commands it ran. wait-changed 
 - **Status line.** `N shell command(s)` while the turn runs, and after it until `Close` or the next turn. Hidden at 0.
 - **The row.** `$ git status`, one command per row, newest last: line breaks shown as `↵`, cut at 200 characters, up to eight rows under `N earlier commands…`. Last in the shared row.
 - **Only a list.** Never blocks, rewrites or reruns a command, and runs nothing of its own. No network, no telemetry. `Close` puts it away for the turn; `Don't show again` and `/wait-shell` turn it off and on.
-
-### wait-ship 0.1.3
-
-- **Every path in the transcript receipt follows the folder the session is
-  in now.** From a subfolder that is the path after `Draft written:` and the
-  same path in `git commit -F`, `gh pr create --body-file`, and the changelog
-  paste line. Each command's path is one single-quoted word. A later `/cd`
-  or worktree, or a space in the drafts folder, no longer makes the command
-  miss the file. An absolute `shipDir` is still written under the repository,
-  and the receipt names that file.
-
-### waitroom 0.1.2
-
-- **If you already have waitroom installed, update it.** Version 0.1.1 still asked for `wait-review` after that plugin left the catalog, so the bundle failed to load with `Dependency "wait-review@waitroom" is not installed`. This release is 0.1.2, so the update actually runs. Run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`. You should see `Plugin "waitroom" updated from 0.1.1 to 0.1.2 for scope user. Restart to apply changes.` Restart once. After that, waitroom loads again and keeps bet-on-your-agent, wait-ship, and wait-breathe.
-
-- **Three old plugins are now disabled, and that is expected.** `wait-review`, `wait-changed`, and `wait-shell` are no longer in the catalog. After the update they stay installed locally and show as disabled (or "Removed from the waitroom marketplace"). While they are still installed, `claude plugin prune` refuses to run. Uninstall those three first. You don't need to install anything in their place.
 
 ## wait-secret 0.1.0
 
