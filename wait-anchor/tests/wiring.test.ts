@@ -7,6 +7,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { install } from '../demo/host'
+import { noteKey } from '../hooks/anchor'
 
 const person = (text: string) => ({ text, origin: { kind: 'composer' } })
 
@@ -204,4 +205,88 @@ test('an empty anchor prints the help and draws no status line', async () => {
 
   expect(reply.text).toBe("/anchor what you're doing · check: what to verify")
   expect(host.status.at(-1)).toBeUndefined()
+})
+
+/**
+ * The turn-end save reads the barrier env after it has loaded the note and
+ * before it writes. `during` runs in that gap.
+ */
+const duringTurnEndSave = async (host: ReturnType<typeof install>, during: () => Promise<void>) => {
+  const hold = host.pauseNextGate()
+  const turn = host.dispatch('turn.complete', { turnId: 'turn-1' })
+  try {
+    await hold.entered
+    await during()
+  } finally {
+    hold.release()
+  }
+
+  await turn
+}
+
+test('a clear between the turn-end load and its save stays cleared', async () => {
+  const host = install({ root: '/work/app', sessionId: 'sess-a' })
+  await start(host)
+  await host.dispatch('command.run', {
+    command: 'anchor',
+    args: 'ship login fix · check: redirect works',
+  })
+
+  await duringTurnEndSave(host, async () => {
+    const cleared = (await host.dispatch('command.run', { command: 'anchor', args: 'clear' })) as { text: string }
+    expect(cleared.text).toBe('cleared')
+  })
+
+  expect(host.store.size).toBe(0)
+  expect(host.status.at(-1)).toBeUndefined()
+})
+
+test('a newer note written between the turn-end load and its save survives', async () => {
+  const host = install({ root: '/work/app', sessionId: 'sess-a' })
+  await start(host)
+  await host.dispatch('command.run', {
+    command: 'anchor',
+    args: 'ship login fix · check: redirect works',
+  })
+
+  await duringTurnEndSave(host, async () => {
+    const replaced = (await host.dispatch('command.run', {
+      command: 'anchor',
+      args: 'ship logout · check: session ends',
+    })) as { text: string }
+    expect(replaced.text).toBe('ship logout · check: session ends')
+  })
+
+  const kept = [...host.store.values()][0] as { goal?: string; check?: string }
+  expect(kept?.goal).toBe('ship logout')
+  expect(kept?.check).toBe('session ends')
+  expect(host.status.at(-1)).toBe('⚓ ship logout → session ends')
+})
+
+test('a rejected store read shows a read error and does not write', async () => {
+  const key = noteKey('/work/app', 'sess-a')
+  if (key === undefined) throw new Error('expected a store key')
+  const stored = { v: 1, goal: 'ship login', check: 'redirect works', awaitingReturn: false }
+  const store = new Map<string, unknown>([[key, stored]])
+  const host = install({ root: '/work/app', sessionId: 'sess-a', store })
+  host.fail.gets = 20
+  await start(host)
+
+  expect(host.status.at(-1)).toBe("wait-anchor: couldn't read your note")
+
+  const shown = (await host.dispatch('command.run', { command: 'anchor', args: '' })) as { text: string }
+  expect(shown.text).toBe("wait-anchor: couldn't read your note")
+
+  const set = (await host.dispatch('command.run', {
+    command: 'anchor',
+    args: 'other goal · check: other check',
+  })) as { text: string }
+  expect(set.text).toBe("wait-anchor: couldn't read your note")
+
+  const cleared = (await host.dispatch('command.run', { command: 'anchor', args: 'clear' })) as { text: string }
+  expect(cleared.text).toBe("wait-anchor: couldn't read your note")
+  expect(store.get(key)).toEqual(stored)
+  expect(host.order.includes('set')).toBe(false)
+  expect(host.order.includes('delete')).toBe(false)
+  expect(host.status.includes(undefined)).toBe(false)
 })

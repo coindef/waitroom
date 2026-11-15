@@ -15,13 +15,20 @@ import {
 } from './anchor'
 import { enterStoreGate, stampStoreDone, stampStoreStart } from './store-barrier'
 
-type Loaded = { gap: IdentityGap } | { key: string; note: Note | null }
+type Loaded = { gap: IdentityGap } | { key: string; note: Note | null } | { key: string; readError: true }
+
+/** A rejected store read. Not the empty-note help, and not a reason to write. */
+const READ_ERROR = "wait-anchor: couldn't read your note"
 
 const asText = (value: unknown): string => (typeof value === 'string' ? value : '')
 
 /**
  * The project root and the host session id. Either one missing is a gap:
  * there is no shorter key to try, and nothing is read.
+ *
+ * A rejected `$.store.get` is a read error. A missing key is an empty note.
+ * Callers must not treat the error as empty: that would show "no note" and
+ * could write over the note the store still holds.
  */
 const load = async ($: EngineInterface): Promise<Loaded> => {
   const root = await $.session.root().catch(() => undefined)
@@ -30,9 +37,13 @@ const load = async ($: EngineInterface): Promise<Loaded> => {
   if (gap !== undefined) return { gap }
   const key = await noteKey(asText(root), asText(id))
   if (key === undefined) return { gap: 'both' }
-  const raw = await $.store.get(key).catch(() => undefined)
+  const read = await $.store.get(key).then(
+    value => ({ value }),
+    () => undefined,
+  )
+  if (read === undefined) return { key, readError: true }
 
-  return { key, note: noteFromStore(raw) }
+  return { key, note: noteFromStore(read.value) }
 }
 
 /**
@@ -61,8 +72,39 @@ const write = async ($: EngineInterface, key: string, note: Note | null): Promis
   $.ui.status(statusFor(note))
 }
 
+/**
+ * Stop owns `awaitingReturn` only. The note from the earlier load is stale:
+ * the store gate awaits before the write, and a `/anchor clear` or a newer
+ * note can land there. Re-read after that gate and write the flag onto the
+ * note stored now. A missing note stays missing. A newer goal and check stay.
+ */
+const armReturn = async ($: EngineInterface, key: string): Promise<void> => {
+  const gate = await enterStoreGate($, 'set')
+  await stampStoreStart($, gate, 'set')
+  let armed: Note | undefined
+  try {
+    const read = await $.store.get(key).then(
+      value => ({ value }),
+      () => undefined,
+    )
+    if (read === undefined) return
+    const latest = noteFromStore(read.value)
+    if (latest === null || latest.awaitingReturn) return
+    armed = { ...latest, awaitingReturn: true }
+    await $.store.set(key, toStored(armed))
+  } finally {
+    await stampStoreDone($, gate, 'set')
+  }
+  if (armed !== undefined) $.ui.status(statusFor(armed))
+}
+
 const showStatus = async ($: EngineInterface): Promise<void> => {
   const found = await load($)
+  if ('readError' in found) {
+    $.ui.status(READ_ERROR)
+
+    return
+  }
   $.ui.status('gap' in found ? undefined : statusFor(found.note))
 }
 
@@ -86,7 +128,7 @@ const remind = async ($: EngineInterface, prompt: PromptLike, claim: Claim): Pro
   claim.current = true
   try {
     const found = await load($)
-    if ('gap' in found || found.note === null) return
+    if ('gap' in found || 'readError' in found || found.note === null) return
     const taken = onPrompt(found.note, true)
     if (taken.line === undefined || taken.note === null) return
     // Save first. A failed set must not print the line and then show it again
@@ -128,6 +170,11 @@ export const register: Register = on => {
   on('command.run', { command: 'anchor' }, async ($, e) => {
     try {
       const found = await load($)
+      if ('readError' in found) {
+        $.ui.status(READ_ERROR)
+
+        return { text: READ_ERROR }
+      }
       if ('gap' in found) {
         $.ui.status(undefined)
 
@@ -153,9 +200,10 @@ export const register: Register = on => {
     try {
       if (e.agentId !== undefined) return done
       const found = await load($)
-      if ('gap' in found || found.note === null) return done
+      if ('gap' in found || 'readError' in found || found.note === null) return done
       const armed = onStop(found.note, false)
-      if (armed !== found.note && armed !== null) await write($, found.key, armed)
+      // `armed` is the stale snapshot. armReturn re-reads and does not write it back.
+      if (armed !== found.note && armed !== null) await armReturn($, found.key)
     } catch {
       // The turn's answer is already decided.
     }

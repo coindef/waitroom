@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### wait-anchor 0.1.1
+
+- **A turn ending no longer puts an older note back.** The save re-reads the note and only sets the return flag. A `/anchor clear` in that gap stays cleared, and a newer note keeps its goal and check.
+- **A failed store read is not an empty note.** The status line and `/anchor` say `wait-anchor: couldn't read your note`. Nothing is written or cleared.
+
 ### bet-on-your-agent 0.6.2
 
 - **A failed read of the history no longer replaces it.** One error reading
