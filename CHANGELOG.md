@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### wait-cards 0.1.1
+
+- **A comment in the deck only hides cards when it is its own block.** A `<!--` written on a question or an answer stays. An unclosed comment hides the cards under it, and `/card` counts them as skipped.
+- **A card waits out its box.** When nothing is due, the line stays clear. `/card got` on a card that was not due does not move it up, so the waits in the reply are the waits until it comes back: 2, 4, 8, then 16.
+- **A failed read leaves the boxes alone.** If the saved progress can't be read, that wait writes nothing. A saved value that isn't a real record is replaced once, and the deck carries on. A card with no saved record still starts at box 1.
+- **Showing a card keeps a mark from another session.** That wait updates when the card was shown. The box and the due wait stay as the later read has them.
+- **`/card` says when the deck was cut.** A deck keeps 1000 cards from the first 256 KiB. Past that, the reply says `1000 of 1001 cards · deck capped at 1000` or `deck cut at 256 KiB`.
+
 ### bet-on-your-agent 0.6.3
 
 - **A file count that cannot be read is not scored as none.** When a snapshot was taken and a later `git status` lists more than 500 paths (changed or untracked, not only this turn's), the row says the count is unknown and that question is left out of the score. A tree already past that limit when the turn starts has no snapshot, so the count is the `Edit`, `Write` and `NotebookEdit` calls, the same as outside a repository. One path git cannot hash is skipped on its own, so the rest of the turn's files still count.

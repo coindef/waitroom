@@ -3,7 +3,6 @@ import type { EngineInterface, Register } from 'claude-code'
 import {
   CANT_READ,
   HINT,
-  NO_CARDS,
   NO_DECK,
   NOTHING_TO_MARK,
   USAGE,
@@ -14,6 +13,8 @@ import {
   markCard,
   markedLine,
   newRecord,
+  noCardsLine,
+  notDueLine,
   parseCardCommand,
   parseDeck,
   pickNext,
@@ -63,22 +64,61 @@ const readDeck = async ($: EngineInterface): Promise<Deck | 'unreadable' | undef
   return isThere ? 'unreadable' : undefined
 }
 
-/** Waits shown so far, across every session of this plugin. */
-const readTick = async ($: EngineInterface): Promise<number> => {
-  const raw = await $.store.get(TICK_KEY).catch(() => undefined)
-  const n = typeof raw === 'object' && raw !== null ? (raw as { n?: unknown }).n : undefined
+type Read = { ok: true; value: unknown } | { ok: false }
 
-  return typeof n === 'number' && Number.isInteger(n) && n >= 0 ? n : 0
+/**
+ * One store read.
+ *
+ * `ok: false` means the get threw. That is not a missing key: callers skip
+ * this turn's writes, so a blip cannot replace the real tick and cards.
+ * A resolved value is returned as it is, including `undefined`.
+ */
+const readValue = async ($: EngineInterface, key: string): Promise<Read> => {
+  try {
+    return { ok: true, value: await $.store.get(key) }
+  } catch {
+    return { ok: false }
+  }
 }
 
-const readRecords = async ($: EngineInterface, cards: readonly Card[]): Promise<Map<string, CardRecord>> => {
-  const rows = await Promise.all(
-    cards.map(async card => [card.id, recordFromStore(await $.store.get(cardKey(card.id)).catch(() => undefined))] as const),
-  )
-  const records = new Map<string, CardRecord>()
-  for (const [id, record] of rows) if (record !== undefined) records.set(id, record)
+/**
+ * Waits shown so far. A missing key, a wrong `v`, a bad `n`, or a negative
+ * `n` is wait 0, and the next successful turn writes a real tick over it.
+ * A thrown read is `ok: false` and is not wait 0.
+ */
+const readTick = async ($: EngineInterface): Promise<{ ok: true; value: number } | { ok: false }> => {
+  const read = await readValue($, TICK_KEY)
+  if (!read.ok) return read
+  const raw = read.value
+  if (typeof raw !== 'object' || raw === null) return { ok: true, value: 0 }
+  const row = raw as { v?: unknown; n?: unknown }
+  const n = row.n
+  if (row.v !== 1 || typeof n !== 'number' || !Number.isInteger(n) || n < 0) return { ok: true, value: 0 }
 
-  return records
+  return { ok: true, value: n }
+}
+
+/**
+ * One record per card that still reads as one this mod wrote.
+ *
+ * A missing key and a present value that is not a record are both a new card
+ * (left out of the map). The show writes that new card, so one bad value does
+ * not stick. Any thrown read fails the whole load: this turn writes nothing.
+ */
+const readRecords = async (
+  $: EngineInterface,
+  cards: readonly Card[],
+): Promise<{ ok: true; value: Map<string, CardRecord> } | { ok: false }> => {
+  const reads = await Promise.all(cards.map(async card => ({ id: card.id, read: await readValue($, cardKey(card.id)) })))
+  if (reads.some(row => !row.read.ok)) return { ok: false }
+  const records = new Map<string, CardRecord>()
+  for (const row of reads) {
+    if (!row.read.ok) continue
+    const record = recordFromStore(row.read.value)
+    if (record !== undefined) records.set(row.id, record)
+  }
+
+  return { ok: true, value: records }
 }
 
 /** No deck: one line, once. The store keeps that it was said, so a new process stays quiet too. */
@@ -108,11 +148,22 @@ const ask = async ($: EngineInterface, memory: Memory): Promise<void> => {
   if (deck === 'unreadable') return
   await forgetHint($, memory)
   if (deck.cards.length === 0) return
-  const tick = await readTick($)
-  const records = await readRecords($, deck.cards)
-  const card = pickNext(deck.cards, records, tick)
-  if (card === undefined) return
-  const record = shownRecord(records.get(card.id) ?? newRecord(), tick)
+  const tickRead = await readTick($)
+  if (!tickRead.ok) return
+  const recordsRead = await readRecords($, deck.cards)
+  if (!recordsRead.ok) return
+  const tick = tickRead.value
+  const card = pickNext(deck.cards, recordsRead.value, tick)
+  // The wait still counts when nothing is due, or the promised gap never elapses.
+  if (card === undefined) {
+    await $.store.set(TICK_KEY, { v: 1, n: tick + 1 }).catch(() => undefined)
+    return
+  }
+  // Read this card again and change `shown` only. The box and due wait come
+  // from this read, not the copy pickNext used, so a mark made in between stays.
+  const fresh = await readValue($, cardKey(card.id))
+  if (!fresh.ok) return
+  const record = shownRecord(recordFromStore(fresh.value) ?? newRecord(), tick)
   memory.asking = { card, record, tick }
   $.ui.status(statusFor(card.question))
   await $.store.set(cardKey(card.id), toStored(record)).catch(() => undefined)
@@ -133,6 +184,8 @@ const answer = ($: EngineInterface, memory: Memory): void => {
 const mark = async ($: EngineInterface, memory: Memory, kind: Mark): Promise<string> => {
   const shown = memory.answered
   if (shown === undefined) return NOTHING_TO_MARK
+  // On screen before it was due: not a review. Leave the box and the due wait.
+  if (shown.record.due > shown.tick) return notDueLine(kind, shown.record, shown.tick)
   const record = markCard(shown.record, kind, shown.tick)
   await $.store.set(cardKey(shown.card.id), toStored(record))
 
@@ -144,11 +197,13 @@ const describe = async ($: EngineInterface): Promise<string> => {
   const deck = await readDeck($)
   if (deck === undefined) return NO_DECK
   if (deck === 'unreadable') return CANT_READ
-  if (deck.cards.length === 0) return NO_CARDS
-  const tick = await readTick($)
-  const records = await readRecords($, deck.cards)
+  if (deck.cards.length === 0) return noCardsLine(deck)
+  const tickRead = await readTick($)
+  if (!tickRead.ok) throw new Error('store unread')
+  const recordsRead = await readRecords($, deck.cards)
+  if (!recordsRead.ok) throw new Error('store unread')
 
-  return deckLine(deck, dueCount(deck.cards, records, tick))
+  return deckLine(deck, dueCount(deck.cards, recordsRead.value, tickRead.value))
 }
 
 export const register: Register = on => {

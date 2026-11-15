@@ -38,7 +38,14 @@ const ELLIPSIS = '…'
 
 export type Card = { id: string; question: string; answer: string }
 
-export type Deck = { cards: Card[]; skipped: number }
+export type Deck = {
+  cards: Card[]
+  skipped: number
+  /** Valid cards past the cap. Omitted when every parsed card was kept. */
+  dropped?: number
+  /** The file was longer than MAX_DECK_CHARS. Omitted when it was not. */
+  cut?: boolean
+}
 
 /**
  * One card's place in the boxes. `due` and `shown` count waits, not time:
@@ -268,18 +275,22 @@ const HEADING = /^\s*#/
  * A card is a `Q:` line and the `A:` line after it. Lines after the `A:` line
  * join the answer until a blank line, a heading, or the next `Q:`. A `Q:` with
  * no answer, an `A:` with no question, an empty side, and a repeated question
- * are skipped and counted, never guessed. Fenced code and HTML comments are
- * not read.
+ * are skipped and counted, never guessed. Fenced code is not read. An HTML
+ * comment is not read only when it is its own block: a line that starts with
+ * `<!--`, through the line that closes it. A `<!--` on a `Q:` or `A:` line is
+ * part of that card. Cards under a comment that never closes count as skipped.
  */
-export const parseDeck = (text: unknown): Deck => {
+const COMMENT_OPEN = /^\s*<!--/
+
+const parseBody = (body: string): { cards: Card[]; skipped: number; dropped: number } => {
   const cards: Card[] = []
   const seen = new Set<string>()
   let skipped = 0
-  if (typeof text !== 'string') return { cards, skipped }
-  const body = text.slice(0, MAX_DECK_CHARS).replace(/<!--[\s\S]*?(?:-->|$)/g, '')
-
+  let dropped = 0
   let question: string[] | undefined
   let answer: string[] | undefined
+  /** Lines under a `<!--` that has not closed. Undefined once it does, or before it starts. */
+  let commentLines: string[] | undefined
 
   const close = (): void => {
     if (question === undefined) return
@@ -298,16 +309,27 @@ export const parseDeck = (text: unknown): Deck => {
     }
     seen.add(id)
     if (cards.length < MAX_CARDS) cards.push({ id, question: q, answer: a })
+    else dropped += 1
   }
 
   let fenced = false
   for (const line of body.split(/\r\n|\r|\n/)) {
+    if (commentLines !== undefined) {
+      if (line.includes('-->')) commentLines = undefined
+      else commentLines.push(line)
+      continue
+    }
     if (FENCE.test(line)) {
       close()
       fenced = !fenced
       continue
     }
     if (fenced) continue
+    if (COMMENT_OPEN.test(line)) {
+      close()
+      if (!line.includes('-->')) commentLines = []
+      continue
+    }
     const isQ = Q_LINE.exec(line)
     if (isQ !== null) {
       close()
@@ -335,8 +357,25 @@ export const parseDeck = (text: unknown): Deck => {
     if (answer !== undefined) answer.push(line)
   }
   close()
+  if (commentLines !== undefined) {
+    const hidden = parseBody(commentLines.join('\n'))
+    skipped += hidden.cards.length + hidden.skipped + hidden.dropped
+  }
 
-  return { cards, skipped }
+  return { cards, skipped, dropped }
+}
+
+export const parseDeck = (text: unknown): Deck => {
+  if (typeof text !== 'string') return { cards: [], skipped: 0 }
+  const cut = text.length > MAX_DECK_CHARS
+  const parsed = parseBody(text.slice(0, MAX_DECK_CHARS))
+
+  return {
+    cards: parsed.cards,
+    skipped: parsed.skipped,
+    ...(parsed.dropped > 0 ? { dropped: parsed.dropped } : {}),
+    ...(cut ? { cut: true } : {}),
+  }
 }
 
 export const newRecord = (): CardRecord => ({ box: 1, due: 0, shown: -1 })
@@ -361,6 +400,8 @@ export const recordFromStore = (raw: unknown): CardRecord | undefined => {
   const row = raw as { v?: unknown; box?: unknown; due?: unknown; shown?: unknown }
   if (row.v !== 1 || !isWait(row.box) || !isWait(row.due) || !isWait(row.shown)) return undefined
   if (row.box < 1 || row.box > TOP_BOX) return undefined
+  // `shown` of -1 is "never". A negative due, or a shown before that, is not a record.
+  if (row.due < 0 || row.shown < -1) return undefined
 
   return { box: row.box, due: row.due, shown: row.shown }
 }
@@ -400,7 +441,8 @@ const rankOf = (record: CardRecord, tick: number): [number, number, number, numb
  * in deck order. Last come cards you left unmarked, the one shown longest ago
  * first, so an unmarked card does not hold the front. Deck order breaks a tie.
  *
- * With nothing due, the card due soonest shows, so every wait has a card.
+ * With nothing due, no card shows. Showing the soonest one on every wait let
+ * `/card got` climb the box before the waits it had promised.
  */
 export const pickNext = (
   cards: readonly Card[],
@@ -412,8 +454,9 @@ export const pickNext = (
     const key = [...rankOf(recordOf(records, card.id), tick), index]
     if (best === undefined || less(key, best.key)) best = { card, key }
   })
+  if (best === undefined || best.key[0] !== 0) return undefined
 
-  return best?.card
+  return best.card
 }
 
 /** Cards due on wait `tick` or before it. */
@@ -445,18 +488,47 @@ export const NO_CARDS = 'no cards in ~/.waitroom/cards.md yet · write a Q: line
 /** The `/card` reply when the deck file is there but can't be read. */
 export const CANT_READ = "can't read ~/.waitroom/cards.md"
 
-/** The `/card` reply to a mark. */
-export const markedLine = (mark: Mark, record: CardRecord): string => {
-  const wait = intervalOf(record.box)
-  const back = wait === 1 ? 'back next wait' : `back in ${wait} waits`
+const backPhrase = (wait: number): string => (wait === 1 ? 'back next wait' : `back in ${wait} waits`)
 
-  return mark === 'got' ? `got it · box ${record.box} · ${back}` : `missed · box ${record.box} · ${back}`
+const markReply = (mark: Mark, box: number, wait: number): string => {
+  const back = backPhrase(wait)
+
+  return mark === 'got' ? `got it · box ${box} · ${back}` : `missed · box ${box} · ${back}`
 }
+
+/** The `/card` reply to a mark that counted. The waits are that box's interval. */
+export const markedLine = (mark: Mark, record: CardRecord): string =>
+  markReply(mark, record.box, intervalOf(record.box))
+
+/**
+ * The `/card` reply when the card on screen was not due. The box stays, and
+ * the waits named here are the ones still left until it is due.
+ */
+export const notDueLine = (mark: Mark, record: CardRecord, tick: number): string =>
+  markReply(mark, record.box, record.due - tick)
+
+const CUT_NOTE = `deck cut at ${MAX_DECK_CHARS / 1024} KiB`
 
 /** The `/card` reply with no args. */
 export const deckLine = (deck: Deck, due: number): string => {
-  const parts = [`${deck.cards.length} ${deck.cards.length === 1 ? 'card' : 'cards'}`, `${due} due`]
+  const count = deck.cards.length
+  const dropped = deck.dropped ?? 0
+  const total = count + dropped
+  const noun = (dropped > 0 ? total : count) === 1 ? 'card' : 'cards'
+  const parts = [dropped > 0 ? `${count} of ${total} ${noun}` : `${count} ${noun}`]
+  if (dropped > 0) parts.push(`deck capped at ${MAX_CARDS}`)
+  if (deck.cut === true) parts.push(CUT_NOTE)
+  parts.push(`${due} due`)
   if (deck.skipped > 0) parts.push(`${deck.skipped} skipped`)
 
   return `${parts.join(' · ')} · mark an answer with /card got or /card miss`
+}
+
+/** `/card` when the kept slice has no cards. A cut, or cards that were skipped, is named. */
+export const noCardsLine = (deck: Deck): string => {
+  const parts = [NO_CARDS]
+  if (deck.cut === true) parts.push(CUT_NOTE)
+  if (deck.skipped > 0) parts.push(`${deck.skipped} skipped`)
+
+  return parts.join(' · ')
 }

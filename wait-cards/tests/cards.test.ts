@@ -9,6 +9,7 @@ import {
   cardId,
   columnWidth,
   deckPathOf,
+  deckLine,
   dueCount,
   markCard,
   newRecord,
@@ -79,6 +80,41 @@ test('a duplicate question keeps the first card and counts the second as skipped
   const deck = parseDeck('Q: same\nA: first\n\nQ: same\nA: second\n')
   expect(deck.cards.map(card => card.answer)).toEqual(['first'])
   expect(deck.skipped).toBe(1)
+})
+
+test('an HTML comment is its own block: <!-- inside a Q or A stays, and an unclosed comment counts the cards it hides', () => {
+  const inline = parseDeck('Q: What marks a comment?\nA: <!-- comment -->\n')
+  const sentence = parseDeck('Q: How is a comment written?\nA: Wrap it in <!-- and -->.\n')
+  const inQuestion = parseDeck('Q: Is <!-- a comment?\nA: no, it is text\n')
+  const hidden = parseDeck('Q: stays\nA: yes\n\n<!--\nQ: hidden\nA: no\n\nQ: also\nA: no\n')
+  const eaten = parseDeck('<!--\nQ: hidden\nA: no\n\nQ: also\nA: no\n')
+  const closed = parseDeck('<!--\nQ: hidden\nA: no\n-->\nQ: outside\nA: yes\n')
+
+  expect({
+    inline: inline.cards.map(card => card.answer),
+    inlineSkipped: inline.skipped,
+    sentence: sentence.cards[0]?.answer,
+    inQuestion: inQuestion.cards.map(card => [card.question, card.answer]),
+    hidden: hidden.cards.map(card => card.question),
+    hiddenSkipped: hidden.skipped,
+    hiddenLine: deckLine(hidden, dueCount(hidden.cards, new Map(), 0)),
+    eaten: eaten.cards.length,
+    eatenSkipped: eaten.skipped,
+    closed: closed.cards.map(card => card.question),
+    closedSkipped: closed.skipped,
+  }).toEqual({
+    inline: ['<!-- comment -->'],
+    inlineSkipped: 0,
+    sentence: 'Wrap it in <!-- and -->.',
+    inQuestion: [['Is <!-- a comment?', 'no, it is text']],
+    hidden: ['stays'],
+    hiddenSkipped: 2,
+    hiddenLine: '1 card · 1 due · 2 skipped · mark an answer with /card got or /card miss',
+    eaten: 0,
+    eatenSkipped: 2,
+    closed: ['outside'],
+    closedSkipped: 0,
+  })
 })
 
 test('fenced code and HTML comments are ignored, so a Q: inside them is not a card', () => {
@@ -167,7 +203,7 @@ test('showing a card stamps when it was shown and does not move its box', () => 
   expect(shownRecord(record, 7)).toEqual({ box: 2, due: record.due, shown: 7 })
 })
 
-test('next card: cards not shown yet in deck order, then unmarked ones shown longest ago, and the soonest due when none is due', () => {
+test('next card: cards not shown yet in deck order, then unmarked ones shown longest ago, and nothing when none is due', () => {
   const cards = parseDeck('Q: a\nA: 1\n\nQ: b\nA: 2\n\nQ: c\nA: 3\n').cards
   const [a, b, c] = cards
   if (a === undefined || b === undefined || c === undefined) throw new Error('three cards')
@@ -181,13 +217,13 @@ test('next card: cards not shown yet in deck order, then unmarked ones shown lon
   // c in box 3 not due for a while: a and b come first even though shown.
   records.set(c.id, { box: 3, due: 50, shown: 3 })
   expect(pickNext(cards, records, 3)?.id).toBe(a.id)
-  // Nothing due at all: the soonest one still shows, so every wait has a card.
+  // Nothing due: the line stays clear. Showing the soonest every wait let got climb the box.
   const later = new Map<string, CardRecord>([
     [a.id, { box: 5, due: 40, shown: 1 }],
     [b.id, { box: 4, due: 20, shown: 2 }],
     [c.id, { box: 5, due: 30, shown: 3 }],
   ])
-  expect(pickNext(cards, later, 4)?.id).toBe(b.id)
+  expect(pickNext(cards, later, 4)).toBeUndefined()
   expect(pickNext([], new Map(), 0)).toBeUndefined()
 })
 
@@ -243,6 +279,9 @@ test('a stored record this mod did not write is a new card', () => {
   expect(recordFromStore({ v: 2, box: 3, due: 1, shown: 1 })).toBeUndefined()
   expect(recordFromStore({ v: 1, box: 9, due: 1, shown: 1 })).toBeUndefined()
   expect(recordFromStore({ v: 1, box: 2, due: 'soon', shown: 1 })).toBeUndefined()
+  expect(recordFromStore({ v: 1, box: 2, due: -1, shown: 1 })).toBeUndefined()
+  expect(recordFromStore({ v: 1, box: 2, due: 1, shown: -2 })).toBeUndefined()
+  expect(recordFromStore({ v: 1, box: 1, due: 0, shown: -1 })).toEqual({ box: 1, due: 0, shown: -1 })
   expect(recordFromStore({ v: 1, box: 2, due: 4, shown: 3 })).toEqual({ box: 2, due: 4, shown: 3 })
 })
 
