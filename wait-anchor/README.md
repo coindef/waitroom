@@ -31,7 +31,7 @@ While a note is set, this mod's status line keeps the check words you wrote:
 
 The goal, an arrow, and the check. The check is not rewritten into a shorter label. Past 48 columns the line ends in `…`, on a character boundary. The stored check stays whole.
 
-Claude Code draws one status line per mod and chooses the order. This mod does not ask to sit under the bet. It does not draw in the row above the prompt, so the bet's question and its keys stay as they are. It does not open a pane or a toast. With no note, it sets no line. If the stored note cannot be read, the line says `wait-anchor: couldn't read your note` instead of going blank. The host puts its own mark and this mod's name in front of the sentence.
+Claude Code draws one status line per mod and chooses the order. This mod does not ask to sit under the bet. It does not draw in the row above the prompt, so the bet's question and its keys stay as they are. It does not open a pane or a toast. With no note, it sets no line. If the stored note cannot be read, the line says `couldn't read your note · nothing was changed · try /anchor again` instead of going blank. The host puts its own mark and this mod's name in front of the sentence.
 
 ## When you come back
 
@@ -67,7 +67,7 @@ The text is stored as text. Control characters and color codes are stripped befo
 - It does not summarize the session.
 - **No transcript reads.** The note never comes from your transcript. The `Back?` line is shown to you, not sent to the model.
 - If the note can't be saved, the `Back?` line waits for your next prompt.
-- If the note can't be read, nothing is written or cleared. `/anchor` replies `wait-anchor: couldn't read your note`.
+- If the note can't be read, nothing is written or cleared. `/anchor` replies `couldn't read your note · nothing was changed · try /anchor again`. A new note replies `couldn't read your note · the new one wasn't saved · try again`. `/anchor clear` replies `couldn't read your note · nothing was cleared · try again`.
 - It does not call a model or open a connection.
 - It does not take the bet's row.
 

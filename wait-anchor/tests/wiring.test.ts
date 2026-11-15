@@ -272,21 +272,23 @@ test('a rejected store read shows a read error and does not write', async () => 
   host.fail.gets = 20
   await start(host)
 
-  expect(host.status.at(-1)).toBe("wait-anchor: couldn't read your note")
+  const unchanged = "couldn't read your note · nothing was changed · try /anchor again"
+  expect(host.status.at(-1)).toBe(unchanged)
 
   const shown = (await host.dispatch('command.run', { command: 'anchor', args: '' })) as { text: string }
-  expect(shown.text).toBe("wait-anchor: couldn't read your note")
+  expect(shown.text).toBe(unchanged)
 
   const set = (await host.dispatch('command.run', {
     command: 'anchor',
     args: 'other goal · check: other check',
   })) as { text: string }
-  expect(set.text).toBe("wait-anchor: couldn't read your note")
+  expect(set.text).toBe("couldn't read your note · the new one wasn't saved · try again")
 
   const cleared = (await host.dispatch('command.run', { command: 'anchor', args: 'clear' })) as { text: string }
-  expect(cleared.text).toBe("wait-anchor: couldn't read your note")
+  expect(cleared.text).toBe("couldn't read your note · nothing was cleared · try again")
   expect(store.get(key)).toEqual(stored)
   expect(host.order.includes('set')).toBe(false)
   expect(host.order.includes('delete')).toBe(false)
   expect(host.status.includes(undefined)).toBe(false)
+  expect(host.status.every(line => line === unchanged)).toBe(true)
 })

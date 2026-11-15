@@ -8,8 +8,8 @@
 
 ### wait-anchor 0.1.1
 
-- **A turn ending no longer puts an older note back.** The save re-reads the note and only sets the return flag. A `/anchor clear` in that gap stays cleared, and a newer note keeps its goal and check.
-- **A failed store read is not an empty note.** The status line and `/anchor` say `wait-anchor: couldn't read your note`. Nothing is written or cleared.
+- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
+- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
 
 ### bet-on-your-agent 0.6.2
 

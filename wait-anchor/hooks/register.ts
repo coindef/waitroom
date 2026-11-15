@@ -8,6 +8,7 @@ import {
   onCommand,
   onPrompt,
   onStop,
+  parseAnchorCommand,
   statusFor,
   toStored,
   type IdentityGap,
@@ -17,8 +18,23 @@ import { enterStoreGate, stampStoreDone, stampStoreStart } from './store-barrier
 
 type Loaded = { gap: IdentityGap } | { key: string; note: Note | null } | { key: string; readError: true }
 
-/** A rejected store read. Not the empty-note help, and not a reason to write. */
-const READ_ERROR = "wait-anchor: couldn't read your note"
+/**
+ * A rejected store read. The host already puts this mod's name in front, so
+ * these start at the words. Nothing was written, and a failed read cannot
+ * promise the old note is still there.
+ */
+const READ_UNCHANGED = "couldn't read your note · nothing was changed · try /anchor again"
+const READ_NOT_SAVED = "couldn't read your note · the new one wasn't saved · try again"
+const READ_NOT_CLEARED = "couldn't read your note · nothing was cleared · try again"
+
+/** The reply for a command that could not read. Show, and text that is not a note, say nothing changed. */
+const readErrorText = (args: string): string => {
+  const parsed = parseAnchorCommand(args)
+  if (parsed.type === 'clear') return READ_NOT_CLEARED
+  if (parsed.type === 'set') return READ_NOT_SAVED
+
+  return READ_UNCHANGED
+}
 
 const asText = (value: unknown): string => (typeof value === 'string' ? value : '')
 
@@ -101,7 +117,7 @@ const armReturn = async ($: EngineInterface, key: string): Promise<void> => {
 const showStatus = async ($: EngineInterface): Promise<void> => {
   const found = await load($)
   if ('readError' in found) {
-    $.ui.status(READ_ERROR)
+    $.ui.status(READ_UNCHANGED)
 
     return
   }
@@ -171,9 +187,9 @@ export const register: Register = on => {
     try {
       const found = await load($)
       if ('readError' in found) {
-        $.ui.status(READ_ERROR)
+        $.ui.status(READ_UNCHANGED)
 
-        return { text: READ_ERROR }
+        return { text: readErrorText(typeof e.args === 'string' ? e.args : '') }
       }
       if ('gap' in found) {
         $.ui.status(undefined)
