@@ -68,6 +68,7 @@
  *   against the real column count.
  */
 
+import type { BoxRenderable } from '@opentui/core'
 import type { TuiPlugin, TuiPluginModule } from '@opencode-ai/plugin/tui'
 
 import {
@@ -299,15 +300,32 @@ export const tui: TuiPlugin = async api => {
     )
   }
 
-  // Digits are handled only while a question is on screen. See keys.ts.
+  // The bet row is focusable. A digit answers only while that row has focus.
+  // The prompt keeps focus while you type, so the same key is a character there.
+  const panels = new Map<string, BoxRenderable>()
+  const panelFocused = (): boolean => {
+    const sessionID = activeSessionId()
+    const panel = sessionID ? panels.get(sessionID) : undefined
+    if (!panel) return false
+    let node = api.renderer.currentFocusedRenderable
+    while (node) {
+      if (node === panel) return true
+      node = node.parent
+    }
+
+    return false
+  }
+  const rememberPanel = (sessionID: string) => (node: BoxRenderable | undefined) => {
+    if (node) panels.set(sessionID, node)
+    else panels.delete(sessionID)
+  }
+
   api.lifecycle.onDispose(
     registerBetKeys(api.keymap, {
       sessionID: activeSessionId,
       bet: openFor,
       owedTurnId: () => owedVerdict(log.load())?.turnId,
-      // The keymap runs before the editor inserts this key. No focused editor
-      // means the key is not landing in an empty prompt, so it is not an answer.
-      promptText: () => api.renderer.currentFocusedEditor?.editBuffer.getText() ?? ' ',
+      panelFocused,
       placeConfidence,
       placeFiles,
       decline,
@@ -347,7 +365,7 @@ export const tui: TuiPlugin = async api => {
 
           if (bet.saidConfidence === undefined) {
             return (
-              <box flexDirection="row" gap={2} maxWidth="50%">
+              <box flexDirection="row" gap={2} maxWidth="50%" focusable ref={rememberPanel(sessionID)}>
                 <text wrapMode="none">
                   Will{about} land first try?
                 </text>
@@ -356,14 +374,14 @@ export const tui: TuiPlugin = async api => {
                     {at + 1}: {asPercent(band)}
                   </text>
                 ))}
-                <text wrapMode="none">0: skip</text>
+                <text wrapMode="none">0: Skip</text>
               </box>
             )
           }
 
           if (bet.saidFiles === undefined) {
             return (
-              <box flexDirection="row" gap={2} maxWidth="50%">
+              <box flexDirection="row" gap={2} maxWidth="50%" focusable ref={rememberPanel(sessionID)}>
                 <text wrapMode="none">
                   {asPercent(bet.saidConfidence)} · how many files?
                 </text>
@@ -372,7 +390,7 @@ export const tui: TuiPlugin = async api => {
                     {at + 1}: {bucket}
                   </text>
                 ))}
-                <text wrapMode="none">0: skip</text>
+                <text wrapMode="none">0: Skip</text>
               </box>
             )
           }
@@ -386,7 +404,7 @@ export const tui: TuiPlugin = async api => {
             const buckets = BONUS_BUCKETS[dim]
 
             return (
-              <box flexDirection="row" gap={2} maxWidth="50%">
+              <box flexDirection="row" gap={2} maxWidth="50%" focusable ref={rememberPanel(sessionID)}>
                 <text wrapMode="none">
                   Bonus: {BONUS_QUESTIONS[dim]}
                 </text>
@@ -395,7 +413,7 @@ export const tui: TuiPlugin = async api => {
                     {at + 1}: {bonusLabel(dim, bucket)}
                   </text>
                 ))}
-                <text wrapMode="none">0: skip</text>
+                <text wrapMode="none">0: Skip</text>
               </box>
             )
           }
@@ -427,14 +445,14 @@ export const tui: TuiPlugin = async api => {
         const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, room)
 
         return (
-          <box flexDirection="row" gap={2} maxWidth="50%">
+          <box flexDirection="row" gap={2} maxWidth="50%" focusable ref={rememberPanel(sessionID)}>
             <text wrapMode="none">
               you said {asPercent(owed.saidConfidence ?? 0)}
               {quoted === '' ? '' : ` · "${quoted}"`}
             </text>
             <text wrapMode="none">1: landed</text>
             <text wrapMode="none">2: needed fixing</text>
-            <text wrapMode="none">0: skip</text>
+            <text wrapMode="none">0: Skip</text>
           </box>
         )
       },

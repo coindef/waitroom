@@ -255,20 +255,22 @@ type KeyActions = {
   owed?: string
   sessionID?: string
   calls: string[]
-  /** Text already in the prompt before the next key. Absent means empty. */
+  /** Text the prompt received. Digits land here while the prompt, not the bet row, has focus. */
   prompt?: string
 }
 
 const harnessFor = (state: KeyActions) => {
   const harness = createTestKeymap({ defaultKeys: true })
   const prompt = harness.host.createTarget('prompt')
+  const panel = harness.host.createTarget('bet-panel')
   harness.root.append(prompt)
+  harness.root.append(panel)
   harness.host.focus(prompt)
   registerBetKeys(harness.keymap, {
     sessionID: () => state.sessionID,
     bet: () => state.bet,
     owedTurnId: () => state.owed,
-    promptText: () => state.prompt ?? '',
+    panelFocused: () => harness.host.getFocusedTarget() === panel,
     placeConfidence: (_id, said) => {
       state.calls.push(`confidence:${said}`)
       state.bet = { ...state.bet, saidConfidence: said }
@@ -296,7 +298,12 @@ const harnessFor = (state: KeyActions) => {
       state.calls.push(`wave:${turnId}`)
     },
   })
-  return harness
+
+  return {
+    host: harness.host,
+    cleanup: () => harness.cleanup(),
+    focusPanel: () => harness.host.focus(panel),
+  }
 }
 
 test('digits 0-5 are not consumed when no bet question is showing', () => {
@@ -324,6 +331,11 @@ test('a digit that answers the question on screen is consumed, and one that does
   const state: KeyActions = { bet: openBet(), calls: [], sessionID: 's1' }
   const harness = harnessFor(state)
   try {
+    const typedIntoPrompt = harness.host.press('1')
+    assert.equal(typedIntoPrompt.defaultPrevented, false)
+    assert.deepEqual(state.calls, [])
+
+    harness.focusPanel()
     const confidence = harness.host.press('1')
     assert.equal(confidence.defaultPrevented, true)
     assert.equal(state.bet.saidConfidence, 0.5)
@@ -353,8 +365,9 @@ test('a digit that answers the question on screen is consumed, and one that does
   }
 })
 
-test('a sentence that contains digits reaches the prompt while each question is up', () => {
+test('with a question showing, a sentence typed into the prompt is the sentence, and no answer is recorded', () => {
   const questions: { bet: OpenBet; owed?: string; text: string }[] = [
+    { bet: openBet(), text: '22 files, then 5 more' },
     { bet: openBet(), text: 'also bump node to 22 and retry 5 times' },
     { bet: openBet({ saidConfidence: 0.8 }), text: 'touch 1 file and then 0 more' },
     { bet: openBet({ saidConfidence: 0.8, saidFiles: '1', bonusDim: 'toolCalls' }), text: 'call tool 3 then skip with 0' },

@@ -105,22 +105,15 @@ export const applyDigit = (digit: number, bet: OpenBet, owedTurnId: string | und
   return false
 }
 
-/**
- * The prompt text before this key is inserted.
- *
- * OpenTUI's keymap listener is prepended, so it runs before the focused editor
- * writes the character. An empty string is an empty prompt. Anything else,
- * including a space, means the person is typing a sentence and the digit
- * belongs in it.
- */
-export const promptIsEmpty = (text: string): boolean => text === ''
-
 export type BetKeyActions = {
   sessionID: () => string | undefined
   bet: (sessionID: string) => OpenBet
   owedTurnId: () => string | undefined
-  /** Prompt text before this key. A missing editor is not an empty prompt. */
-  promptText: () => string
+  /**
+   * True only while the bet row itself holds focus. The prompt stays focused
+   * while someone types, and a digit there is a character, not an answer.
+   */
+  panelFocused: () => boolean
   placeConfidence: (sessionID: string, said: number) => void
   placeFiles: (sessionID: string, said: FileBucket) => void
   decline: (sessionID: string) => void
@@ -131,13 +124,13 @@ export type BetKeyActions = {
 }
 
 /**
- * Bind 0–5 only while a question is on screen.
+ * Bind bare digits 0–5 only while a question is on screen and the bet row has focus.
  *
  * `enabled` is the keymap addon's layer predicate (`registerEnabledFields`).
  * `createDefaultOpenTuiKeymap` installs it; calling it here is a no-op
  * refcount bump when the host already did. The command also returns false
- * when that digit is not an answer, or when the prompt already holds text,
- * so `fix issue 312` reaches the prompt while a verdict is on screen.
+ * when that digit is not an answer, or when the prompt has focus, so
+ * `fix issue 312 then add 3 tests` reaches the prompt while a verdict is on screen.
  */
 export const registerBetKeys = <Target extends object, Event extends KeymapEvent>(
   keymap: Keymap<Target, Event>,
@@ -146,9 +139,9 @@ export const registerBetKeys = <Target extends object, Event extends KeymapEvent
   const offEnabled = registerEnabledFields(keymap)
   const offLayer = keymap.registerLayer({
     enabled: () => {
+      if (!actions.panelFocused()) return false
       const sessionID = actions.sessionID()
       if (!sessionID) return false
-      if (!promptIsEmpty(actions.promptText())) return false
 
       return questionShowing(actions.bet(sessionID), actions.owedTurnId() !== undefined)
     },
@@ -156,9 +149,9 @@ export const registerBetKeys = <Target extends object, Event extends KeymapEvent
     commands: DIGITS.map(digit => ({
       name: `bet.digit-${digit}`,
       run: () => {
+        if (!actions.panelFocused()) return false
         const sessionID = actions.sessionID()
         if (!sessionID) return false
-        if (!promptIsEmpty(actions.promptText())) return false
 
         return applyDigit(digit, actions.bet(sessionID), actions.owedTurnId(), {
           placeConfidence: said => actions.placeConfidence(sessionID, said),
