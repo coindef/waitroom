@@ -2,16 +2,6 @@
 
 ## Unreleased
 
-### wait-ping 0.1.2
-
-- **From an hour, the away line drops the seconds.** `1h 0m 40s` is `1h`. `2h 1m 40s` is `2h 1m`. Under an hour is unchanged (`45s`, `1m`, `1m 30s`, `59m 59s`).
-- **An unusable threshold is named when you turn notifications on.** `(0.5 isn't usable, using 30s)`. A value that floors to at least 1 is kept and is not named.
-
-### wait-anchor 0.1.1
-
-- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
-- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
-
 ### bet-on-your-agent 0.6.4
 
 - **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
@@ -28,26 +18,10 @@
   ended was written over every record. That turn is left unrecorded, and the
   status line is cleared instead of staying on the running-turn prompt.
 
-### wait-ship 0.1.3
+### wait-anchor 0.1.1
 
-- **Every path in the transcript receipt follows the folder the session is
-  in now.** From a subfolder that is the path after `Draft written:` and the
-  same path in `git commit -F`, `gh pr create --body-file`, and the changelog
-  paste line. Each command's path is one single-quoted word. A later `/cd`
-  or worktree, or a space in the drafts folder, no longer makes the command
-  miss the file. An absolute `shipDir` is still written under the repository,
-  and the receipt names that file.
-
-### wait-cards 0.1.0
-
-First release: one flashcard from a deck you write, one card per wait.
-
-- **Deck.** `~/.waitroom/cards.md`, a `Q:` line and then an `A:` line per card. This mod reads the file and never writes it. It does not make cards for you.
-- **While Claude works.** The status line shows `Q: ` and the question. Past 48 columns it ends in `…`, on a character boundary.
-- **When the turn ends.** One log line, `A: 429 · /card got or /card miss`. It is shown to you, not sent to Claude. An interrupted turn gets its answer too. A subagent's turn does not count.
-- **`/card got` and `/card miss`.** Optional. `got` moves the card up one of five boxes, `miss` sends it back to box 1, and a missed card comes back on the next wait. A card you don't mark keeps its box. `/card` counts the deck.
-- **No deck.** One log line, `Add cards to ~/.waitroom/cards.md`, and then quiet. No sample cards.
-- **Kept in `$.store`.** Each card's box and a count of waits, under Claude's configuration directory. No model, no network, no keypress capture.
+- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
+- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
 
 ### wait-anchor 0.1.0
 
@@ -60,6 +34,17 @@ First release: a note you set for yourself, the goal and what to check when you 
 - **No transcript reads.** The note never comes from your transcript. The Back? line is shown to you, not sent to the model. No summary, no model, no network. The note is stored as text.
 - If the note can't be saved, the Back? line waits for your next prompt.
 
+### wait-cards 0.1.0
+
+First release: one flashcard from a deck you write, one card per wait.
+
+- **Deck.** `~/.waitroom/cards.md`, a `Q:` line and then an `A:` line per card. This mod reads the file and never writes it. It does not make cards for you.
+- **While Claude works.** The status line shows `Q: ` and the question. Past 48 columns it ends in `…`, on a character boundary.
+- **When the turn ends.** One log line, `A: 429 · /card got or /card miss`. It is shown to you, not sent to Claude. An interrupted turn gets its answer too. A subagent's turn does not count.
+- **`/card got` and `/card miss`.** Optional. `got` moves the card up one of five boxes, `miss` sends it back to box 1, and a missed card comes back on the next wait. A card you don't mark keeps its box. `/card` counts the deck.
+- **No deck.** One log line, `Add cards to ~/.waitroom/cards.md`, and then quiet. No sample cards.
+- **Kept in `$.store`.** Each card's box and a count of waits, under Claude's configuration directory. No model, no network, no keypress capture.
+
 ### wait-notify 0.1.0
 
 First release: a native macOS notification when Claude Code is blocked on you and you're not at the terminal. One reminder after 3 minutes, then quiet.
@@ -71,6 +56,11 @@ First release: a native macOS notification when Claude Code is blocked on you an
 - **`~/.waitroom/notify.json`:** `present_idle_secs` (30), `remind_after_min` (3), `notify_on_stop` (false). A missing or broken file means the defaults.
 - **macOS only.** Anything but `Darwin` from `uname`, and nothing else runs. No shell, no network, no sound. It never blocks or changes a tool call or a prompt.
 
+### wait-ping 0.1.2
+
+- **From an hour, the away line drops the seconds.** `1h 0m 40s` is `1h`. `2h 1m 40s` is `2h 1m`. Under an hour is unchanged (`45s`, `1m`, `1m 30s`, `59m 59s`).
+- **An unusable threshold is named when you turn notifications on.** `(0.5 isn't usable, using 30s)`. A value that floors to at least 1 is kept and is not named.
+
 ### wait-shell 0.1.0
 
 First release: while a turn runs, lists the shell commands it ran. wait-changed shows the files a turn changed; wait-shell shows the commands it ran.
@@ -79,6 +69,16 @@ First release: while a turn runs, lists the shell commands it ran. wait-changed 
 - **Status line.** `N shell command(s)` while the turn runs, and after it until `Close` or the next turn. Hidden at 0.
 - **The row.** `$ git status`, one command per row, newest last: line breaks shown as `↵`, cut at 200 characters, up to eight rows under `N earlier commands…`. Last in the shared row.
 - **Only a list.** Never blocks, rewrites or reruns a command, and runs nothing of its own. No network, no telemetry. `Close` puts it away for the turn; `Don't show again` and `/wait-shell` turn it off and on.
+
+### wait-ship 0.1.3
+
+- **Every path in the transcript receipt follows the folder the session is
+  in now.** From a subfolder that is the path after `Draft written:` and the
+  same path in `git commit -F`, `gh pr create --body-file`, and the changelog
+  paste line. Each command's path is one single-quoted word. A later `/cd`
+  or worktree, or a space in the drafts folder, no longer makes the command
+  miss the file. An absolute `shipDir` is still written under the repository,
+  and the receipt names that file.
 
 ## wait-secret 0.1.0
 
