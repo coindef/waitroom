@@ -24,6 +24,9 @@ import {
   kitOf,
   parseDiffFiles,
   parseSubjects,
+  readDiff,
+  sidePath,
+  splitNul,
   prBodyOf,
   receiptLines,
   scopeOf,
@@ -87,6 +90,40 @@ test('several diffs concatenated parse as one combined list', () => {
 test('a removed "-- comment" and an added "++x" stay content of the real file', () => {
   const files = parseDiffFiles(modified('src/notes.ts', ['++x'], ['-- comment']))
   expect(files).toEqual([{ path: 'src/notes.ts', added: 1, removed: 1, kind: 'modified' }])
+})
+
+test('a quoted diff header decodes to the name on disk, octal bytes included', () => {
+  expect(sidePath('café.txt')).toBe('café.txt')
+  expect(sidePath('my file.txt\t')).toBe('my file.txt')
+  expect(sidePath('"a \\"quoted\\" name.txt"\t')).toBe('a "quoted" name.txt')
+  expect(sidePath('"caf\\303\\251.txt"')).toBe('café.txt')
+  const files = parseDiffFiles(
+    diff([
+      'diff --git "a \\"quoted\\" name.txt" "a \\"quoted\\" name.txt"',
+      '--- /dev/null',
+      '+++ "a \\"quoted\\" name.txt"\t',
+      '@@ -0,0 +1 @@',
+      '+quoted line',
+    ]),
+  )
+  expect(files).toEqual([{ path: 'a "quoted" name.txt', added: 1, removed: 0, kind: 'added' }])
+})
+
+test('splitNul keeps a leading space, a quote and non-ASCII exactly', () => {
+  expect(splitNul('a.ts\0café.txt\0 lead.txt \0a "quoted" name.txt\0')).toEqual([
+    'a.ts',
+    'café.txt',
+    ' lead.txt ',
+    'a "quoted" name.txt',
+  ])
+  expect(splitNul('')).toEqual([])
+})
+
+test('a non-zero diff with empty stdout is a failed read, not an empty diff', () => {
+  expect(readDiff(0, '')).toBe('')
+  expect(readDiff(1, 'diff --git a a\n')).toBe('diff --git a a\n')
+  expect(readDiff(1, '')).toBeUndefined()
+  expect(readDiff(128, '')).toBeUndefined()
 })
 
 test('subjects parse one per line, blanks dropped', () => {

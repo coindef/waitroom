@@ -13,7 +13,12 @@ import {
   kitOf,
   parseDiffFiles,
   parseSubjects,
+  readDiff,
   receiptLines,
+  splitNul,
+  TRACKED_DIFF_ARGS,
+  UNTRACKED_LIST_ARGS,
+  untrackedDiffArgs,
   yieldsBand,
 } from './ship'
 
@@ -53,19 +58,25 @@ const repoRoot = async ($: EngineInterface): Promise<string | undefined> => {
  * folder is left out. `text` is the diff as read, for `fingerprintOf`.
  */
 const scanTree = async ($: EngineInterface, root: string, config: Config) => {
-  const tracked = await runGit($, ['diff', 'HEAD', '--no-color', '--no-prefix'], root)
-  const chunks: string[] = tracked?.exitCode === 0 ? [tracked.stdout] : []
+  // core.quotePath=false keeps non-ASCII names raw in the diff headers, so
+  // the path in a draft is the path on disk rather than octal escapes.
+  const tracked = await runGit($, [...TRACKED_DIFF_ARGS], root)
+  const chunks: string[] = []
+  const trackedText = tracked ? readDiff(tracked.exitCode, tracked.stdout) : undefined
+  if (trackedText !== undefined) chunks.push(trackedText)
 
-  const others = await runGit($, ['ls-files', '--others', '--exclude-standard'], root)
-  const untracked = (others?.stdout ?? '')
-    .split('\n')
-    .map(line => line.trim())
-    .filter(path => path !== '' && !isUnder(path, config.shipDir))
+  // -z: NUL-separated and never quoted, so a name with a space, a quote or
+  // non-ASCII characters comes back as it is on disk instead of skipped.
+  const others = await runGit($, [...UNTRACKED_LIST_ARGS], root)
+  const untracked = (others?.exitCode === 0 ? splitNul(others.stdout) : [])
+    .filter(path => !isUnder(path, config.shipDir))
     .slice(0, UNTRACKED_LIMIT)
   for (const path of untracked) {
     // --no-index exits 1 when the two sides differ, which is the point here.
-    const one = await runGit($, ['diff', '--no-color', '--no-prefix', '--no-index', '--', '/dev/null', path], root)
-    if (one && one.exitCode <= 1) chunks.push(one.stdout)
+    // The same exit with an empty stdout means git could not open the path.
+    const one = await runGit($, [...untrackedDiffArgs(path)], root)
+    const text = one ? readDiff(one.exitCode, one.stdout) : undefined
+    if (text !== undefined) chunks.push(text)
   }
   const text = chunks.join('\n')
 

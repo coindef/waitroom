@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### wait-ship 0.1.3
+
+- **A file whose name git quotes stays in the kit.** An untracked `café.txt` or `a "quoted" name.txt` was dropped, and a tracked non-ASCII name was written with octal escapes. The scan reads the name as it is on disk.
+
 ### wait-cards 0.1.0
 
 First release: one flashcard from a deck you write, one card per wait.
