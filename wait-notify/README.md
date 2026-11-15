@@ -85,8 +85,10 @@ These cancel the reminder as soon as they happen:
 
 - a prompt you send (typed, or from your phone or the web; a task
   notification or another session's message is not you)
-- a tool call that was already running when the notification went out
-  finishing, which is Claude going on after your answer
+- the last main-loop tool call that was already running when the
+  notification went out finishing, which is Claude going on after your
+  answer. Another call ending while that one is still open, or a subagent's
+  tool, is not you answering
 - the main turn ending, answered or with Esc (a subagent finishing does not
   count)
 - your answer to an MCP server's question
@@ -159,7 +161,7 @@ notification does not check whether you are at the terminal.
 
 ```
 claude plugin validate ./wait-notify
-claude plugin test     ./wait-notify   # 93 tests
+claude plugin test     ./wait-notify   # 95 tests
 ```
 
 `hooks/notify.ts` has no engine dependency: the copy, the config, parsing

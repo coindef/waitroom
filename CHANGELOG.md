@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### wait-notify 0.1.1
+
+- **A tool already running, other than the one you're answering, no longer cancels the reminder.** A parallel Read, or a subagent's tool, was treated as your answer. The reminder was dropped while Claude was still blocked, and a Read ending during the check could skip the notification itself. The reminder now stays until every main-loop tool that was already running has finished.
+- **An ended session no longer comes back as a live peer.** A prompt sent as the session ended could write that session's record again after it was removed. Another session would then treat it as live for a day. That write is skipped once the session id has changed.
+
 ### bet-on-your-agent 0.6.3
 
 - **A file count that cannot be read is not scored as none.** When a snapshot was taken and a later `git status` lists more than 500 paths (changed or untracked, not only this turn's), the row says the count is unknown and that question is left out of the score. A tree already past that limit when the turn starts has no snapshot, so the count is the `Edit`, `Write` and `NotebookEdit` calls, the same as outside a repository. One path git cannot hash is skipped on its own, so the rest of the turn's files still count.
