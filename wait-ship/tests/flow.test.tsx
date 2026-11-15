@@ -357,6 +357,36 @@ test('a worktree switch after the turn prints the path from the new folder', asy
   expect(fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]).toBeUndefined()
 })
 
+test('session.start, then /cd into a worktree, names only the turn from that folder', async ($, on) => {
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  const seen: Seen = { runs: [], logged: [] }
+  const repo: Repo = { root: ROOT, cwd: `${ROOT}/packages/app`, diffHead: '', untracked: [] }
+  const fs = engineBottom(on, repo, {}, seen)
+  await $.session.start({ cwd: `${ROOT}/packages/app`, surface: 'terminal', isInteractive: true })
+
+  // /cd into a worktree subfolder. The notes were already there; the turn writes the feature.
+  repo.root = '/wt/feature'
+  repo.cwd = '/wt/feature/packages/app'
+  repo.diffHead = NOTES_DIFF
+  await landTurn($, 'turn-cd', () => {
+    repo.diffHead = `${NOTES_DIFF}${NEW_FILE_DIFF}`
+  })
+
+  const offering = await mountBand($)
+  expect(await offering.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
+  expect(await offering.find({ text: /notes\.md|2 files/ })).toBeUndefined()
+  await offering.press({ key: 'all' })
+  await offering.unmount()
+
+  expect(seen.logged[0]).toBe(
+    "Draft written: ../../.waitroom/ship/COMMIT_EDITMSG.txt — git commit -F '../../.waitroom/ship/COMMIT_EDITMSG.txt'",
+  )
+  const commit = fs['/wt/feature/.waitroom/ship/COMMIT_EDITMSG.txt']
+  expect(commit).toContain('src/feature.ts')
+  expect(commit).not.toContain('notes.md')
+  expect(fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]).toBeUndefined()
+})
+
 test('a session entered through a symlink prints a path git can open', async ($, on) => {
   const seen: Seen = { runs: [], logged: [] }
   const repo: Repo = {
