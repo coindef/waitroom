@@ -13,6 +13,16 @@
   ended was written over every record. That turn is left unrecorded, and the
   status line is cleared instead of staying on the running-turn prompt.
 
+### wait-ship 0.1.3
+
+- **Every path in the transcript receipt follows the folder the session is
+  in now.** From a subfolder that is the path after `Draft written:` and the
+  same path in `git commit -F`, `gh pr create --body-file`, and the changelog
+  paste line. Each command's path is one single-quoted word. A later `/cd`
+  or worktree, or a space in the drafts folder, no longer makes the command
+  miss the file. An absolute `shipDir` is still written under the repository,
+  and the receipt names that file.
+
 ### wait-cards 0.1.0
 
 First release: one flashcard from a deck you write, one card per wait.
