@@ -420,29 +420,30 @@ export const register: Register = (on, options) => {
   // One hook per tool so `e` narrows to that tool's own input.
   on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
     const ran = await next(e)
-    if (e.agentId === undefined && !ran.deny && !ran.isError) await noteFile($, e.file_path)
+    if (!ran.deny && !ran.isError) await noteFile($, e.file_path)
 
     return ran
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'Write' }, async ($, e, next) => {
     const ran = await next(e)
-    if (e.agentId === undefined && !ran.deny && !ran.isError) await noteFile($, e.file_path)
+    if (!ran.deny && !ran.isError) await noteFile($, e.file_path)
 
     return ran
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'NotebookEdit' }, async ($, e, next) => {
     const ran = await next(e)
-    if (e.agentId === undefined && !ran.deny && !ran.isError) await noteFile($, e.notebook_path)
+    if (!ran.deny && !ran.isError) await noteFile($, e.notebook_path)
 
     return ran
   }).catch(($, e, next) => next(e))
 
   // A failed command can still have written files, so only a denied one is skipped.
+  // A subagent's shell counts here too: the question is how many files the turn touches.
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     const ran = await next(e)
-    if (e.agentId === undefined && !ran.deny) await noteWorktreeFiles($)
+    if (!ran.deny) await noteWorktreeFiles($)
 
     return ran
   }).catch(($, e, next) => next(e))

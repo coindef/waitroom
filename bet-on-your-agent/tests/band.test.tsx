@@ -700,7 +700,7 @@ test('/bet-recap prints a shareable, plain-text card for this session', async ($
   expect(reply.text).not.toMatch(/\u001b/)
 })
 
-test('a subagent tool call does not count toward the open main turn', async ($, on) => {
+test("a subagent's tool calls stay off the open turn's tool-call count", async ($, on) => {
   fullEngine(on)
   on('tool.call', { tool: 'Edit' }, () => ({ result: {} as never }))
   on('tool.call', { tool: 'Read' }, () => ({ result: {} as never }))
@@ -732,16 +732,17 @@ test('a subagent tool call does not count toward the open main turn', async ($, 
   await band.press({ key: 'b3-6' })
   expect(await band.find({ text: /0 written so far/ })).toBeDefined()
 
+  // The file still counts: the question is how many files the turn touches.
+  // The five calls do not count toward the tool-call bonus.
   await $.tool.call({ tool: 'Edit', file_path: '/work/sub.ts', agentId: 'agent-1' } as never)
   for (let at = 0; at < 4; at++) {
     await $.tool.call({ tool: 'Read', file_path: '/work/sub-read.ts', agentId: 'agent-1' } as never)
   }
-  expect(await band.find({ text: /0 written so far/ })).toBeDefined()
-  expect(await band.find({ text: /1 written so far/ })).toBeUndefined()
-
-  // The main turn's own calls still count: one file, and three tool calls in all.
-  await $.tool.call({ tool: 'Edit', file_path: '/work/main.ts' })
   expect(await band.find({ text: /1 written so far/ })).toBeDefined()
+
+  // The main turn's own calls still count: a second file, and three tool calls in all.
+  await $.tool.call({ tool: 'Edit', file_path: '/work/main.ts' })
+  expect(await band.find({ text: /2 written so far/ })).toBeDefined()
   for (let at = 0; at < 2; at++) {
     await $.tool.call({ tool: 'Read', file_path: `/work/main-${at}.ts` } as never)
   }
