@@ -491,18 +491,38 @@ const relativePosix = (from: string, to: string): string => {
   return parts.length === 0 ? '.' : parts.join('/')
 }
 
+/** Where a draft is written: under `root`, even when `repoPath` itself is absolute. */
+export const draftAbsolute = (root: string, repoPath: string): string => normalizePosix(`${root}/${repoPath}`)
+
+/** `repoPath` as a path under `root`, after the same collapse `draftAbsolute` uses. */
+export const writtenRelative = (root: string, repoPath: string): string => {
+  const abs = draftAbsolute(root, repoPath)
+  const base = normalizePosix(root)
+  if (abs === base) return '.'
+  if (base === '/') return abs.slice(1)
+  if (abs.startsWith(`${base}/`)) return abs.slice(base.length + 1)
+
+  return abs
+}
+
 /**
  * The draft path a command run from the session folder can open. `repoPath`
- * is repository-relative, the way the draft is written under the repository
- * root. From a session inside the repository the result is relative to `cwd`,
- * so at the root it stays `repoPath`. With no session folder, `repoPath` is
- * returned unchanged. An absolute `repoPath` is kept as given.
+ * is relative to the repository root (see `writtenRelative`). From a session
+ * inside the repository the result is relative to `cwd`, so at the root it
+ * stays `repoPath`. A session folder outside the repository gets the absolute
+ * path, which still opens. With no session folder, `repoPath` is unchanged.
+ * Callers pass the physical root and folder (`git rev-parse`), so a logical
+ * symlink path is not compared with a physical root.
  */
 export const pathFromCwd = (root: string, cwd: string | undefined, repoPath: string): string => {
   if (repoPath.startsWith('/')) return repoPath
+  const abs = draftAbsolute(root, repoPath)
   if (cwd === undefined || cwd === '' || !cwd.startsWith('/') || !root.startsWith('/')) return repoPath
+  const rootNorm = normalizePosix(root)
+  const cwdNorm = normalizePosix(cwd)
+  if (cwdNorm !== rootNorm && !cwdNorm.startsWith(`${rootNorm}/`)) return abs
 
-  return relativePosix(cwd, normalizePosix(`${root}/${repoPath}`))
+  return relativePosix(cwdNorm, abs)
 }
 
 /**

@@ -22,10 +22,12 @@ import {
   isTestFile,
   isUnder,
   kitOf,
+  draftAbsolute,
   parseDiffFiles,
   parseSubjects,
   pathFromCwd,
   prBodyOf,
+  writtenRelative,
   receiptLines,
   scopeOf,
   subjectOf,
@@ -393,6 +395,14 @@ test('pathFromCwd is the draft as a command in the session folder opens it', () 
   // No session folder yet: leave the repository-relative path, which is what the root prints.
   expect(pathFromCwd('/repo', undefined, file)).toBe(file)
   expect(pathFromCwd('/repo', '', file)).toBe(file)
+  // A folder that is not inside the root cannot be reached with `../` reliably.
+  expect(pathFromCwd('/repo', '/wt/feature', file)).toBe(`/repo/${file}`)
+})
+
+test('an absolute shipDir is written under the repository, and the receipt names that file', () => {
+  expect(draftAbsolute('/repo', '/tmp/drafts/COMMIT_EDITMSG.txt')).toBe('/repo/tmp/drafts/COMMIT_EDITMSG.txt')
+  expect(writtenRelative('/repo', '/tmp/drafts/COMMIT_EDITMSG.txt')).toBe('tmp/drafts/COMMIT_EDITMSG.txt')
+  expect(writtenRelative('/repo', '.waitroom/ship/COMMIT_EDITMSG.txt')).toBe('.waitroom/ship/COMMIT_EDITMSG.txt')
 })
 
 // ---------------------------------------------------------------------------

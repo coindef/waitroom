@@ -12,9 +12,11 @@ import {
   isUnder,
   kitOf,
   parseDiffFiles,
+  draftAbsolute,
   parseSubjects,
   pathFromCwd,
   receiptLines,
+  writtenRelative,
   yieldsBand,
 } from './ship'
 
@@ -27,8 +29,6 @@ const UNTRACKED_LIMIT = 100
 
 const offer = atom({ plugin: 'wait-ship', key: 'offer' } as const, null as ShipOffer | null)
 const lastSeen = atom({ plugin: 'wait-ship', key: 'lastSeen' } as const, null as string | null)
-/** Folder the session started in: the receipt's command is run from there. */
-let sessionCwd: string | undefined
 
 type Config = { enabled: boolean; shipDir: string; includeChangelog: boolean }
 
@@ -42,11 +42,30 @@ const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string)
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
 /** The repository root, or undefined where the session is not in a repository. */
-const repoRoot = async ($: EngineInterface): Promise<string | undefined> => {
-  const found = await runGit($, ['rev-parse', '--show-toplevel'])
+const repoRoot = async ($: EngineInterface, cwd?: string): Promise<string | undefined> => {
+  const found = await runGit($, ['rev-parse', '--show-toplevel'], cwd)
   const root = found?.exitCode === 0 ? found.stdout.trim() : ''
 
   return root === '' ? undefined : root
+}
+
+/**
+ * Where the session is right now, as git sees that directory: the physical
+ * root and the physical folder. `git rev-parse --show-prefix` is taken from
+ * `cwd`, so a symlink (logical cwd, physical root) still yields a `../` path
+ * that opens, and a `/cd` or worktree switch is read at draft-write time.
+ */
+const placeOf = async (
+  $: EngineInterface,
+  cwd: string,
+  fallbackRoot: string,
+): Promise<{ root: string; cwd: string }> => {
+  const prefix = await runGit($, ['rev-parse', '--show-prefix'], cwd)
+  const physicalRoot = await repoRoot($, cwd)
+  if (prefix?.exitCode !== 0 || physicalRoot === undefined) return { root: fallbackRoot, cwd }
+  const pre = prefix.stdout.trim().replace(/\/+$/, '')
+
+  return { root: physicalRoot, cwd: pre === '' ? physicalRoot : `${physicalRoot}/${pre}` }
 }
 
 /**
@@ -149,13 +168,18 @@ const applyOffer = async ($: EngineInterface, config: Config, kit: ShipOffer, mo
     await $.fs.write(ignore, DRAFTS_GITIGNORE).catch(() => undefined)
   }
 
+  // Read the folder at accept time. A cwd saved at session start is wrong
+  // after `/cd` or a worktree switch.
+  const here = await $.session.cwd().catch(() => '')
+  const place = here === '' ? { root, cwd: undefined } : await placeOf($, here, root)
+
   const wrote: ShipResult['wrote'] = []
   for (const { kind, text } of drafts) {
-    // Written under the repository root. The receipt is typed in the session's
-    // own folder, so the path it prints starts from there.
     const repoPath = `${config.shipDir}/${ARTIFACT_NAME[kind]}`
-    await $.fs.write(`${root}/${repoPath}`, text)
-    wrote.push({ kind, path: pathFromCwd(root, sessionCwd, repoPath) })
+    // An absolute shipDir is still written under the repository root
+    // (`${root}/…`). The receipt names that file, not the absolute path.
+    await $.fs.write(draftAbsolute(root, repoPath), text)
+    wrote.push({ kind, path: pathFromCwd(place.root, place.cwd, writtenRelative(place.root, repoPath)) })
   }
 
   return { turnId: kit.turnId, mode, wrote }
@@ -189,7 +213,6 @@ export const register: Register = (on, options) => {
   // The tree as the session found it: what was already changed then is not a
   // turn's to ship, so the first turn is measured against it like any other.
   on('session.start', async ($, e, next) => {
-    if (typeof e.cwd === 'string' && e.cwd !== '') sessionCwd = e.cwd
     const done = await next(e)
     if (!config.enabled || (await read($, lastSeen)) !== null) return done
     const root = await repoRoot($)

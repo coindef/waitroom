@@ -58,7 +58,7 @@ composer; only `bet-on-your-agent`'s digits 1 to 5 answer from there.
 - Accepted drafts are written under `shipDir` (`.waitroom/ship` by default):
   `COMMIT_EDITMSG.txt`, `PR_BODY.md`, `CHANGELOG_ENTRY.md`. One line per draft
   in the transcript says exactly what to run. The path is quoted, and it is
-  the one from the folder the session started in. The row is free again at
+  the one from the folder the session is in now. The row is free again at
   once:
 
 ```
@@ -131,7 +131,7 @@ the row the moment the kit is answered.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 74 tests
+claude plugin test .         # 78 tests
 ```
 
 The diff parsing, style inference and every drafted artifact live in

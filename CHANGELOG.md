@@ -4,10 +4,11 @@
 
 ### wait-ship 0.1.3
 
-- **The transcript's `git commit -F` path works from the folder the session
-  started in.** It is relative to that folder, in single quotes, so a
-  subfolder or a space in the drafts folder no longer makes the command miss
-  the file. The rest of the line is unchanged.
+- **Every path in the transcript receipt is relative to the folder the
+  session is in now, and single-quoted.** A subfolder, a later `/cd` or
+  worktree, or a space in the drafts folder no longer makes the command miss
+  the file. An absolute `shipDir` is still written under the repository, and
+  the receipt names that file.
 
 ### wait-cards 0.1.0
 
