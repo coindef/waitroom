@@ -22,8 +22,13 @@ export type Installed = {
   failures: { message: string }[]
   /** How many times the hook read `next.error`. */
   errorReads: { count: number }
-  /** The next N store sets throw and do not change the map. */
-  fail: { sets: number }
+  /** The next N store sets throw and do not change the map. The next N gets throw and do not read it. */
+  fail: { sets: number; gets: number }
+  /**
+   * Pause the next `$.env.get`. The turn-end save reads that after it has
+   * loaded the note and before it writes. `entered` resolves once the read is waiting.
+   */
+  pauseNextGate: () => { entered: Promise<void>; release: () => void }
   calls: HostCalls
   store: Map<string, unknown>
   prompts: unknown[]
@@ -52,7 +57,21 @@ export const install = (options: {
   const recovered = { count: 0 }
   const failures: { message: string }[] = []
   const errorReads = { count: 0 }
-  const fail = { sets: 0 }
+  const fail = { sets: 0, gets: 0 }
+  let gateWait: { entered: () => void; release: Promise<void> } | undefined
+  const pauseNextGate = () => {
+    let entered!: () => void
+    let release!: () => void
+    const enteredPromise = new Promise<void>(resolve => {
+      entered = resolve
+    })
+    const releasePromise = new Promise<void>(resolve => {
+      release = resolve
+    })
+    gateWait = { entered, release: releasePromise }
+
+    return { entered: enteredPromise, release }
+  }
   const prompts: unknown[] = []
   const calls: HostCalls = { http: 0, model: 0, messages: 0 }
   const hooks: { event: string; filter: Record<string, unknown>; fn: Hook; recover?: Hook }[] = []
@@ -79,7 +98,16 @@ export const install = (options: {
       register: async (command: { name: string }) => ({ command: command.name }),
     },
     env: {
-      get: async () => undefined,
+      get: async () => {
+        const waiting = gateWait
+        if (waiting !== undefined) {
+          gateWait = undefined
+          waiting.entered()
+          await waiting.release
+        }
+
+        return undefined
+      },
     },
     fs: {
       write: async () => undefined,
@@ -106,7 +134,14 @@ export const install = (options: {
       },
     },
     store: {
-      get: async (key: string) => store.get(key),
+      get: async (key: string) => {
+        if (fail.gets > 0) {
+          fail.gets -= 1
+          throw new Error('store get failed')
+        }
+
+        return store.get(key)
+      },
       set: async (key: string, value: unknown) => {
         order.push('set')
         if (fail.sets > 0) {
@@ -190,7 +225,20 @@ export const install = (options: {
     }
   }
 
-  return { status, logs, order, recovered, failures, errorReads, fail, calls, store, prompts, dispatch }
+  return {
+    status,
+    logs,
+    order,
+    recovered,
+    failures,
+    errorReads,
+    fail,
+    pauseNextGate,
+    calls,
+    store,
+    prompts,
+    dispatch,
+  }
 }
 
 export const storeToJson = (store: Map<string, unknown>): string => JSON.stringify([...store.entries()])
