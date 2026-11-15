@@ -9,6 +9,11 @@
 - **A diff that was cut off is not a clean result.** When the diff is too big to read in full, the status line says `diff too big to scan fully`. The partial text is not listed and is not saved as the baseline.
 - **Committing the secret no longer hides it.** The scan also reads what was committed during the turn. If that range cannot be read, the turn is not reported as clean.
 
+### wait-anchor 0.1.1
+
+- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
+- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
+
 ### bet-on-your-agent 0.6.4
 
 - **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
@@ -34,6 +39,12 @@
   or worktree, or a space in the drafts folder, no longer makes the command
   miss the file. An absolute `shipDir` is still written under the repository,
   and the receipt names that file.
+
+### waitroom 0.1.2
+
+- **If you already have waitroom installed, update it.** Version 0.1.1 still asked for `wait-review` after that plugin left the catalog, so the bundle failed to load with `Dependency "wait-review@waitroom" is not installed`. This release is 0.1.2, so the update actually runs. Run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`. You should see `Plugin "waitroom" updated from 0.1.1 to 0.1.2 for scope user. Restart to apply changes.` Restart once. After that, waitroom loads again and keeps bet-on-your-agent, wait-ship, and wait-breathe.
+
+- **Three old plugins are now disabled, and that is expected.** `wait-review`, `wait-changed`, and `wait-shell` are no longer in the catalog. After the update they stay installed locally and show as disabled (or "Removed from the waitroom marketplace"). While they are still installed, `claude plugin prune` refuses to run. Uninstall those three first. You don't need to install anything in their place.
 
 ### wait-cards 0.1.0
 
