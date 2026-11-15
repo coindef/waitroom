@@ -369,6 +369,61 @@ test('untracked files whose names git would quote stay in the kit under their re
   expect(seen.runs.some(argv => argv.at(-1) === quoted)).toBe(true)
 })
 
+/** Git C-quoting of a name that holds ESC, a newline and U+202E. */
+const CONTROL_DIFF = [
+  'diff --git "esc\\033nl\\nrtl\\342\\200\\256.txt" "esc\\033nl\\nrtl\\342\\200\\256.txt"',
+  '--- /dev/null',
+  '+++ "esc\\033nl\\nrtl\\342\\200\\256.txt"',
+  '@@ -0,0 +1 @@',
+  '+one',
+  '',
+].join('\n')
+
+const SAFE_NAME = 'esc\\x1bnl\\nrtl\\u202e.txt'
+
+test('ESC, a newline and a bidi mark show up only as visible escapes in the row and the draft', async ($, on) => {
+  const fs = engineBottom(on, { root: ROOT, diffHead: CONTROL_DIFF, untracked: [] })
+  await landTurn($, 'turn-ctrl')
+
+  const offering = await mountBand($)
+  expect(await offering.find({ text: /\\x1b/ })).toBeDefined()
+  expect(await offering.find({ text: /nl\\nrtl/ })).toBeDefined()
+  expect(await offering.find({ text: /\\u202e/ })).toBeDefined()
+  expect(await offering.find({ text: /\u001b/ })).toBeUndefined()
+  expect(await offering.find({ text: /\u202e/ })).toBeUndefined()
+  await offering.press({ key: 'more' })
+  await offering.press({ key: 'commit' })
+  await offering.unmount()
+
+  const commit = fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`] ?? ''
+  expect(commit).toContain(SAFE_NAME)
+  expect(commit.includes('\u001b')).toBe(false)
+  expect(commit.includes('\u202e')).toBe(false)
+  expect(commit.split('\n')[0]).toBe(`Add ${SAFE_NAME}`)
+})
+
+test("a file git could not read is named on the row, and two are plural", async ($, on) => {
+  const repo: Repo = {
+    root: ROOT,
+    diffHead: '',
+    untracked: ['ok.txt', 'hidden.txt'],
+    untrackedDiffs: { 'ok.txt': NEW_FILE_DIFF },
+  }
+  engineBottom(on, repo)
+  await landTurn($, 'turn-skip-1')
+  const one = await mountBand($)
+  expect(await one.find({ text: "1 file skipped: git couldn't read it" })).toBeDefined()
+  expect(await one.find({ text: /files skipped/ })).toBeUndefined()
+  await one.unmount()
+
+  repo.untracked = ['ok.txt', 'hidden.txt', 'also.txt']
+  repo.untrackedDiffs = { 'ok.txt': `${NEW_FILE_DIFF}+more\n` }
+  await landTurn($, 'turn-skip-2')
+  const two = await mountBand($)
+  expect(await two.find({ text: "2 files skipped: git couldn't read them" })).toBeDefined()
+  await two.unmount()
+})
+
 const SESSION = { cwd: ROOT, surface: 'terminal', isInteractive: true } as const
 
 test('a turn that changed nothing gets no kit, however much was already changed before it', async ($, on) => {

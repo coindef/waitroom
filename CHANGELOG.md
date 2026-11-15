@@ -4,7 +4,8 @@
 
 ### wait-ship 0.1.3
 
-- **A file whose name git quotes stays in the kit.** An untracked `café.txt` or `a "quoted" name.txt` was dropped, and a tracked non-ASCII name was written with octal escapes. The scan reads the name as it is on disk.
+- **A file whose name git quotes stays in the kit.** An untracked `café.txt` or `a "quoted" name.txt` was dropped, and a tracked non-ASCII name was written with octal escapes. The scan reads the name as it is on disk. A control character or a bidi mark in that name is written as a visible escape (`\x1b`, `\n`, `\u202e`), not as the raw character.
+- **A file git could not read is counted.** The row says `1 file skipped: git couldn't read it` (or `2 files skipped: git couldn't read them`). The kit still lists only the files it read.
 
 ### wait-cards 0.1.0
 

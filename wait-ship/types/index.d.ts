@@ -14,6 +14,11 @@ export type ShipOffer = {
   /** Absent when there is no CHANGELOG.md, or `includeChangelog` is off. */
   changelogEntry?: string
   /**
+   * Files git listed and could not read. Absent when every listed file was
+   * read. The row then says how many, so the kit's count is not quietly short.
+   */
+  skipped?: number
+  /**
    * Set once "More" was pressed: the row then offers each draft on its own
    * key (commit, PR, changelog, for editing) beside accept-all and skip,
    * which are all it offers until then.

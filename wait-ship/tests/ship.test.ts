@@ -30,6 +30,7 @@ import {
   prBodyOf,
   receiptLines,
   scopeOf,
+  skippedLine,
   subjectOf,
   summaryBullets,
   testPlanLines,
@@ -109,6 +110,20 @@ test('a quoted diff header decodes to the name on disk, octal bytes included', (
   expect(files).toEqual([{ path: 'a "quoted" name.txt', added: 1, removed: 0, kind: 'added' }])
 })
 
+test('ESC, a newline and U+202E in a name are visible escapes in the draft, not raw controls', () => {
+  // Git's C-quoting of ESC (\033), newline (\n) and U+202E (\342\200\256).
+  const header = '"esc\\033nl\\nrtl\\342\\200\\256.txt"'
+  const safe = 'esc\\x1bnl\\nrtl\\u202e.txt'
+  expect(sidePath(header)).toBe(safe)
+  const commit = commitFileText(
+    commitOf(parseDiffFiles(diff(['diff --git a a', '--- /dev/null', `+++ ${header}`, '@@ -0,0 +1 @@', '+one'])), []),
+  )
+  expect(commit).toContain(safe)
+  expect(commit.includes('\u001b')).toBe(false)
+  expect(commit.includes('\u202e')).toBe(false)
+  expect(commit.split('\n')[0]).toBe(`Add ${safe}`)
+})
+
 test('splitNul keeps a leading space, a quote and non-ASCII exactly', () => {
   expect(splitNul('a.ts\0café.txt\0 lead.txt \0a "quoted" name.txt\0')).toEqual([
     'a.ts',
@@ -117,6 +132,11 @@ test('splitNul keeps a leading space, a quote and non-ASCII exactly', () => {
     'a "quoted" name.txt',
   ])
   expect(splitNul('')).toEqual([])
+})
+
+test('one skipped file, and several, are named as such', () => {
+  expect(skippedLine(1)).toBe("1 file skipped: git couldn't read it")
+  expect(skippedLine(2)).toBe("2 files skipped: git couldn't read them")
 })
 
 test('a non-zero diff with empty stdout is a failed read, not an empty diff', () => {

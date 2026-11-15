@@ -88,12 +88,55 @@ const unquoteGit = (inner: string): string => {
   return new TextDecoder().decode(Uint8Array.from(bytes))
 }
 
+/** C0 controls that read better as the C escape than as `\xHH`. ESC stays `\x1b`. */
+const NAMED_CONTROL: Record<number, string> = {
+  0x07: '\\a',
+  0x08: '\\b',
+  0x09: '\\t',
+  0x0a: '\\n',
+  0x0b: '\\v',
+  0x0c: '\\f',
+  0x0d: '\\r',
+}
+
+/**
+ * A code point that must not be written into a terminal or a commit message:
+ * C0, DEL, C1, and the bidi/isolate marks that reorder the line.
+ */
+const hidesText = (code: number): boolean =>
+  code <= 0x1f ||
+  (code >= 0x7f && code <= 0x9f) ||
+  code === 0x200e ||
+  code === 0x200f ||
+  (code >= 0x202a && code <= 0x202e) ||
+  (code >= 0x2066 && code <= 0x2069)
+
+/** The same character, as text a terminal will show rather than obey. */
+const visibleEscape = (code: number): string => {
+  const named = NAMED_CONTROL[code]
+  if (named !== undefined) return named
+  if (code <= 0xff) return `\\x${code.toString(16).padStart(2, '0')}`
+
+  return `\\u${code.toString(16).padStart(4, '0')}`
+}
+
+/** After unquoting: controls and bidi marks become `\x1b`, `\n`, `\u202e`, and the like. */
+const visiblePath = (text: string): string => {
+  let out = ''
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0
+    out += hidesText(code) ? visibleEscape(code) : ch
+  }
+
+  return out
+}
+
 export const sidePath = (rest: string): string => {
   const cut = rest.indexOf('\t')
   const name = cut < 0 ? rest : rest.slice(0, cut)
-  if (name.length > 1 && name.startsWith('"') && name.endsWith('"')) return unquoteGit(name.slice(1, -1))
+  const raw = name.length > 1 && name.startsWith('"') && name.endsWith('"') ? unquoteGit(name.slice(1, -1)) : name
 
-  return name
+  return visiblePath(raw)
 }
 
 const BINARY_LINE = /^Binary files (.+) and (.+) differ$/
@@ -142,7 +185,7 @@ export const parseDiffFiles = (output: string): FileChange[] => {
       flush()
       const [, left, right] = binary as unknown as [string, string, string]
       files.push({
-        path: right === '/dev/null' ? left : right,
+        path: visiblePath(right === '/dev/null' ? left : right),
         added: 0,
         removed: 0,
         kind: left === '/dev/null' ? 'added' : right === '/dev/null' ? 'deleted' : 'modified',
@@ -195,6 +238,10 @@ export const readDiff = (exitCode: number, stdout: string): string | undefined =
 
   return undefined
 }
+
+/** The dim line under a kit when git listed a file and could not read it. */
+export const skippedLine = (count: number): string =>
+  count === 1 ? "1 file skipped: git couldn't read it" : `${count} files skipped: git couldn't read them`
 
 /**
  * The tracked-diff argv, after `git`. `core.quotePath=false` keeps a non-ASCII

@@ -15,6 +15,7 @@ import {
   parseSubjects,
   readDiff,
   receiptLines,
+  skippedLine,
   splitNul,
   TRACKED_DIFF_ARGS,
   UNTRACKED_LIST_ARGS,
@@ -71,16 +72,21 @@ const scanTree = async ($: EngineInterface, root: string, config: Config) => {
   const untracked = (others?.exitCode === 0 ? splitNul(others.stdout) : [])
     .filter(path => !isUnder(path, config.shipDir))
     .slice(0, UNTRACKED_LIMIT)
+  let skipped = 0
   for (const path of untracked) {
     // --no-index exits 1 when the two sides differ, which is the point here.
     // The same exit with an empty stdout means git could not open the path.
     const one = await runGit($, [...untrackedDiffArgs(path)], root)
     const text = one ? readDiff(one.exitCode, one.stdout) : undefined
-    if (text !== undefined) chunks.push(text)
+    if (text === undefined) {
+      skipped += 1
+      continue
+    }
+    chunks.push(text)
   }
   const text = chunks.join('\n')
 
-  return { files: parseDiffFiles(text).filter(one => !isUnder(one.path, config.shipDir)), text }
+  return { files: parseDiffFiles(text).filter(one => !isUnder(one.path, config.shipDir)), text, skipped }
 }
 
 const recentSubjects = async ($: EngineInterface, root: string) => {
@@ -120,12 +126,12 @@ const readTree = async ($: EngineInterface, root: string, config: Config) => {
 const buildOffer = async ($: EngineInterface, config: Config, turnId: string): Promise<ShipOffer | null> => {
   const root = await repoRoot($)
   if (root === undefined) return null
-  const { files, hasMoved } = await readTree($, root, config)
+  const { files, hasMoved, skipped } = await readTree($, root, config)
   if (!hasMoved || files.length === 0) return null
   const subjects = await recentSubjects($, root)
   const changelogContent = await loadChangelog($, root, config)
 
-  return { turnId, ...kitOf(files, subjects, changelogContent) }
+  return { turnId, ...kitOf(files, subjects, changelogContent), ...(skipped > 0 ? { skipped } : {}) }
 }
 
 const artifactsFor = (mode: ShipMode, hasChangelog: boolean): ArtifactKind[] => {
@@ -278,6 +284,11 @@ export const register: Register = (on, options) => {
           Drafts ready: <Text weight="bold">{kit.commit.subject}</Text>
           <Text dimColor> · {sizes}</Text>
         </Text>
+        {kit.skipped !== undefined && kit.skipped > 0 ? (
+          <Text dimColor wrap="truncate-end">
+            {skippedLine(kit.skipped)}
+          </Text>
+        ) : null}
         {/* columnGap, not gap: a gap holds down as well as across, and put two
             blank rows between the keys once the expanded row wrapped. */}
         <Box columnGap={2} flexWrap="wrap">
