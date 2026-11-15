@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### bet-on-your-agent 0.6.2
+
+- **A failed read of the history no longer replaces it.** One error reading
+  the stored turns was treated as an empty history, and the turn that just
+  ended was written over every record. That turn is left unrecorded, and the
+  status line is cleared instead of staying on the running-turn prompt.
+
 ### wait-ship 0.1.3
 
 - **Every path in the transcript receipt is relative to the folder the
