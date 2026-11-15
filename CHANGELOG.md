@@ -2,9 +2,16 @@
 
 ## Unreleased
 
-### bet-on-your-agent 0.6.2
+### bet-on-your-agent 0.6.3
 
 - **A file count that cannot be read is not scored as none.** More than 500 changed paths leaves the count unknown: the row says so, and that turn's file question is left out of the score. One path git cannot hash is skipped on its own, so the rest of the turn's files still count.
+
+### bet-on-your-agent 0.6.2
+
+- **A failed read of the history no longer replaces it.** One error reading
+  the stored turns was treated as an empty history, and the turn that just
+  ended was written over every record. That turn is left unrecorded, and the
+  status line is cleared instead of staying on the running-turn prompt.
 
 ### wait-cards 0.1.0
 

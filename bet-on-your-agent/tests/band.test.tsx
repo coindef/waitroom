@@ -673,6 +673,61 @@ test('a declined turn leaves the status line alone', async ($, on) => {
   expect(said.at(-1)).toBeUndefined()
 })
 
+test('a failed read of the history leaves the stored turns in place', async ($, on) => {
+  mock.clock(on)
+  const old = Array.from({ length: 40 }, (_, at) => ({
+    turnId: `old-${at}`,
+    at,
+    durationMs: 1000,
+    files: 0,
+    filesBucket: '0' as const,
+    toolCalls: 0,
+    isAborted: false,
+    saidConfidence: 0.8,
+    landed: true,
+  }))
+  const data: Record<string, unknown> = { extrasFrom: '1900-01-01', turns: old }
+  let failReads = false
+  const said: (string | undefined)[] = []
+  on('store.get', ($$, e) => {
+    if (failReads) throw new Error('EIO: store unreadable for a moment')
+
+    return { value: data[e.key] }
+  })
+  on('store.set', ($$, e) => {
+    data[e.key] = e.value
+
+    return { value: undefined }
+  })
+  on('ui.status', ($$, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+  on('turn.start', ($$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($$, e) => ({ text: e.answer }))
+
+  await $.turn.start({ text: 'a turn', turnId: 'unlucky' })
+  // One unreadable moment, covering the read that would otherwise build
+  // [thisTurn] and write it over the forty records.
+  failReads = true
+  await $.turn.complete({
+    turnId: 'unlucky',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  failReads = false
+
+  const kept = data.turns as typeof old
+  expect(kept).toHaveLength(40)
+  expect(kept.map(one => one.turnId)).toEqual(old.map(one => one.turnId))
+  // The turn ended unrecorded, so the line is not left on the running prompt
+  // and does not ask whether a turn the store never took landed.
+  expect(said.at(-1)).toBeUndefined()
+})
+
 /**
  * Someone past their first week: the day the extras surface on their own is
  * already behind the mock clock (which starts at 0), so every question and
