@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### wait-notify 0.1.1
+
+- **The reminder waits for your answer.** A quick Read or a subagent's tool finishing alongside the one you're answering no longer cancels it.
+- **A session you ended stays ended.** A prompt sent right as you exit or `/clear` no longer makes other sessions think it's still open.
+
 ### wait-anchor 0.1.1
 
 - **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
