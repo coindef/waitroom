@@ -57,12 +57,13 @@ composer; only `bet-on-your-agent`'s digits 1 to 5 answer from there.
   answered with `a` or `s`, so those are all the row shows until you ask.
 - Accepted drafts are written under `shipDir` (`.waitroom/ship` by default):
   `COMMIT_EDITMSG.txt`, `PR_BODY.md`, `CHANGELOG_ENTRY.md`. One line per draft
-  in the transcript says exactly what to run, and the row is free again at
+  in the transcript says exactly what to run. The path is quoted, and it is
+  the one from the folder the session is in now. The row is free again at
   once:
 
 ```
-wait-ship: Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F .waitroom/ship/COMMIT_EDITMSG.txt
-wait-ship: Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file .waitroom/ship/PR_BODY.md
+wait-ship: Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F '.waitroom/ship/COMMIT_EDITMSG.txt'
+wait-ship: Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file '.waitroom/ship/PR_BODY.md'
 ```
 
 - The drafts folder ignores itself: the first time it writes there, it adds a
@@ -130,7 +131,7 @@ the row the moment the kit is answered.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 70 tests
+claude plugin test .         # 78 tests
 ```
 
 The diff parsing, style inference and every drafted artifact live in

@@ -405,6 +405,211 @@ test('files written through the shell count, not only Edit and Write calls', asy
   await pane.unmount()
 })
 
+const gitRan = (stdout: string, exitCode = 0) => ({
+  value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+})
+
+/** A nested repository or a worktree: `git hash-object` exits 128 on the path. */
+const isUnhashable = (path: string) => path === 'sub/' || path.startsWith('.wt/')
+
+/**
+ * A git the shell-write tests can move underneath a running turn.
+ *
+ * Hashing a batch that contains an unhashable path fails the whole call, the
+ * way `git hash-object` does. Hashing one path reports that path alone.
+ */
+const trackGit = (on: On, repo: { status: string; hashes: string }) => {
+  on('process.run', ($$, e) => {
+    const argv = e.argv.join(' ')
+    if (argv.includes('--show-toplevel')) return gitRan('/work\n')
+    if (argv.includes('status')) return gitRan(repo.status)
+    if (argv.includes('hash-object')) {
+      const dash = e.argv.lastIndexOf('--')
+      const paths = dash === -1 ? [] : e.argv.slice(dash + 1)
+      if (paths.some(path => isUnhashable(path))) return gitRan('', 128)
+
+      return gitRan(repo.hashes)
+    }
+
+    return gitRan('')
+  })
+}
+
+const betNone = async (band: { press: (key: { key: string }) => Promise<unknown> }) => {
+  await band.press({ key: 'p80' })
+  await band.press({ key: 'f0' })
+  // The bonus question and the daily challenge are not under test here.
+  await band.press({ key: 'decline' })
+  await band.press({ key: 'decline' })
+}
+
+test('one unhashable path at turn start does not hide the files the shell writes', async ($, on) => {
+  engineBottom(on)
+  const repo = { status: ['?? sub/', ''].join('\0'), hashes: '' }
+  trackGit(on, repo)
+  on('tool.call', { tool: 'Bash' }, () => {
+    repo.status = ['?? sub/', ' M src/a.ts', ' M src/b.ts', ''].join('\0')
+    repo.hashes = 'aaa\nbbb\n'
+
+    return { result: { stdout: '', stderr: '', interrupted: false } } as never
+  })
+
+  await $.turn.start({ text: 'write two files through the shell', turnId: 'turn-unhash' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betNone(band)
+  await $.tool.call({ tool: 'Bash', command: 'sed -i ... src/a.ts src/b.ts' } as never)
+  expect(await band.find({ text: /2 written so far/ })).toBeDefined()
+  expect(await band.find({ text: /0 written so far/ })).toBeUndefined()
+  await band.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-unhash',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  // Called none and the shell wrote two: a miss, not a free point for zero.
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /File count called right 0\/1/ })).toBeDefined()
+  await pane.unmount()
+})
+
+test('an unhashable path that appears mid-turn does not hide that turn’s shell writes', async ($, on) => {
+  engineBottom(on)
+  const repo = { status: '', hashes: '' }
+  trackGit(on, repo)
+  on('tool.call', { tool: 'Bash' }, () => {
+    repo.status = ['?? .wt/x/', ' M src/a.ts', ' M src/b.ts', ''].join('\0')
+    repo.hashes = 'aaa\nbbb\n'
+
+    return { result: { stdout: '', stderr: '', interrupted: false } } as never
+  })
+
+  await $.turn.start({ text: 'write two files through the shell', turnId: 'turn-unhash-2' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betNone(band)
+  expect(await band.find({ text: /0 written so far/ })).toBeDefined()
+  await $.tool.call({ tool: 'Bash', command: 'git worktree add .wt/x && sed -i ...' } as never)
+  expect(await band.find({ text: /2 written so far/ })).toBeDefined()
+  expect(await band.find({ text: /0 written so far/ })).toBeUndefined()
+  await band.unmount()
+})
+
+test('a turn that leaves more than 500 changed paths is not scored as writing none', async ($, on) => {
+  engineBottom(on)
+  const repo = { status: '', hashes: '' }
+  trackGit(on, repo)
+  on('tool.call', { tool: 'Bash' }, () => {
+    const paths = Array.from({ length: 501 }, (_, at) => `gen/f${at}.ts`)
+    repo.status = [...paths.map(path => `?? ${path}`), ''].join('\0')
+    repo.hashes = paths.map((_, at) => `h${at}`).join('\n') + '\n'
+
+    return { result: { stdout: '', stderr: '', interrupted: false } } as never
+  })
+
+  await $.turn.start({ text: 'generate the fixtures', turnId: 'turn-many' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betNone(band)
+  expect(await band.find({ text: /0 written so far/ })).toBeDefined()
+  await $.tool.call({ tool: 'Bash', command: 'node gen.js' } as never)
+  expect(await band.find({ text: /file count unknown \(500\+ paths\)/ })).toBeDefined()
+  expect(await band.find({ text: /0 written so far/ })).toBeUndefined()
+  await band.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-many',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  // The call was "none". Scoring it would be a point for a count we never read.
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /Calibrating/ })).toBeDefined()
+  expect(await pane.find({ text: /File count called right/ })).toBeUndefined()
+  await pane.unmount()
+})
+
+test('a tree already past 500 paths still scores the Edit and Write calls', async ($, on) => {
+  engineBottom(on)
+  const paths = Array.from({ length: 600 }, (_, at) => `dist/f${at}.js`)
+  const repo = { status: [...paths.map(path => `?? ${path}`), ''].join('\0'), hashes: '' }
+  trackGit(on, repo)
+
+  await $.turn.start({ text: 'edit two sources', turnId: 'turn-huge-start' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await band.press({ key: 'p80' })
+  await band.press({ key: 'f2-3' })
+  // The bonus question and the daily challenge are not under test here.
+  await band.press({ key: 'decline' })
+  await band.press({ key: 'decline' })
+  await $.tool.call({ tool: 'Edit', file_path: '/work/src/a.ts', old_string: 'x', new_string: 'y' })
+  await $.tool.call({ tool: 'Edit', file_path: '/work/src/b.ts', old_string: 'x', new_string: 'y' })
+  expect(await band.find({ text: /2 written so far/ })).toBeDefined()
+  expect(await band.find({ text: /file count unknown/ })).toBeUndefined()
+  await band.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-huge-start',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  // Called 2–3 and the two edits are the whole count: a right call, not a dropped one.
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /File count called right 1\/1/ })).toBeDefined()
+  await pane.unmount()
+})
+
 test('the band yields to a survey of the engine’s own', async ($, on) => {
   engineBottom(on)
   await $.turn.start({ text: 'anything', turnId: 'turn-4' })
@@ -753,6 +958,127 @@ test('/bet-recap prints a shareable, plain-text card for this session', async ($
   expect(reply.text).toContain('Daily challenge')
   // Copy-paste friendly: no ANSI escapes inside the box.
   expect(reply.text).not.toMatch(/\u001b/)
+})
+
+test("a subagent's tool calls stay off the open turn's tool-call count", async ($, on) => {
+  fullEngine(on)
+  on('tool.call', { tool: 'Edit' }, () => ({ result: {} as never }))
+  on('tool.call', { tool: 'Read' }, () => ({ result: {} as never }))
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  // Duration, then files, so the turn under test asks about tool calls.
+  for (const turnId of ['rot-1', 'rot-2']) {
+    await $.turn.start({ text: 'rotate', turnId })
+    await $.turn.complete({
+      turnId,
+      answer: 'done',
+      durationMs: 1000,
+      isAborted: false,
+      reason: 'answer',
+    })
+  }
+
+  await $.turn.start({ text: 'main turn', turnId: 'm1' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await band.press({ key: 'p80' })
+  await band.press({ key: 'f0' })
+  expect(await band.find({ text: /how many tool calls will it make\?/ })).toBeDefined()
+  // 3-6 is what this turn's own calls land on. Five subagent calls would push it to 7+.
+  await band.press({ key: 'b3-6' })
+  expect(await band.find({ text: /0 written so far/ })).toBeDefined()
+
+  // The file still counts: the question is how many files the turn touches.
+  // The five calls do not count toward the tool-call bonus.
+  await $.tool.call({
+    tool: 'Edit',
+    file_path: '/work/sub.ts',
+    old_string: 'x',
+    new_string: 'y',
+    agentId: 'agent-1',
+  } as never)
+  for (let at = 0; at < 4; at++) {
+    await $.tool.call({ tool: 'Read', file_path: '/work/sub-read.ts', agentId: 'agent-1' } as never)
+  }
+  expect(await band.find({ text: /1 written so far/ })).toBeDefined()
+
+  // The main turn's own calls still count: a second file, and three tool calls in all.
+  await $.tool.call({ tool: 'Edit', file_path: '/work/main.ts', old_string: 'x', new_string: 'y' })
+  expect(await band.find({ text: /2 written so far/ })).toBeDefined()
+  for (let at = 0; at < 2; at++) {
+    await $.tool.call({ tool: 'Read', file_path: `/work/main-${at}.ts` } as never)
+  }
+  await band.unmount()
+  await $.turn.complete({
+    turnId: 'm1',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /Bonus: 1\/1 correct/ })).toBeDefined()
+  await pane.unmount()
+})
+
+test('/bet-recap this session leaves out a turn another window recorded', async ($, on) => {
+  const other = {
+    turnId: 'other-session-turn',
+    at: 5,
+    durationMs: 1000,
+    files: 0,
+    filesBucket: '0',
+    toolCalls: 0,
+    isAborted: false,
+    saidConfidence: 0.95,
+    landed: false,
+    ask: 'something from another window',
+    sessionId: 'other-window',
+  }
+  fullEngine(on, { ...PAST_FIRST_WEEK, turns: [other] })
+  on('session.id', () => ({ value: 'this-window' }))
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  // This window's own call stays on the card. The other window's does not.
+  await $.turn.start({ text: 'the turn this window made', turnId: 'mine' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await band.press({ key: 'p80' })
+  await band.press({ key: 'f0' })
+  await band.press({ key: 'decline' })
+  await band.press({ key: 'decline' })
+  await band.unmount()
+  await $.turn.complete({
+    turnId: 'mine',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  const reply = await $.command.run({ command: 'bet-recap' } as never)
+
+  expect(reply.text).toMatch(/Turns bet\s+1/)
+  expect(reply.text).not.toContain('something from ano')
+  // 80% and it landed: (0.8 - 1) squared is 0.040. The other window's 0.902 is not in the mean.
+  expect(reply.text).toMatch(/Session Brier\s+0\.040/)
 })
 
 test('/bet-recap draws its card to fit the terminal it is printed in', async ($, on) => {

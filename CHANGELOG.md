@@ -10,12 +10,31 @@
 - **The file forecast counts a turn that wrote files another way.** `session.diff`, `apply_patch` text, a `patch` message part, and, when the diff call is missing, `git status`. A tool part that errors counts once, the same as one that completes.
 - **The band repaints.** The open bet and the rank-up line live in a Solid store the slot reads while it renders.
 
+### bet-on-your-agent 0.6.4
+
+- **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
+- **`/bet-recap` counts this session.** "This session" is the turns stamped with the current session id. A turn another window recorded, even one made after this session began, stays out of the card. The rank and the badge wall still read the whole history. With no session id from the host, the card falls back to the turns since this session started.
+
+### bet-on-your-agent 0.6.3
+
+- **A file count that cannot be read is not scored as none.** When a snapshot was taken and a later `git status` lists more than 500 paths (changed or untracked, not only this turn's), the row says the count is unknown and that question is left out of the score. A tree already past that limit when the turn starts has no snapshot, so the count is the `Edit`, `Write` and `NotebookEdit` calls, the same as outside a repository. One path git cannot hash is skipped on its own, so the rest of the turn's files still count.
+
 ### bet-on-your-agent 0.6.2
 
 - **A failed read of the history no longer replaces it.** One error reading
   the stored turns was treated as an empty history, and the turn that just
   ended was written over every record. That turn is left unrecorded, and the
   status line is cleared instead of staying on the running-turn prompt.
+
+### wait-ship 0.1.3
+
+- **Every path in the transcript receipt follows the folder the session is
+  in now.** From a subfolder that is the path after `Draft written:` and the
+  same path in `git commit -F`, `gh pr create --body-file`, and the changelog
+  paste line. Each command's path is one single-quoted word. A later `/cd`
+  or worktree, or a space in the drafts folder, no longer makes the command
+  miss the file. An absolute `shipDir` is still written under the repository,
+  and the receipt names that file.
 
 ### wait-cards 0.1.0
 
@@ -78,6 +97,16 @@ First release: warns when a Claude Code turn edits files outside the scope you s
 - **Status line.** After each landed Edit, Write, MultiEdit or NotebookEdit, `N outside scope` — only for files outside your globs. Hidden at 0 and when no scope is set.
 - **Turn end.** The row lists the files outside the scope (up to eight, then `N more files…`). With no scope, files outside the paths your prompt named are listed as `(guess)` and never counted.
 - **Only warns.** Never blocks, never reverts, no network, no telemetry. `/wait-scope` turns it off and on.
+
+## wait-ping 0.1.1
+
+- **A threshold under a second stays at 30.** A value between 0 and 1 used
+  to floor to 0, and then every turn notified, including a turn of 0 ms
+  (`You were away 0s`). It floors, then keeps the number only when it is at
+  least 1. The setting's minimum is 1.
+- **A long turn names the hours.** `You were away 2h`, `You were away 1h 5m`,
+  or `You were away 2h 1m 40s`. Under an hour the line is unchanged (`45s`,
+  `1m`, `1m 30s`).
 
 ## wait-ping 0.1.0
 
