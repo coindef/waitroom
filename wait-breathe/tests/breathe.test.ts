@@ -9,6 +9,7 @@ import {
   MESSAGES,
   sessionCountsOf,
   sessionSummaryLine,
+  storeFrom,
   toggledLine,
   toggleRefusedLine,
   wholePositive,
@@ -111,6 +112,28 @@ test('no line names the plugin again: the engine already prints wait-breathe: in
   ]) {
     expect(line).not.toMatch(/^(wait-)?breathe\b/)
   }
+})
+
+test('storeFrom keeps a record this mod wrote and rejects a value it cannot read', () => {
+  const record = { rotation: 3, lastPromptAt: 10, history: [{ at: 10, taken: true }] }
+  expect(storeFrom(record)).toEqual(record)
+  expect(storeFrom({ rotation: 0, lastPromptAt: null, history: [] })).toEqual({
+    rotation: 0,
+    lastPromptAt: null,
+    history: [],
+  })
+  expect(storeFrom(undefined)).toBeUndefined()
+  expect(storeFrom(null)).toBeUndefined()
+  expect(storeFrom('not-a-record')).toBeUndefined()
+  expect(storeFrom(4)).toBeUndefined()
+  expect(storeFrom([])).toBeUndefined()
+  expect(storeFrom({ rotation: 1, lastPromptAt: null, history: { not: 'a list' } })).toBeUndefined()
+  expect(storeFrom({ rotation: 1, lastPromptAt: null, history: 'nope' })).toBeUndefined()
+  expect(storeFrom({ rotation: '1', lastPromptAt: null, history: [] })).toBeUndefined()
+  expect(storeFrom({ rotation: 1, lastPromptAt: '1', history: [] })).toBeUndefined()
+  expect(storeFrom({ rotation: Number.NaN, lastPromptAt: null, history: [] })).toBeUndefined()
+  expect(storeFrom({ rotation: 1, lastPromptAt: null, history: [{ at: 1 }] })).toBeUndefined()
+  expect(storeFrom({ rotation: 1, lastPromptAt: null, history: [{ at: 1, taken: 'yes' }] })).toBeUndefined()
 })
 
 test('the enabled row is found under the installed name or a working copy\'s, and nothing else', () => {

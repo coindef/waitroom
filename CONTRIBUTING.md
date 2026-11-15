@@ -11,7 +11,7 @@ claude plugin validate ./wait-ship
 claude plugin test     ./wait-ship            # 70 tests
 
 claude plugin validate ./wait-breathe
-claude plugin test     ./wait-breathe         # 28 tests
+claude plugin test     ./wait-breathe         # 33 tests
 
 claude plugin validate ./wait-ping
 claude plugin test     ./wait-ping            # 31 tests

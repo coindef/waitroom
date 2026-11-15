@@ -3,6 +3,7 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { ActivePrompt } from '../types'
 import {
+  type BreatheStore,
   canPrompt,
   enabledRowKey,
   keepHistory,
@@ -10,16 +11,13 @@ import {
   type PromptEvent,
   sessionCountsOf,
   sessionSummaryLine,
+  storeFrom,
   toggledLine,
   toggleRefusedLine,
   wholePositive,
 } from './breathe'
 
 const STORE_KEY = 'state'
-
-type Store = { rotation: number; lastPromptAt: number | null; history: PromptEvent[] }
-
-const EMPTY_STORE: Store = { rotation: 0, lastPromptAt: null, history: [] }
 
 const activePrompt = atom({ plugin: 'wait-breathe', key: 'activePrompt' } as const, null as ActivePrompt | null)
 const sessionStartedAt = atom(
@@ -29,15 +27,31 @@ const sessionStartedAt = atom(
 
 type Config = { enabled: boolean; longTurnSeconds: number }
 
-const loadStore = async ($: EngineInterface): Promise<Store> => {
-  const raw = await $.store.get(STORE_KEY).catch(() => undefined)
+/**
+ * The saved record.
+ *
+ * Undefined when the read fails or the value is not a record this mod wrote.
+ * A missing key is an empty record: that is the first run, and it is safe to
+ * write. Callers that write skip the write on undefined, so a failed read
+ * never replaces the cooldown, the rotation, or the history.
+ */
+const loadStore = async ($: EngineInterface): Promise<BreatheStore | undefined> => {
+  const read = await $.store.get(STORE_KEY).then(
+    value => ({ value }),
+    () => undefined,
+  )
+  if (read === undefined) return undefined
+  if (read.value === undefined) return { rotation: 0, lastPromptAt: null, history: [] }
 
-  return raw && typeof raw === 'object' ? { ...EMPTY_STORE, ...(raw as Partial<Store>) } : EMPTY_STORE
+  return storeFrom(read.value)
 }
 
 /** The one check a long turn gets: past the threshold, cooldown allowing, show it. */
 const fire = async ($: EngineInterface, turnId: string) => {
   const store = await loadStore($)
+  // Unreadable cooldown: show nothing. A nudge here could be the second inside
+  // ten minutes, and writing would replace a record this read does not have.
+  if (store === undefined) return
   const now = await $.clock.now()
   if (!canPrompt(store.lastPromptAt, now)) return
   const message = messageAt(store.rotation)
@@ -57,8 +71,11 @@ const commitAndClear = async ($: EngineInterface, turnId: string) => {
   const current = await read($, activePrompt)
   if (current && current.turnId === turnId) {
     const store = await loadStore($)
-    const event: PromptEvent = { at: current.shownAt, taken: current.takenAt !== null }
-    await $.store.set(STORE_KEY, { ...store, history: keepHistory(store.history, event) })
+    // A record we could not read stays where it is, including on this path.
+    if (store !== undefined) {
+      const event: PromptEvent = { at: current.shownAt, taken: current.takenAt !== null }
+      await $.store.set(STORE_KEY, { ...store, history: keepHistory(store.history, event) })
+    }
   }
   await update($, activePrompt, () => null)
 }
@@ -142,8 +159,10 @@ export const register: Register = (on, options) => {
   on('session.end', async ($, e, next) => {
     if (config.enabled) {
       const store = await loadStore($)
-      const counts = sessionCountsOf(store.history, await read($, sessionStartedAt))
-      if (counts.shown > 0) $.ui.log(sessionSummaryLine(counts.shown, counts.taken))
+      if (store !== undefined) {
+        const counts = sessionCountsOf(store.history, await read($, sessionStartedAt))
+        if (counts.shown > 0) $.ui.log(sessionSummaryLine(counts.shown, counts.taken))
+      }
     }
 
     return next(e)
