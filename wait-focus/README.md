@@ -1,8 +1,8 @@
 # wait-focus
 
-Name up to three paths. After the turn, each one says whether it got touched.
+Did Claude touch auth? Name up to three paths. When the turn ends, the status line says yes or no for each one.
 
-A file or a folder. You point. This mod reports. It never blocks an edit.
+It reports. It never blocks an edit.
 
 ```sh
 claude plugin marketplace add coindef/waitroom
@@ -10,6 +10,8 @@ claude plugin install wait-focus@waitroom
 ```
 
 Needs Claude Code 2.1.318 or later. Restart after installing.
+
+wait-scope warns about edits outside the globs you set. wait-focus answers yes or no for the few paths you care about.
 
 ## Commands
 
