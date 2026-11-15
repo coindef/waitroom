@@ -62,6 +62,14 @@ export type TurnRecord = {
   filesUnknown?: true
   /** Tool calls the turn made, of any kind, counted whether denied or not. */
   toolCalls: number
+  /**
+   * The session that recorded this turn.
+   *
+   * `/bet-recap`'s "this session" keeps the records that carry the id of the
+   * session asking. Absent on a turn recorded before sessions were stamped,
+   * which then stays out of a session that has an id.
+   */
+  sessionId?: string
   /** An interrupted turn is recorded but never scored. */
   isAborted: boolean
   /**
@@ -219,8 +227,11 @@ declare module 'claude-code' {
       bonusRotation: number
       /**
        * When this session began, epoch milliseconds; null until `session.start`
-       * has set it once. The recap card's "this session" is every record at or
-       * after this.
+       * has set it once.
+       *
+       * The recap card's "this session" is the records stamped with the
+       * current session id. This timestamp is the fallback when the host
+       * gives no id: every record at or after it.
        */
       sessionStartedAt: number | null
     }
