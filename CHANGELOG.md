@@ -10,7 +10,7 @@
 
 ### bet-on-your-agent 0.6.4
 
-- **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
+- **A subagent's work does not raise this turn's tool-call count.** The bonus question "how many tool calls will it make?" counts only the calls on your turn. Files the subagent writes still show in "N written so far": an edit, a write, or a notebook edit counts when it actually runs, and a shell command still updates that count from the files on disk.
 - **`/bet-recap` counts this session.** "This session" is the turns stamped with the current session id. A turn another window recorded, even one made after this session began, stays out of the card. The rank and the badge wall still read the whole history. With no session id from the host, the card falls back to the turns since this session started.
 
 ### bet-on-your-agent 0.6.3
