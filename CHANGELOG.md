@@ -12,6 +12,17 @@ First release: you name one to three paths, and after a turn the status line say
 - **Fails open.** Outside a git repository, or when git fails, times out, or its output is cut off, the turn stays quiet: no line, no crash, and no guess. More than 40 changed files under the list does the same. Nothing is blocked, edited, or committed.
 - **Kept in `$.store`.** One value, keyed by the project root, under Claude's configuration directory. Two sessions in one project share it. A missing project root saves nothing.
 
+### bet-on-your-agent 0.6.3
+
+- **A file count that cannot be read is not scored as none.** When a snapshot was taken and a later `git status` lists more than 500 paths (changed or untracked, not only this turn's), the row says the count is unknown and that question is left out of the score. A tree already past that limit when the turn starts has no snapshot, so the count is the `Edit`, `Write` and `NotebookEdit` calls, the same as outside a repository. One path git cannot hash is skipped on its own, so the rest of the turn's files still count.
+
+### bet-on-your-agent 0.6.2
+
+- **A failed read of the history no longer replaces it.** One error reading
+  the stored turns was treated as an empty history, and the turn that just
+  ended was written over every record. That turn is left unrecorded, and the
+  status line is cleared instead of staying on the running-turn prompt.
+
 ### wait-cards 0.1.0
 
 First release: one flashcard from a deck you write, one card per wait.
@@ -73,6 +84,16 @@ First release: warns when a Claude Code turn edits files outside the scope you s
 - **Status line.** After each landed Edit, Write, MultiEdit or NotebookEdit, `N outside scope` — only for files outside your globs. Hidden at 0 and when no scope is set.
 - **Turn end.** The row lists the files outside the scope (up to eight, then `N more files…`). With no scope, files outside the paths your prompt named are listed as `(guess)` and never counted.
 - **Only warns.** Never blocks, never reverts, no network, no telemetry. `/wait-scope` turns it off and on.
+
+## wait-ping 0.1.1
+
+- **A threshold under a second stays at 30.** A value between 0 and 1 used
+  to floor to 0, and then every turn notified, including a turn of 0 ms
+  (`You were away 0s`). It floors, then keeps the number only when it is at
+  least 1. The setting's minimum is 1.
+- **A long turn names the hours.** `You were away 2h`, `You were away 1h 5m`,
+  or `You were away 2h 1m 40s`. Under an hour the line is unchanged (`45s`,
+  `1m`, `1m 30s`).
 
 ## wait-ping 0.1.0
 
