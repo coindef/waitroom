@@ -60,6 +60,9 @@ export const parseDiffFiles = (output: string): FileChange[] => {
   let added = 0
   let removed = 0
   let hasHeader = false
+  // `---` / `+++` name a file only before the first hunk. From `@@` until the
+  // next diff, a removed `-- …` line is `--- …` and an added `++ …` line is `+++ …`.
+  let inHunk = false
 
   const flush = () => {
     if (!hasHeader) return
@@ -81,6 +84,7 @@ export const parseDiffFiles = (output: string): FileChange[] => {
       added = 0
       removed = 0
       hasHeader = false
+      inHunk = false
       continue
     }
     const binary = BINARY_LINE.exec(line)
@@ -96,12 +100,16 @@ export const parseDiffFiles = (output: string): FileChange[] => {
       hasHeader = false
       continue
     }
-    if (line.startsWith('--- ')) {
+    if (line.startsWith('@@')) {
+      inHunk = true
+      continue
+    }
+    if (!inHunk && line.startsWith('--- ')) {
       minus = sidePath(line.slice(4))
       hasHeader = true
       continue
     }
-    if (line.startsWith('+++ ')) {
+    if (!inHunk && line.startsWith('+++ ')) {
       plus = sidePath(line.slice(4))
       hasHeader = true
       continue
