@@ -39,7 +39,7 @@ Claude Code puts its own mark and this mod's name in front of that sentence. A f
 
 A path that is not on disk yet is still watched. It reads untouched until a turn creates it. The reply says `(not on disk yet)` so you can see that when you set it.
 
-The line comes down while the next turn runs, then the new verdict replaces it. Past 48 columns, folders are shortened from the left (`…/LoginForm.tsx touched`) so every `touched` or `untouched` stays. With no paths, it sets no line.
+The line comes down while the next turn runs, then the new verdict replaces it. Past 48 columns, folders are shortened from the left (`…/LoginForm.tsx touched`). If that is still too wide, `touched` and `untouched` become `yes` and `no` (`…/auth/ yes · package.json no · README.md no`). With no paths, it sets no line.
 
 This mod does not draw in the row above the prompt, so the bet's question and its keys stay as they are. It does not open a pane.
 

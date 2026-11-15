@@ -575,16 +575,19 @@ const verdictWord = (touched: boolean): string => (touched ? 'touched' : 'untouc
  *
  * Past 48 columns, folders come off the left (`…/LoginForm.tsx`) until every
  * verdict still fits. Columns are display width, so a CJK name counts as two.
- * The words `touched` and `untouched` are never the part that is cut. An ASCII
- * final name that is itself too long stays whole. A wide final name is
- * shortened from the left until the line fits in 48 columns.
+ * If only final names are left and the line is still over 48, `touched` and
+ * `untouched` become `yes` and `no` (`…/auth/ yes · package.json no · README.md no`).
+ * That shorter pair is used only when it fits. A single long ASCII name keeps
+ * `touched`. A wide final name is shortened from the left until the line fits.
  */
 export const statusLine = (rows: readonly Verdict[]): string | undefined => {
   if (rows.length === 0) return undefined
   const shown = rows.map(row => shownPath(displayPath(row.path)))
+  let short = false
   const label = (row: Verdict | undefined): string => {
     if (row?.hint === 'symlink') return 'is a symlink'
     if (row?.hint === 'submodule') return 'is a submodule'
+    if (short) return row?.touched === true ? 'yes' : 'no'
 
     return verdictWord(row?.touched === true)
   }
@@ -609,6 +612,12 @@ export const statusLine = (rows: readonly Verdict[]): string | undefined => {
       path.shortened = true
       text = line()
       continue
+    }
+    if (!short) {
+      short = true
+      const shorter = line()
+      if (columnWidth(shorter) <= STATUS_COLUMNS) return shorter
+      short = false
     }
     let wide = -1
     let wideWidth = -1

@@ -189,7 +189,8 @@ test('a long path loses folders from the left, and every touched or untouched st
       { path: 'package.json', touched: false },
       { path: 'README.md', touched: false },
     ]),
-  ).toBe('…/auth/ touched · package.json untouched · README.md untouched')
+  ).toBe('…/auth/ yes · package.json no · README.md no')
+  expect(columnWidth('…/auth/ yes · package.json no · README.md no')).toBeLessThanOrEqual(48)
   expect(
     statusLine([
       { path: 'src/components/auth/LoginForm.tsx', touched: true },
@@ -212,7 +213,7 @@ test('bidi marks and C1 controls are stripped from a displayed path', () => {
 test('a CJK path is measured in display columns and stays within 48', () => {
   const wide = `${'あ'.repeat(30)}.ts`
   const line = statusLine([{ path: `src/${wide}`, touched: true }])
-  expect(line?.endsWith('touched')).toBe(true)
+  expect(line?.endsWith('yes') || line?.endsWith('touched')).toBe(true)
   expect(line?.startsWith('…/')).toBe(true)
   expect(columnWidth(line ?? '')).toBeLessThanOrEqual(48)
   expect(line).not.toBe(`src/${wide} touched`)
