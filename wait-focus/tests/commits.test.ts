@@ -30,7 +30,16 @@ type Scene = {
   line: string
 }
 
-const scene = async ($: Parameters<Parameters<typeof test>[1]>[0], on: On, one: Scene) => {
+type Host = {
+  session: { start: (event: { cwd: string; surface: 'terminal'; isInteractive: boolean }) => Promise<unknown> }
+  command: { run: (event: never) => Promise<unknown> }
+  turn: {
+    start: (event: { text: string; turnId: string }) => Promise<unknown>
+    complete: (event: ReturnType<typeof finish>) => Promise<{ text: string }>
+  }
+}
+
+const scene = async ($: Host, on: On, one: Scene) => {
   const argvs: string[][] = []
   const said: (string | undefined)[] = []
   let head = HEAD_A
