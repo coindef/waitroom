@@ -131,7 +131,7 @@ the row the moment the kit is answered.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 73 tests
+claude plugin test .         # 74 tests
 ```
 
 The diff parsing, style inference and every drafted artifact live in
