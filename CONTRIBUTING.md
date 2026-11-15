@@ -20,7 +20,7 @@ claude plugin validate ./wait-scope
 claude plugin test     ./wait-scope           # 47 tests
 
 claude plugin validate ./wait-secret
-claude plugin test     ./wait-secret          # 23 tests
+claude plugin test     ./wait-secret          # 27 tests
 
 claude plugin validate ./wait-notify
 claude plugin test     ./wait-notify          # 93 tests

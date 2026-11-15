@@ -37,10 +37,17 @@ This install stays on its own. The four rooms are `/plugin install waitroom@wait
 
 ## What it looks for
 
-Only lines this turn added, read from the local `git diff`
-uses (tracked changes against HEAD, plus untracked files). A line that was
-already uncommitted before the turn is not the turn's. Eight patterns, first
-match on a line wins:
+Only lines this turn added, read from the local `git diff`. Tracked
+changes are diffed against HEAD. A repository with no commit yet is diffed
+against the empty tree, so a staged file is still seen. Every untracked file
+is diffed. The scan does not stop after the first hundred names. Anything
+committed during the turn is diffed from the revision at the start of the
+turn through HEAD. A line that
+was already uncommitted before the turn is not the turn's. A diff git could
+not finish, a diff cut off because it was too big, or a list of new files
+that stopped early is not a clean tree: the status line says so, and that
+partial read is not saved as the baseline. Eight patterns, first match on a
+line wins:
 
 - `sk-ant-…` (Anthropic) and `sk-…` (OpenAI)
 - `AKIA…` / `ASIA…` (AWS access key id)
@@ -62,16 +69,18 @@ line is never flagged. There is no button for it, on purpose.
 
 It sees what git sees. A file git ignores (a `.env` in `.gitignore`, say) is
 not read, which is also a file that will not be committed. Outside a git
-repository it stays silent. Patterns are a guess: a key in an unusual format
-is missed, and a random-looking test fixture is flagged.
+repository it stays silent. A diff too big for one read, or a read git does
+not finish, is named on the status line instead of being treated as empty or
+as clean. Patterns are a guess: a key in an unusual format is missed, and a
+random-looking test fixture is flagged.
 
 ## What it never does
 
 It never blocks a tool or a commit, never edits or deletes a file, makes no
-network call, and sends no telemetry. It runs `git rev-parse`, `git diff` and
-`git ls-files`, nothing else. The full value of a match is never shown, and
-the state it keeps between the start and end of a turn holds digests of lines,
-not the lines.
+network call, and sends no telemetry. It runs `git rev-parse`,
+`git symbolic-ref`, `git hash-object`, `git diff` and `git ls-files`, nothing
+else. The full value of a match is never shown, and the state it keeps
+between the start and end of a turn holds digests of lines, not the lines.
 
 `/wait-secret` turns it off, and the next `/wait-secret` turns it back on —
 the same switch as *Flag likely secrets a turn wrote* under `/plugin` →
@@ -81,7 +90,7 @@ wait-secret.
 
 ```sh
 claude plugin validate ./wait-secret
-claude plugin test     ./wait-secret   # 21 tests
+claude plugin test     ./wait-secret   # 27 tests
 ```
 
 Every key in the tests is fake and built by concatenation

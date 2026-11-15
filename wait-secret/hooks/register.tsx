@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Baseline, SecretCard, TreeScan } from '../types'
+import type { Baseline, FileAdds, SecretCard } from '../types'
 import {
   splitNul,
   baselineOf,
@@ -13,6 +13,10 @@ import {
   overflowLine,
   parseAddedLines,
   rowLine,
+  DIFF_TOO_BIG,
+  partialFilesLine,
+  RANGE_UNREAD,
+  SCAN_UNREAD,
   statusLine,
   SUBTITLE,
   TITLE,
@@ -25,13 +29,13 @@ import {
 
 /** `$.store` key for a disable the settings write could not persist. */
 const DISABLED_KEY = 'disabled'
-/** Untracked files diffed one by one per scan, so a stray folder cannot stall it. */
-const UNTRACKED_LIMIT = 100
 
 const baseline = atom({ plugin: 'wait-secret', key: 'baseline' } as const, null as Baseline | null)
 const card = atom({ plugin: 'wait-secret', key: 'card' } as const, null as SecretCard | null)
 
-const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string) =>
+type GitRun = { exitCode: number; stdout: string; stderr: string; isStdoutTruncated?: boolean }
+
+const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string): Promise<GitRun | undefined> =>
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
 /** The repository root, or undefined where the session is not in a repository. */
@@ -42,36 +46,163 @@ const repoRoot = async ($: EngineInterface): Promise<string | undefined> => {
   return root === '' ? undefined : root
 }
 
-/**
- * The lines every changed file adds against HEAD right now: the same
- * read-only scan of this turn's changes (staged and unstaged tracked changes,
- * plus untracked files). diff and ls-files, nothing else, and no file read.
- */
-const scanTree = async ($: EngineInterface): Promise<TreeScan> => {
-  const root = await repoRoot($)
-  if (root === undefined) return { ok: false }
+type Head = { kind: 'commit'; rev: string } | { kind: 'unborn' } | { kind: 'unread'; gap: string }
 
-  // core.quotePath=false keeps non-ASCII names raw in the diff headers, so
-  // the path on a row is the path on disk rather than octal escapes.
-  const tracked = await runGit($, ['-c', 'core.quotePath=false', 'diff', 'HEAD', '--no-color', '--no-prefix', '--no-ext-diff'], root)
+type Read = {
+  ok: boolean
+  files: FileAdds[]
+  /** HEAD, or the empty tree when the repository has no commit yet. */
+  startRev?: string
+  unborn?: boolean
+  /** Set when this read is not a finished tree. Never paired with `ok`. */
+  gap?: string
+}
+
+const diffArgs = (revision: readonly string[]) =>
+  ['-c', 'core.quotePath=false', 'diff', ...revision, '--no-color', '--no-prefix', '--no-ext-diff'] as const
+
+/** A diff the host cut off is not usable, whatever follows the cut. Exit 1 is a real `--no-index` difference. */
+const takeDiff = (run: GitRun | undefined, allowOne = false): { ok: true; stdout: string } | { ok: false; gap: string } => {
+  if (run?.isStdoutTruncated) return { ok: false, gap: DIFF_TOO_BIG }
+  if (run !== undefined && (run.exitCode === 0 || (allowOne && run.exitCode === 1))) return { ok: true, stdout: run.stdout }
+
+  return { ok: false, gap: SCAN_UNREAD }
+}
+
+/**
+ * HEAD's commit, or unborn when this is a branch with no commit yet.
+ * A missing object that is not that case is unread: an empty diff is the
+ * wrong answer for it.
+ */
+const readHead = async ($: EngineInterface, root: string): Promise<Head> => {
+  const verified = await runGit($, ['rev-parse', '--verify', '--quiet', 'HEAD'], root)
+  if (verified === undefined || verified.isStdoutTruncated) {
+    return { kind: 'unread', gap: verified?.isStdoutTruncated ? DIFF_TOO_BIG : SCAN_UNREAD }
+  }
+  const rev = verified.exitCode === 0 ? verified.stdout.trim() : ''
+  if (rev !== '') return { kind: 'commit', rev }
+  const branch = await runGit($, ['symbolic-ref', '-q', 'HEAD'], root)
+  if (branch?.isStdoutTruncated) return { kind: 'unread', gap: DIFF_TOO_BIG }
+  if (branch !== undefined && branch.exitCode === 0 && branch.stdout.trim() !== '') return { kind: 'unborn' }
+
+  return { kind: 'unread', gap: SCAN_UNREAD }
+}
+
+/**
+ * Tracked changes. `git diff HEAD` exits 128 when nothing has been committed,
+ * which is not an empty tree: staged lines are `git diff --cached` against
+ * the empty tree, plus unstaged lines against the index. Any other failed
+ * diff stays failed.
+ */
+const trackedText = async (
+  $: EngineInterface,
+  root: string,
+  head: Head,
+): Promise<{ ok: true; text: string; startRev: string; unborn: boolean } | { ok: false; gap: string; startRev?: string; unborn?: boolean }> => {
+  if (head.kind === 'unread') return { ok: false, gap: head.gap }
+  if (head.kind === 'commit') {
+    const diff = takeDiff(await runGit($, diffArgs(['HEAD']), root))
+    if (!diff.ok) return { ok: false, gap: diff.gap, startRev: head.rev, unborn: false }
+
+    return { ok: true, text: diff.stdout, startRev: head.rev, unborn: false }
+  }
+  const empty = await runGit($, ['hash-object', '-t', 'tree', '/dev/null'], root)
+  if (empty?.isStdoutTruncated) return { ok: false, gap: DIFF_TOO_BIG, unborn: true }
+  const tree = empty !== undefined && empty.exitCode === 0 ? empty.stdout.trim() : ''
+  if (tree === '') return { ok: false, gap: SCAN_UNREAD, unborn: true }
+  const staged = takeDiff(await runGit($, diffArgs(['--cached', tree]), root))
+  if (!staged.ok) return { ok: false, gap: staged.gap, startRev: tree, unborn: true }
+  const unstaged = takeDiff(await runGit($, diffArgs([]), root))
+  if (!unstaged.ok) return { ok: false, gap: unstaged.gap, startRev: tree, unborn: true }
+
+  return { ok: true, text: `${staged.stdout}\n${unstaged.stdout}`, startRev: tree, unborn: true }
+}
+
+/**
+ * Every untracked name, in the order git lists them. Stopping after a prefix
+ * would let a later name hide. A name whose diff does not come back whole
+ * ends the scan: the files already read are not a finished tree.
+ */
+const withUntracked = async (
+  $: EngineInterface,
+  root: string,
+  tracked: string,
+): Promise<{ ok: true; text: string } | { ok: false; gap: string }> => {
   // -z: NUL-separated and never quoted, so a name with a space, a quote or
   // non-ASCII characters comes back as it is on disk instead of skipped.
   const others = await runGit($, ['ls-files', '-z', '--others', '--exclude-standard'], root)
-  const trackedOk = tracked !== undefined && tracked.exitCode === 0
-  const othersOk = others !== undefined && others.exitCode === 0
-  if (!trackedOk && !othersOk) return { ok: false }
-
-  const chunks: string[] = trackedOk ? [tracked.stdout] : []
-  const untracked = othersOk
-    ? splitNul(others.stdout).slice(0, UNTRACKED_LIMIT)
-    : []
-  for (const path of untracked) {
+  if (others?.isStdoutTruncated) return { ok: false, gap: DIFF_TOO_BIG }
+  if (others === undefined || others.exitCode !== 0) return { ok: false, gap: SCAN_UNREAD }
+  const names = splitNul(others.stdout)
+  const chunks = [tracked]
+  let scanned = 0
+  for (const path of names) {
     // --no-index exits 1 when the two sides differ, which is the point here.
-    const one = await runGit($, ['-c', 'core.quotePath=false', 'diff', '--no-color', '--no-prefix', '--no-index', '--', '/dev/null', path], root)
-    if (one && one.exitCode <= 1) chunks.push(one.stdout)
+    const one = await runGit(
+      $,
+      ['-c', 'core.quotePath=false', 'diff', '--no-color', '--no-prefix', '--no-index', '--', '/dev/null', path],
+      root,
+    )
+    const taken = takeDiff(one, true)
+    if (!taken.ok) return { ok: false, gap: one?.isStdoutTruncated ? DIFF_TOO_BIG : partialFilesLine(scanned, names.length) }
+    chunks.push(taken.stdout)
+    scanned += 1
   }
 
-  return { ok: true, files: parseAddedLines(chunks.join('\n')) }
+  return { ok: true, text: chunks.join('\n') }
+}
+
+/**
+ * What was committed during the turn: `<start>..HEAD`. Still unborn means
+ * nothing was committed. The same revision at both ends is an empty range.
+ * Anything else we cannot compute is not a clean tree.
+ */
+const committedText = async (
+  $: EngineInterface,
+  root: string,
+  head: Head,
+  before: Baseline,
+): Promise<{ ok: true; text: string } | { ok: false; gap: string }> => {
+  if (head.kind === 'unread') return { ok: false, gap: head.gap === DIFF_TOO_BIG ? DIFF_TOO_BIG : RANGE_UNREAD }
+  if (head.kind === 'unborn') return before.unborn === true ? { ok: true, text: '' } : { ok: false, gap: RANGE_UNREAD }
+  if (before.startRev === undefined) return { ok: false, gap: RANGE_UNREAD }
+  if (before.startRev === head.rev) return { ok: true, text: '' }
+  const diff = takeDiff(await runGit($, diffArgs([`${before.startRev}..HEAD`]), root))
+  if (!diff.ok) return { ok: false, gap: diff.gap === DIFF_TOO_BIG ? DIFF_TOO_BIG : RANGE_UNREAD }
+
+  return { ok: true, text: diff.stdout }
+}
+
+/** The worktree now: tracked changes plus every untracked file. Not a repository is `ok: false` with no gap. */
+const readTree = async ($: EngineInterface): Promise<Read> => {
+  const root = await repoRoot($)
+  if (root === undefined) return { ok: false, files: [] }
+  const head = await readHead($, root)
+  const tracked = await trackedText($, root, head)
+  if (!tracked.ok) return { ok: false, files: [], startRev: tracked.startRev, unborn: tracked.unborn, gap: tracked.gap }
+  const full = await withUntracked($, root, tracked.text)
+  if (!full.ok) return { ok: false, files: [], startRev: tracked.startRev, unborn: tracked.unborn, gap: full.gap }
+
+  return { ok: true, files: parseAddedLines(full.text), startRev: tracked.startRev, unborn: tracked.unborn }
+}
+
+/**
+ * The worktree, plus `<start>..HEAD` for lines a commit during the turn
+ * took out of the worktree diff. Either half failing drops the files:
+ * a card built from the half we have would look finished.
+ */
+const readEnd = async ($: EngineInterface, before: Baseline): Promise<Read> => {
+  const root = await repoRoot($)
+  if (root === undefined) return { ok: false, files: [] }
+  const head = await readHead($, root)
+  const tracked = await trackedText($, root, head)
+  if (!tracked.ok) return { ok: false, files: [], gap: tracked.gap }
+  const full = await withUntracked($, root, tracked.text)
+  if (!full.ok) return { ok: false, files: [], gap: full.gap }
+  const committed = await committedText($, root, head, before)
+  if (!committed.ok) return { ok: false, files: [], gap: committed.gap }
+
+  return { ok: true, files: parseAddedLines(`${full.text}\n${committed.text}`) }
 }
 
 const setEnabled = async ($: EngineInterface, want: boolean): Promise<{ deny?: string }> => {
@@ -115,7 +246,7 @@ const ensurePref = ($: EngineInterface): Promise<void> => {
 const showStatus = async ($: EngineInterface) => {
   try {
     const now = silenced() ? null : await read($, card)
-    $.ui.status(now === null ? undefined : statusLine(now.hits.length + now.overflow))
+    $.ui.status(now === null ? undefined : (now.gap ?? statusLine(now.hits.length + now.overflow)))
   } catch {
     // Nothing to do: the list is still right, only unshown.
   }
@@ -193,8 +324,23 @@ export const register: Register = (on, options) => {
 
       return next(e)
     }
-    const scan = await scanTree($)
-    await update($, baseline, () => baselineOf(e.turnId, scan))
+    const scan = await readTree($)
+    await update($, baseline, prev => {
+      if (!scan.ok) {
+        // A failed diff is not an empty tree, and a cut-off diff is not the
+        // new baseline. This turn has nothing complete to compare against.
+        return {
+          turnId: e.turnId,
+          ok: false,
+          seen: prev?.ok ? prev.seen : {},
+          startRev: scan.startRev ?? prev?.startRev,
+          unborn: scan.unborn ?? prev?.unborn,
+          gap: scan.gap,
+        }
+      }
+
+      return { ...baselineOf(e.turnId, { ok: true, files: scan.files }), startRev: scan.startRev, unborn: scan.unborn }
+    })
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -212,7 +358,23 @@ export const register: Register = (on, options) => {
       }
       const started = await read($, baseline)
       const before = started !== null && started.turnId === e.turnId ? started : null
-      const found = before === null ? null : cardFor(before, await scanTree($))
+      if (before === null) {
+        await update($, card, () => null)
+        await showStatus($)
+
+        return done
+      }
+      const after = await readEnd($, before)
+      const gap = !before.ok || !after.ok ? (after.gap ?? before.gap) : undefined
+      if (gap !== undefined || !before.ok || !after.ok) {
+        // No list from a prefix, and no quiet "nothing found" when the read
+        // did not finish. Outside a repository there is no gap, so no line.
+        await update($, card, () => (gap === undefined ? null : { turnId: e.turnId, hits: [], overflow: 0, gap }))
+        await showStatus($)
+
+        return done
+      }
+      const found = cardFor(before, { ok: true, files: after.files })
       await update($, card, () => (found === null ? null : { turnId: e.turnId, ...found }))
       await showStatus($)
     } catch {
@@ -231,7 +393,7 @@ export const register: Register = (on, options) => {
     await ensurePref($)
     if (silenced() || e.props.hasSurvey || e.props.isWorking) return next(e)
     const showing = await read($, card)
-    if (!showing) return next(e)
+    if (!showing || showing.gap !== undefined) return next(e)
 
     const { Box, Text, Button } = $.ui.resolve(e)
     const dismiss = async () => {

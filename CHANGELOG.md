@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### wait-secret 0.1.1
+
+- **A diff git could not read is not treated as an empty tree.** If that read fails, secrets that were already staged are not reported as this turn's, and the failed read is not saved as the baseline. A repository with no commit yet is diffed against the empty tree, so a staged secret is still seen.
+- **Every new file is scanned.** A secret in a new file is no longer skipped once there are more than 100 untracked files. A scan that stops early says so (`scanned 100 of 101 new files`) instead of looking finished.
+- **A diff that was cut off is not a clean result.** When the diff is too big to read in full, the status line says `diff too big to scan fully`. The partial text is not listed and is not saved as the baseline.
+- **Committing the secret no longer hides it.** The scan also reads what was committed during the turn. If that range cannot be read, the turn is not reported as clean.
+
 ### bet-on-your-agent 0.6.4
 
 - **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
