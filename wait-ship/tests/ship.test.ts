@@ -452,3 +452,17 @@ test('filesSince names only the files whose own diff changed since the baseline'
   expect(filesSince(null, seen, files).map(one => one.path)).toEqual(['notes.md', 'src/feature.ts'])
   expect(filesSince(seen, seen, files)).toEqual([])
 })
+
+test('a newline between diffs does not make the previous file look changed', () => {
+  const notes = added('notes.md', ['+a note written between turns'])
+  const scratch = added('scratch.txt', ['+scratch'])
+  const feature = added('src/feature.ts')
+  // The extra newline is what joining the tracked diff to an untracked diff inserts.
+  const before = treeSeenOf(`${notes}\n${scratch}`)
+  const seen = treeSeenOf(`${notes}${feature}\n${scratch}`)
+  const files = parseDiffFiles(`${notes}${feature}\n${scratch}`)
+
+  expect(before.files['notes.md']).toBe(seen.files['notes.md'])
+  expect(before.files['scratch.txt']).toBe(seen.files['scratch.txt'])
+  expect(filesSince(before, seen, files).map(one => one.path)).toEqual(['src/feature.ts'])
+})

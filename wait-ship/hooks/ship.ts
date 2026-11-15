@@ -544,7 +544,10 @@ export const treeSeenOf = (text: string): TreeSeen => {
     const from = starts[at]
     if (from === undefined) continue
     const to = starts[at + 1] ?? text.length
-    const body = text.slice(from, to)
+    // The newline that only separates this chunk from the next one is not part
+    // of the file. Counting it would mark the file changed once another file
+    // is appended after it.
+    const body = text.slice(from, to).replace(/\n+$/, '')
     const path = parseDiffFiles(body)[0]?.path
     if (path !== undefined && path !== '') files[path] = fingerprintOf(body)
   }
@@ -554,15 +557,13 @@ export const treeSeenOf = (text: string): TreeSeen => {
 
 /**
  * Files whose diff changed since `before`. No earlier read counts every file
- * as changed. When the whole text moved but no file's chunk did, every file
- * stays, which is what a scan that could not be split per file already did.
+ * as changed. A tree that moved without any file's own chunk moving — a file
+ * put back to HEAD, or a newline that only separated chunks — names nothing.
  */
 export const filesSince = (before: TreeSeen | null, seen: TreeSeen, files: readonly FileChange[]): FileChange[] => {
   if (before === null) return [...files]
-  const changed = files.filter(file => before.files[file.path] !== seen.files[file.path])
-  if (changed.length === 0 && before.tree !== seen.tree) return [...files]
 
-  return changed
+  return files.filter(file => before.files[file.path] !== seen.files[file.path])
 }
 
 // ---------------------------------------------------------------------------

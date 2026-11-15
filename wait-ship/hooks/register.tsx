@@ -75,7 +75,13 @@ const scanTree = async ($: EngineInterface, root: string, config: Config, stopWh
     if (stopWhenGitFails && one === undefined) return failed
     if (one && one.exitCode <= 1) chunks.push(one.stdout)
   }
-  const text = chunks.join('\n')
+  // Each diff already ends in a newline. A second one between chunks sticks
+  // to the previous file, so that file's fingerprint changes when a later
+  // file is appended even though its own diff did not.
+  const text = chunks
+    .filter(chunk => chunk !== '')
+    .map(chunk => (chunk.endsWith('\n') ? chunk : `${chunk}\n`))
+    .join('')
 
   return {
     files: parseDiffFiles(text).filter(one => !isUnder(one.path, config.shipDir)),

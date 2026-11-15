@@ -385,6 +385,66 @@ test('a turn that writes a file names only that file, not one edited between tur
   expect(commit).not.toContain('notes.md')
 })
 
+test('an untracked file already in the tree does not pull a hand edit into the kit', async ($, on) => {
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  const scratch = [
+    'diff --git scratch.txt scratch.txt',
+    '--- /dev/null',
+    '+++ scratch.txt',
+    '@@ -0,0 +1,1 @@',
+    '+scratch',
+    '',
+  ].join('\n')
+  const repo: Repo = {
+    root: ROOT,
+    diffHead: '',
+    untracked: ['scratch.txt'],
+    untrackedDiffs: { 'scratch.txt': scratch },
+  }
+  const fs = engineBottom(on, repo)
+  await $.session.start(SESSION)
+
+  repo.diffHead = NOTES_DIFF
+  await landTurn($, 'turn-between')
+  await landTurn($, 'turn-writes', () => {
+    repo.diffHead = `${NOTES_DIFF}${NEW_FILE_DIFF}`
+  })
+
+  const offering = await mountBand($)
+  expect(await offering.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
+  expect(await offering.find({ text: /notes\.md|scratch\.txt|2 files|3 files/ })).toBeUndefined()
+  await offering.press({ key: 'all' })
+  await offering.unmount()
+
+  const commit = fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]
+  expect(commit).toContain('src/feature.ts')
+  expect(commit).not.toContain('notes.md')
+  expect(commit).not.toContain('scratch.txt')
+})
+
+test('an untracked path with no diff of its own does not pull a hand edit into the kit', async ($, on) => {
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: ['scratch.txt'] }
+  const fs = engineBottom(on, repo)
+  await $.session.start(SESSION)
+
+  repo.diffHead = NOTES_DIFF
+  await landTurn($, 'turn-between')
+  await landTurn($, 'turn-writes', () => {
+    repo.diffHead = `${NOTES_DIFF}${NEW_FILE_DIFF}`
+  })
+
+  const offering = await mountBand($)
+  expect(await offering.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
+  expect(await offering.find({ text: /notes\.md|2 files/ })).toBeUndefined()
+  await offering.press({ key: 'all' })
+  await offering.unmount()
+
+  const commit = fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]
+  expect(commit).toContain('src/feature.ts')
+  expect(commit).not.toContain('notes.md')
+})
+
 test('a git failure at turn start leaves the previous baseline and the turn still finishes', async ($, on) => {
   on('session.start', ($$, e) => ({ cwd: e.cwd }))
   const repo: Repo = { root: ROOT, diffHead: NOTES_DIFF, untracked: [] }
