@@ -17,7 +17,7 @@ claude plugin validate ./wait-ping
 claude plugin test     ./wait-ping            # 31 tests
 
 claude plugin validate ./wait-scope
-claude plugin test     ./wait-scope           # 47 tests
+claude plugin test     ./wait-scope           # 59 tests
 
 claude plugin validate ./wait-secret
 claude plugin test     ./wait-secret          # 23 tests

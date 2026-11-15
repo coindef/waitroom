@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### wait-scope 0.1.1
+
+- **A scope file that can't be read is not "no scope".** If `.claude/wait-scope` is there but the read fails, the turn keeps the last scope that file gave, or skips the check, and says so once. It does not guess, and it does not use the setting in place of that file.
+- **`*` is the top level only, and `src/*` is the files directly in that folder.** A bare folder name still covers everything inside it.
+- **A comma in `.claude/wait-scope` stays in the glob.** `src/**/*.{ts,tsx}` matches `.ts` and `.tsx`. Commas still separate globs in the *Files in scope* setting.
+- **A glob typed in the prompt is read like an edited path.** `..`, the macOS `/private` alias, and a drive letter fold the same way. A guess does not cover a file outside the project.
+- **`fix src/auth` is a folder.** `and/or`, `read/write`, and `TCP/IP` stay prose.
+
 ### bet-on-your-agent 0.6.2
 
 - **A failed read of the history no longer replaces it.** One error reading
