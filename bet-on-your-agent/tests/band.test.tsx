@@ -994,14 +994,20 @@ test("a subagent's tool calls stay off the open turn's tool-call count", async (
 
   // The file still counts: the question is how many files the turn touches.
   // The five calls do not count toward the tool-call bonus.
-  await $.tool.call({ tool: 'Edit', file_path: '/work/sub.ts', agentId: 'agent-1' } as never)
+  await $.tool.call({
+    tool: 'Edit',
+    file_path: '/work/sub.ts',
+    old_string: 'x',
+    new_string: 'y',
+    agentId: 'agent-1',
+  } as never)
   for (let at = 0; at < 4; at++) {
     await $.tool.call({ tool: 'Read', file_path: '/work/sub-read.ts', agentId: 'agent-1' } as never)
   }
   expect(await band.find({ text: /1 written so far/ })).toBeDefined()
 
   // The main turn's own calls still count: a second file, and three tool calls in all.
-  await $.tool.call({ tool: 'Edit', file_path: '/work/main.ts' })
+  await $.tool.call({ tool: 'Edit', file_path: '/work/main.ts', old_string: 'x', new_string: 'y' })
   expect(await band.find({ text: /2 written so far/ })).toBeDefined()
   for (let at = 0; at < 2; at++) {
     await $.tool.call({ tool: 'Read', file_path: `/work/main-${at}.ts` } as never)
