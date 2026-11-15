@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### waitroom 0.1.2
+
+- **The three-room install is what an update installs.** `waitroom@waitroom` depends on bet-on-your-agent, wait-ship, and wait-breathe. 0.1.1 kept that version string after `wait-review` left the dependency list, so `claude plugin update` stayed on the cached copy and the bundle failed to load with `Dependency "wait-review@waitroom" is not installed`. The first interactive session logs three lines: the three rooms are in, wait-breathe stays off until `/breathe`, and the optional `claude plugin install wait-ping@waitroom`. It does not return. No pane and no row.
+- **Removed plugins are marked removed.** The marketplace maps `wait-review`, `wait-changed`, and `wait-shell` to `null` in `renames`, so an install of a plugin that left the catalog is no longer a load error (`Plugin "…" not found in marketplace`).
+
 ### wait-cards 0.1.0
 
 First release: one flashcard from a deck you write, one card per wait.
