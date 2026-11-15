@@ -273,6 +273,8 @@ test('a rejected store read shows a read error and does not write', async () => 
   await start(host)
 
   const unchanged = "couldn't read your note · nothing was changed · try /anchor again"
+  const notSaved = "couldn't read your note · the new one wasn't saved · try again"
+  const notCleared = "couldn't read your note · nothing was cleared · try again"
   expect(host.status.at(-1)).toBe(unchanged)
 
   const shown = (await host.dispatch('command.run', { command: 'anchor', args: '' })) as { text: string }
@@ -282,13 +284,16 @@ test('a rejected store read shows a read error and does not write', async () => 
     command: 'anchor',
     args: 'other goal · check: other check',
   })) as { text: string }
-  expect(set.text).toBe("couldn't read your note · the new one wasn't saved · try again")
+  expect(set.text).toBe(notSaved)
 
   const cleared = (await host.dispatch('command.run', { command: 'anchor', args: 'clear' })) as { text: string }
-  expect(cleared.text).toBe("couldn't read your note · nothing was cleared · try again")
+  expect(cleared.text).toBe(notCleared)
   expect(store.get(key)).toEqual(stored)
   expect(host.order.includes('set')).toBe(false)
   expect(host.order.includes('delete')).toBe(false)
   expect(host.status.includes(undefined)).toBe(false)
   expect(host.status.every(line => line === unchanged)).toBe(true)
+  for (const line of [unchanged, notSaved, notCleared, shown.text, set.text, cleared.text, ...host.status]) {
+    expect(line?.includes('wait-anchor:')).toBe(false)
+  }
 })
