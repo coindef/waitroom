@@ -1,6 +1,6 @@
 {
   "name": "wait-scope",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "description": "Warns when a Claude Code turn edits files outside the scope you set: a short count on the status line, then a list once the turn ends. Never blocks or reverts an edit.",
   "author": {
     "name": "coindef"
