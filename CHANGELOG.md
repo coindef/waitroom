@@ -2,43 +2,38 @@
 
 ## Unreleased
 
-### wait-ship 0.1.3
-
 - **The shared row is one row again on Claude Code 2.1.323 and later.** Those
   versions ask every mod for its own row and stack the answers, and `next()`
-  no longer says who drew. This mod now leaves the other rows out of
+  no longer says who drew. wait-ship leaves the other rows out of
   `AbovePromptList`, in the same order as before: breathe, then this offer,
   then the bet. On 2.1.319 and earlier it still yields from the stamp on
   `next()`.
 
-### bet-on-your-agent 0.6.4
-
 - **The shared row is one row again on Claude Code 2.1.323 and later.** The
-  forecast still comes ahead of a ship offer while a turn runs, and still
-  waits behind a breathe nudge and, between turns, a ship offer. The yield
-  is done by leaving the other rows out of `AbovePromptList`. On 2.1.319 and
-  earlier the stamp on `next()` still decides.
-
-### wait-breathe 0.2.1
+  bet's forecast still comes ahead of a ship offer while a turn runs, and
+  still waits behind a breathe nudge and, between turns, a ship offer. The
+  yield is done by leaving the other rows out of `AbovePromptList`. On
+  2.1.319 and earlier the stamp on `next()` still decides.
 
 - **The shared row is one row again on Claude Code 2.1.323 and later.** A due
-  nudge keeps the row ahead of a ship offer and a forecast instead of
-  stacking on them. On 2.1.319 and earlier a nudge still takes the row by
+  breathe nudge keeps the row ahead of a ship offer and a forecast instead
+  of stacking on them. On 2.1.319 and earlier a nudge still takes the row by
   drawing it.
 
-### wait-scope 0.1.1
-
 - **The card yields the shared row again on Claude Code 2.1.323 and later.**
-  It was stacking on a wait-ship offer. It waits behind breathe, ship, and
-  the bet, and shows once they close. Returning the engine's own drawing is
-  not a yield: an empty row still shows this card. On 2.1.319 and earlier
-  the stamp on `next()` still decides.
+  wait-scope was stacking on a wait-ship offer. It waits behind breathe,
+  ship, and the bet, and shows once they close. Returning the engine's own
+  drawing is not a yield: an empty row still shows this card. On 2.1.319 and
+  earlier the stamp on `next()` still decides.
 
-### wait-secret 0.1.1
+- **The card yields the shared row on Claude Code 2.1.323 and later.**
+  wait-secret waits behind breathe, ship, the bet, and scope, and shows once
+  they close. On 2.1.319 and earlier the stamp on `next()` still decides.
 
-- **The card yields the shared row on Claude Code 2.1.323 and later.** It
-  waits behind breathe, ship, the bet, and scope, and shows once they close.
-  On 2.1.319 and earlier the stamp on `next()` still decides.
+### bet-on-your-agent 0.6.4
+
+- **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
+- **`/bet-recap` counts this session.** "This session" is the turns stamped with the current session id. A turn another window recorded, even one made after this session began, stays out of the card. The rank and the badge wall still read the whole history. With no session id from the host, the card falls back to the turns since this session started.
 
 ### bet-on-your-agent 0.6.3
 
@@ -50,6 +45,16 @@
   the stored turns was treated as an empty history, and the turn that just
   ended was written over every record. That turn is left unrecorded, and the
   status line is cleared instead of staying on the running-turn prompt.
+
+### wait-ship 0.1.3
+
+- **Every path in the transcript receipt follows the folder the session is
+  in now.** From a subfolder that is the path after `Draft written:` and the
+  same path in `git commit -F`, `gh pr create --body-file`, and the changelog
+  paste line. Each command's path is one single-quoted word. A later `/cd`
+  or worktree, or a space in the drafts folder, no longer makes the command
+  miss the file. An absolute `shipDir` is still written under the repository,
+  and the receipt names that file.
 
 ### wait-cards 0.1.0
 
