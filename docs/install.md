@@ -127,15 +127,13 @@ claude plugin update waitroom@waitroom
 
 You should see `Plugin "waitroom" updated from 0.1.1 to 0.1.2 for scope user. Restart to apply changes.` Restart Claude Code once. waitroom loads again and keeps bet-on-your-agent, wait-ship, and wait-breathe.
 
-`wait-review`, `wait-changed`, and `wait-shell` stay installed locally and show as disabled (or "Removed from the waitroom marketplace"). Uninstall each one to clear it:
+`wait-review`, `wait-changed`, and `wait-shell` stay installed locally and show as disabled (or "Removed from the waitroom marketplace"). While they are still installed, `claude plugin prune` refuses to run (`Skipped — cannot determine orphans: … failed to load. Fix or uninstall, then retry.`). Uninstall those three first:
 
 ```bash
 claude plugin uninstall wait-review@waitroom
 claude plugin uninstall wait-changed@waitroom
 claude plugin uninstall wait-shell@waitroom
 ```
-
-Don't run `claude plugin prune`. It would remove bet-on-your-agent, wait-ship, and wait-breathe and delete their saved data.
 
 ## Coming from the old name
 

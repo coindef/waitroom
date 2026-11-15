@@ -42,7 +42,7 @@ the installed one while you work on a clone.
 
 ### Dependency "wait-review@waitroom" is not installed
 
-That error after a marketplace update means the installed bundle is still 0.1.1, which asks for `wait-review`. Run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`, and restart. You do not uninstall or reinstall `waitroom@waitroom`. `wait-review`, `wait-changed`, and `wait-shell` stay installed and disabled; uninstall those three to clear them. See [If waitroom fails after a marketplace update](install.md#if-waitroom-fails-after-a-marketplace-update). That is not the old marketplace once named `wait-review`.
+That error after a marketplace update means the installed bundle is still 0.1.1, which asks for `wait-review`. Run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`, and restart. You do not uninstall or reinstall `waitroom@waitroom`. `wait-review`, `wait-changed`, and `wait-shell` stay installed and disabled. While they are, `claude plugin prune` refuses to run, so uninstall those three first. See [If waitroom fails after a marketplace update](install.md#if-waitroom-fails-after-a-marketplace-update). That is not the old marketplace once named `wait-review`.
 
 ### The early-access switch
 

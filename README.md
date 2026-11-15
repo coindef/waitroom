@@ -40,7 +40,7 @@ claude plugin install wait-cards@waitroom
 
 wait-ping is the legacy notifier. It sends a desktop notification when a long turn ends or a permission prompt is waiting. wait-anchor keeps a note you set, the goal and what to check when you come back, and stays quiet until you set one. wait-cards shows one flashcard from a deck you write in `~/.waitroom/cards.md`, and stays quiet until that file has cards.
 
-Restart Claude Code once you're done. If `waitroom@waitroom` fails to load with `Dependency "wait-review@waitroom" is not installed` after a marketplace update, run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`, and restart. You do not uninstall or reinstall the bundle. `wait-review`, `wait-changed`, and `wait-shell` stay installed and disabled; uninstall those three to clear them. See [docs/install.md](docs/install.md#if-waitroom-fails-after-a-marketplace-update).
+Restart Claude Code once you're done. If `waitroom@waitroom` fails to load with `Dependency "wait-review@waitroom" is not installed` after a marketplace update, run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`, and restart. You do not uninstall or reinstall the bundle. `wait-review`, `wait-changed`, and `wait-shell` stay installed and disabled. While they are, `claude plugin prune` refuses to run, so uninstall those three first. See [docs/install.md](docs/install.md#if-waitroom-fails-after-a-marketplace-update).
 
 To update, or to install the three core rooms in one command, see [docs/install.md](docs/install.md).
 
