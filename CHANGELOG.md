@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### bet-on-your-agent 0.6.5
+
+- **The 500-path cap counts only what this turn changed.** The snapshot is taken when the turn starts, however long `git status` already is. Paths that were already dirty or untracked are that baseline, so they do not count toward the cap and do not make the count unknown. A tree that starts with more than 500 such paths is still scored, including files written through the shell. The count is unknown only when this turn itself changes more than 500 paths. The row then says `file count unknown (500+ paths)`, and that question is left out of the score.
+
 ### bet-on-your-agent 0.6.3
 
 - **A file count that cannot be read is not scored as none.** When a snapshot was taken and a later `git status` lists more than 500 paths (changed or untracked, not only this turn's), the row says the count is unknown and that question is left out of the score. A tree already past that limit when the turn starts has no snapshot, so the count is the `Edit`, `Write` and `NotebookEdit` calls, the same as outside a repository. One path git cannot hash is skipped on its own, so the rest of the turn's files still count.

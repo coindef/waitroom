@@ -321,10 +321,12 @@ const noteToolCall = async ($: EngineInterface) => {
 }
 
 /**
- * Past this many changed paths, a look at the working tree is not a count.
+ * Past this many paths changed since the turn started, a look is not a count.
  *
- * Giving up used to look the same as a clean tree, and the turn was scored
- * as having written nothing.
+ * The cap is that delta, not the length of `git status`. Paths already
+ * dirty or untracked at the start are the baseline, so they do not use it
+ * up. Giving up on the whole status list used to mark every later turn
+ * unknown, and the file question was asked and then never scored.
  */
 const WORKTREE_LIMIT = 500
 
@@ -369,14 +371,14 @@ const hashPresent = async (
  * Each file git sees changed in the repository, as path to content hash.
  *
  * Undefined outside a repository, or when git does not answer; the tool calls
- * are then the only count there is. `'untrusted'` when `git status` lists more
- * paths than `WORKTREE_LIMIT` — changed or untracked, not only this turn's.
- * A first look that returns that is no baseline, and the tool calls are the
- * count. A later look, against a baseline already taken, means the count can
- * no longer be read.
+ * are then the only count there is. A first look is the baseline, however
+ * long `git status` is: files already there are not this turn's writes.
+ * Passed that baseline, `'untrusted'` when more than `WORKTREE_LIMIT` paths
+ * moved from it. The count can no longer be read, and it is not zero.
  */
 const lookAtWorktree = async (
   $: EngineInterface,
+  against?: Readonly<Record<string, string>>,
 ): Promise<Record<string, string> | 'untrusted' | undefined> => {
   const top = await runGit($, ['rev-parse', '--show-toplevel'])
   const root = top?.exitCode === 0 ? top.stdout.trim() : ''
@@ -384,7 +386,6 @@ const lookAtWorktree = async (
   const status = await runGit($, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], root)
   if (status?.exitCode !== 0) return undefined
   const entries = parseStatus(status.stdout)
-  if (entries.length > WORKTREE_LIMIT) return 'untrusted'
   const present = entries.filter(one => !one.isDeleted).map(one => one.path)
   const hashed = await hashPresent($, root, present)
   if (hashed === undefined) return undefined
@@ -398,6 +399,11 @@ const lookAtWorktree = async (
     if (hash === undefined) continue
     look[`${root}/${one.path}`] = hash
   }
+  // The cap is paths this turn changed, not paths already dirty or untracked.
+  // A tree that starts over the cap still has a baseline, so a later look can
+  // tell a new file from one that was sitting there. Falling back to Edit and
+  // Write here would drop every shell write in that tree.
+  if (against !== undefined && changedSince(against, look).length > WORKTREE_LIMIT) return 'untrusted'
 
   return look
 }
@@ -406,14 +412,15 @@ const lookAtWorktree = async (
  * Counts every file whose content moved since the turn started, however it
  * was written: a shell heredoc or a script makes no Edit call.
  *
- * A later look that gives up marks the count unknown. It does not leave the
- * number where it stood, which is zero whenever the writes came through the
- * shell. A turn that never got a baseline is left to the tool calls.
+ * A later look whose delta from the baseline is past the cap marks the count
+ * unknown. It does not leave the number where it stood, which is zero
+ * whenever the writes came through the shell. A turn that never got a
+ * baseline is left to the tool calls.
  */
 const noteWorktreeFiles = async ($: EngineInterface) => {
   const { baseline, filesUnknown } = await read($, open)
   if (filesUnknown === true || baseline === undefined) return
-  const now = await lookAtWorktree($)
+  const now = await lookAtWorktree($, baseline)
   if (now === 'untrusted') {
     await update($, open, bet => ({ ...bet, filesUnknown: true as const }))
 
@@ -547,10 +554,10 @@ export const register: Register = (on, options) => {
     await lapseStaleVerdicts($)
     await showStatus($)
     // Taken before the turn runs, so whatever it writes shows as a change.
-    // A status list already past the limit is no baseline, same as outside a
-    // repository: Edit, Write and NotebookEdit stay the count, and the file
-    // question is still scored. Marking it unknown here would ask that
-    // question on every turn and then throw the answer away.
+    // The list can already be past 500 paths. Those paths are the baseline,
+    // not this turn's writes, and the file question is still scored against
+    // what moves from here. Marking the count unknown here would ask that
+    // question on every turn in a dirty tree and then throw the answer away.
     const baseline = await lookAtWorktree($)
     if (baseline !== undefined && baseline !== 'untrusted') {
       await update($, open, bet => (bet.turnId === e.turnId ? { ...bet, baseline } : bet))

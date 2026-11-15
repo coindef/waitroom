@@ -610,6 +610,62 @@ test('a tree already past 500 paths still scores the Edit and Write calls', asyn
   await pane.unmount()
 })
 
+test('untracked files already in the tree do not use up the 500-path cap', async ($, on) => {
+  engineBottom(on)
+  const prior = Array.from({ length: 600 }, (_, at) => `dist/f${at}.js`)
+  const priorHashes = prior.map((_, at) => `p${at}`)
+  const repo = {
+    status: [...prior.map(path => `?? ${path}`), ''].join('\0'),
+    hashes: priorHashes.join('\n') + '\n',
+  }
+  trackGit(on, repo)
+  on('tool.call', { tool: 'Bash' }, () => {
+    const written = ['src/a.ts', 'src/b.ts']
+    repo.status = [...prior.map(path => `?? ${path}`), ...written.map(path => `?? ${path}`), ''].join('\0')
+    repo.hashes = [...priorHashes, 'aaa', 'bbb'].join('\n') + '\n'
+
+    return { result: { stdout: '', stderr: '', interrupted: false } } as never
+  })
+
+  await $.turn.start({ text: 'write two sources from the shell', turnId: 'turn-preexisting' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await band.press({ key: 'p80' })
+  await band.press({ key: 'f2-3' })
+  // The bonus question and the daily challenge are not under test here.
+  await band.press({ key: 'decline' })
+  await band.press({ key: 'decline' })
+  await $.tool.call({ tool: 'Bash', command: 'cat > src/a.ts <<EOF\n' } as never)
+  expect(await band.find({ text: /2 written so far/ })).toBeDefined()
+  expect(await band.find({ text: /file count unknown/ })).toBeUndefined()
+  await band.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-preexisting',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  // Called 2–3. The 600 untracked files were already there; the shell wrote two.
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /File count called right 1\/1/ })).toBeDefined()
+  await pane.unmount()
+})
+
 test('the band yields to a survey of the engine’s own', async ($, on) => {
   engineBottom(on)
   await $.turn.start({ text: 'anything', turnId: 'turn-4' })
