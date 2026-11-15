@@ -8,7 +8,7 @@
   The new file is added and the edit is updated, and only the new file
   is listed under Added. The commit subject names each path when there
   are at most three files and the line fits in 72 characters. Otherwise
-  it counts, as in `add 2 files, update 1 across several areas`.
+  it counts, as in `add 2 files, update 1 file`.
 
 ### bet-on-your-agent 0.6.3
 

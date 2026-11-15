@@ -271,6 +271,29 @@ test('summaryBullets: each area reads its own change kind, not the whole diff\'s
   expect(bullets.some(line => line.startsWith('- Restructures code in removed'))).toBe(true)
 })
 
+test('summaryBullets keeps Removes when one directory both adds and deletes', () => {
+  const created: FileChange = { path: 'src/new.ts', added: 4, removed: 0, kind: 'added' }
+  const gone: FileChange = { path: 'src/old.ts', added: 0, removed: 3, kind: 'deleted' }
+  const bullets = summaryBullets([created, gone])
+  expect(bullets.some(line => line === '- Removes src/old.ts.')).toBe(true)
+})
+
+test('per-action summary bullets still leave the third directory and the test line', () => {
+  const files: FileChange[] = [
+    { path: 'a/new.ts', added: 4, removed: 0, kind: 'added' },
+    { path: 'a/edit.ts', added: 2, removed: 1, kind: 'modified' },
+    { path: 'a/old.ts', added: 0, removed: 3, kind: 'deleted' },
+    { path: 'b/util.ts', added: 1, removed: 1, kind: 'modified' },
+    { path: 'c/guide.md', added: 2, removed: 0, kind: 'modified' },
+    { path: 'a/new.test.ts', added: 5, removed: 0, kind: 'added' },
+  ]
+  const bullets = summaryBullets(files)
+  expect(bullets.some(line => line.includes(' in a ('))).toBe(true)
+  expect(bullets.some(line => line.includes(' in b ('))).toBe(true)
+  expect(bullets.some(line => line.includes(' in c ('))).toBe(true)
+  expect(bullets).toContain('- Includes test coverage for the change.')
+})
+
 test('testPlanLines turns each touched test file into its own checkbox, plus a manual line always', () => {
   const lines = testPlanLines([TEST, FEATURE])
   expect(lines).toContain('- [ ] `src/client.test.ts` passes')
@@ -366,16 +389,19 @@ test('a mixed subject names paths only when three or fewer fit on the line', () 
 
   // Five files fit the character cap and still fall back to counts.
   const five = [added('src/a.ts'), added('src/b.ts'), edited('src/c.ts'), edited('src/d.ts'), edited('src/e.ts')]
-  expect(subjectOf(five, style, 'feat', 'src')).toBe('feat(src): add 2 files, update 3')
+  expect(subjectOf(five, style, 'feat', 'src')).toBe('feat(src): add 2 files, update 3 files')
 
-  // Three longer paths would be cut mid-path, so the subject counts instead.
+  // Three realistic paths would be cut mid-path (73 characters), so the subject counts.
+  const named =
+    'feat: add src/api/users.ts, tests/users.test.ts, update src/api/routes.ts'
+  expect(named.length).toBeGreaterThan(72)
   const three = [added('src/api/users.ts'), added('tests/users.test.ts'), edited('src/api/routes.ts')]
-  expect(subjectOf(three, style, 'feat', undefined)).toBe('feat: add 2 files, update 1 across several areas')
+  expect(subjectOf(three, style, 'feat', undefined)).toBe('feat: add 2 files, update 1 file across several areas')
   // The same three paths fit a freeform subject, which has no type prefix.
   // A fourth file does not, so that subject counts too.
   const free = inferStyle(['Add a thing', 'Fix a thing'])
   const four = [...three, edited('src/count.ts')]
-  expect(subjectOf(four, free, 'feat', undefined)).toBe('Add 2 files, update 2 across several areas')
+  expect(subjectOf(four, free, 'feat', undefined)).toBe('Add 2 files, update 2 files across several areas')
 })
 
 // ---------------------------------------------------------------------------
