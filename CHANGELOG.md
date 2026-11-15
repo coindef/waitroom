@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### wait-anchor 0.1.1
+
+- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
+- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
+
 ### bet-on-your-agent 0.6.4
 
 - **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
@@ -17,53 +22,6 @@
   the stored turns was treated as an empty history, and the turn that just
   ended was written over every record. That turn is left unrecorded, and the
   status line is cleared instead of staying on the running-turn prompt.
-
-### wait-anchor 0.1.1
-
-- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
-- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
-
-### wait-anchor 0.1.0
-
-First release: a note you set for yourself, the goal and what to check when you come back.
-
-- **`/anchor`.** `ship login fix · check: redirect works` sets or replaces the note. `/anchor` shows it. `/anchor clear` clears it. With no note, the reply is `/anchor what you're doing · check: what to verify`. The reply does not start a turn.
-- **Status line.** `⚓ ship login fix → redirect works`. The check words stay as written. Past 48 columns the line ends in `…`. Claude Code chooses where that line sits among the other mods' lines. No note, no line. It does not take the row above the prompt.
-- **After Stop.** The next prompt you type logs `Back? You said: redirect works.` once. The prompt is unchanged. A later prompt does not repeat it until another main-loop turn ends.
-- **Kept as plugin-scoped JSON** under Claude's configuration directory. One value per project root and session id. Stop does not clear it. `/anchor clear` does. This mod does not choose the file name. A missing session id or project root saves nothing.
-- **No transcript reads.** The note never comes from your transcript. The Back? line is shown to you, not sent to the model. No summary, no model, no network. The note is stored as text.
-- If the note can't be saved, the Back? line waits for your next prompt.
-
-### wait-cards 0.1.0
-
-First release: one flashcard from a deck you write, one card per wait.
-
-- **Deck.** `~/.waitroom/cards.md`, a `Q:` line and then an `A:` line per card. This mod reads the file and never writes it. It does not make cards for you.
-- **While Claude works.** The status line shows `Q: ` and the question. Past 48 columns it ends in `…`, on a character boundary.
-- **When the turn ends.** One log line, `A: 429 · /card got or /card miss`. It is shown to you, not sent to Claude. An interrupted turn gets its answer too. A subagent's turn does not count.
-- **`/card got` and `/card miss`.** Optional. `got` moves the card up one of five boxes, `miss` sends it back to box 1, and a missed card comes back on the next wait. A card you don't mark keeps its box. `/card` counts the deck.
-- **No deck.** One log line, `Add cards to ~/.waitroom/cards.md`, and then quiet. No sample cards.
-- **Kept in `$.store`.** Each card's box and a count of waits, under Claude's configuration directory. No model, no network, no keypress capture.
-
-### wait-notify 0.1.0
-
-First release: a native macOS notification when Claude Code is blocked on you and you're not at the terminal. One reminder after 3 minutes, then quiet.
-
-- **Two moments, from Claude Code's `Notification` hook.** `permission_prompt` says `Waiting on a permission`. Claude asking you a question says `Asked you a question`: the `AskUserQuestion` dialog (Claude Code sends `permission_prompt` for it too, so an open `AskUserQuestion` call tells them apart) or an MCP server's `elicitation_dialog`. Titled `Claude needs you · <project folder>`. When two live sessions' folders have the same name, each title adds its parent folder's name (`work/api`, `fork/api`), or a short session-id tag (`api · 3f2a`) when the parent folders' names match too. Never more of the path than those two names. With no session id or project root from Claude Code, the title is the plain `Claude needs you`. `idle_prompt` and every other type send nothing.
-- **Only when you're away.** Present means `HIDIdleTime` from `ioreg -c IOHIDSystem` under 30 seconds, with Terminal, iTerm2, Ghostty, VS Code or Cursor frontmost (`osascript`). Present sends nothing, now or later.
-- **One reminder.** After 3 minutes, if Claude is still blocked and you're still away: `Still waiting · 3 min`. Never a second. Your prompt, the waiting tool call finishing, the main turn ending, an answered MCP question or the session ending cancels it. So does being back at the terminal by the recheck, which counts any key or mouse event since the notification, as long as a terminal is in front at the recheck. Claude Code raises no event when you answer a permission dialog, but your answer is a key press at the terminal. So if you allow a long command and walk away, no reminder comes while it runs. An answer from your phone or the web can still get one, and so can an answer followed by a switch to another app.
-- **A turn end is silent** unless `notify_on_stop` is on.
-- **`~/.waitroom/notify.json`:** `present_idle_secs` (30), `remind_after_min` (3), `notify_on_stop` (false). A missing or broken file means the defaults.
-- **macOS only.** Anything but `Darwin` from `uname`, and nothing else runs. No shell, no network, no sound. It never blocks or changes a tool call or a prompt.
-
-### wait-shell 0.1.0
-
-First release: while a turn runs, lists the shell commands it ran. wait-changed shows the files a turn changed; wait-shell shows the commands it ran.
-
-- **Every Bash call in the turn.** Claude's and its subagents', in the order they finish. A call a hook refused never ran, so the list leaves it out. `error`, `stopped` and `background` mark a command that did not simply finish.
-- **Status line.** `N shell command(s)` while the turn runs, and after it until `Close` or the next turn. Hidden at 0.
-- **The row.** `$ git status`, one command per row, newest last: line breaks shown as `↵`, cut at 200 characters, up to eight rows under `N earlier commands…`. Last in the shared row.
-- **Only a list.** Never blocks, rewrites or reruns a command, and runs nothing of its own. No network, no telemetry. `Close` puts it away for the turn; `Don't show again` and `/wait-shell` turn it off and on.
 
 ### wait-ship 0.1.4
 
@@ -84,6 +42,48 @@ First release: while a turn runs, lists the shell commands it ran. wait-changed 
 - **If you already have waitroom installed, update it.** Version 0.1.1 still asked for `wait-review` after that plugin left the catalog, so the bundle failed to load with `Dependency "wait-review@waitroom" is not installed`. This release is 0.1.2, so the update actually runs. Run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`. You should see `Plugin "waitroom" updated from 0.1.1 to 0.1.2 for scope user. Restart to apply changes.` Restart once. After that, waitroom loads again and keeps bet-on-your-agent, wait-ship, and wait-breathe.
 
 - **Three old plugins are now disabled, and that is expected.** `wait-review`, `wait-changed`, and `wait-shell` are no longer in the catalog. After the update they stay installed locally and show as disabled (or "Removed from the waitroom marketplace"). While they are still installed, `claude plugin prune` refuses to run. Uninstall those three first. You don't need to install anything in their place.
+
+### wait-cards 0.1.0
+
+First release: one flashcard from a deck you write, one card per wait.
+
+- **Deck.** `~/.waitroom/cards.md`, a `Q:` line and then an `A:` line per card. This mod reads the file and never writes it. It does not make cards for you.
+- **While Claude works.** The status line shows `Q: ` and the question. Past 48 columns it ends in `…`, on a character boundary.
+- **When the turn ends.** One log line, `A: 429 · /card got or /card miss`. It is shown to you, not sent to Claude. An interrupted turn gets its answer too. A subagent's turn does not count.
+- **`/card got` and `/card miss`.** Optional. `got` moves the card up one of five boxes, `miss` sends it back to box 1, and a missed card comes back on the next wait. A card you don't mark keeps its box. `/card` counts the deck.
+- **No deck.** One log line, `Add cards to ~/.waitroom/cards.md`, and then quiet. No sample cards.
+- **Kept in `$.store`.** Each card's box and a count of waits, under Claude's configuration directory. No model, no network, no keypress capture.
+
+### wait-anchor 0.1.0
+
+First release: a note you set for yourself, the goal and what to check when you come back.
+
+- **`/anchor`.** `ship login fix · check: redirect works` sets or replaces the note. `/anchor` shows it. `/anchor clear` clears it. With no note, the reply is `/anchor what you're doing · check: what to verify`. The reply does not start a turn.
+- **Status line.** `⚓ ship login fix → redirect works`. The check words stay as written. Past 48 columns the line ends in `…`. Claude Code chooses where that line sits among the other mods' lines. No note, no line. It does not take the row above the prompt.
+- **After Stop.** The next prompt you type logs `Back? You said: redirect works.` once. The prompt is unchanged. A later prompt does not repeat it until another main-loop turn ends.
+- **Kept as plugin-scoped JSON** under Claude's configuration directory. One value per project root and session id. Stop does not clear it. `/anchor clear` does. This mod does not choose the file name. A missing session id or project root saves nothing.
+- **No transcript reads.** The note never comes from your transcript. The Back? line is shown to you, not sent to the model. No summary, no model, no network. The note is stored as text.
+- If the note can't be saved, the Back? line waits for your next prompt.
+
+### wait-notify 0.1.0
+
+First release: a native macOS notification when Claude Code is blocked on you and you're not at the terminal. One reminder after 3 minutes, then quiet.
+
+- **Two moments, from Claude Code's `Notification` hook.** `permission_prompt` says `Waiting on a permission`. Claude asking you a question says `Asked you a question`: the `AskUserQuestion` dialog (Claude Code sends `permission_prompt` for it too, so an open `AskUserQuestion` call tells them apart) or an MCP server's `elicitation_dialog`. Titled `Claude needs you · <project folder>`. When two live sessions' folders have the same name, each title adds its parent folder's name (`work/api`, `fork/api`), or a short session-id tag (`api · 3f2a`) when the parent folders' names match too. Never more of the path than those two names. With no session id or project root from Claude Code, the title is the plain `Claude needs you`. `idle_prompt` and every other type send nothing.
+- **Only when you're away.** Present means `HIDIdleTime` from `ioreg -c IOHIDSystem` under 30 seconds, with Terminal, iTerm2, Ghostty, VS Code or Cursor frontmost (`osascript`). Present sends nothing, now or later.
+- **One reminder.** After 3 minutes, if Claude is still blocked and you're still away: `Still waiting · 3 min`. Never a second. Your prompt, the waiting tool call finishing, the main turn ending, an answered MCP question or the session ending cancels it. So does being back at the terminal by the recheck, which counts any key or mouse event since the notification, as long as a terminal is in front at the recheck. Claude Code raises no event when you answer a permission dialog, but your answer is a key press at the terminal. So if you allow a long command and walk away, no reminder comes while it runs. An answer from your phone or the web can still get one, and so can an answer followed by a switch to another app.
+- **A turn end is silent** unless `notify_on_stop` is on.
+- **`~/.waitroom/notify.json`:** `present_idle_secs` (30), `remind_after_min` (3), `notify_on_stop` (false). A missing or broken file means the defaults.
+- **macOS only.** Anything but `Darwin` from `uname`, and nothing else runs. No shell, no network, no sound. It never blocks or changes a tool call or a prompt.
+
+### wait-shell 0.1.0
+
+First release: while a turn runs, lists the shell commands it ran. wait-changed shows the files a turn changed; wait-shell shows the commands it ran.
+
+- **Every Bash call in the turn.** Claude's and its subagents', in the order they finish. A call a hook refused never ran, so the list leaves it out. `error`, `stopped` and `background` mark a command that did not simply finish.
+- **Status line.** `N shell command(s)` while the turn runs, and after it until `Close` or the next turn. Hidden at 0.
+- **The row.** `$ git status`, one command per row, newest last: line breaks shown as `↵`, cut at 200 characters, up to eight rows under `N earlier commands…`. Last in the shared row.
+- **Only a list.** Never blocks, rewrites or reruns a command, and runs nothing of its own. No network, no telemetry. `Close` puts it away for the turn; `Don't show again` and `/wait-shell` turn it off and on.
 
 ## wait-secret 0.1.0
 
