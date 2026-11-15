@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### bet-on-your-agent 0.6.2
+
+- **A failed read of the history no longer replaces it.** One error reading
+  the stored turns was treated as an empty history, and the turn that just
+  ended was written over every record. That turn is left unrecorded, and the
+  status line is cleared instead of staying on the running-turn prompt.
+
 ### wait-cards 0.1.0
 
 First release: one flashcard from a deck you write, one card per wait.
