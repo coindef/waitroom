@@ -6,6 +6,11 @@
 
 - **If the cooldown cannot be read, no nudge is shown, and what is already saved is left alone.** Once the read works again, nudges come back on their usual ten-minute schedule. If the saved record itself cannot be read, the next due nudge starts a fresh one, so one bad value cannot turn the nudges off for good.
 
+### bet-on-your-agent 0.6.4
+
+- **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
+- **`/bet-recap` counts this session.** "This session" is the turns stamped with the current session id. A turn another window recorded, even one made after this session began, stays out of the card. The rank and the badge wall still read the whole history. With no session id from the host, the card falls back to the turns since this session started.
+
 ### bet-on-your-agent 0.6.3
 
 - **A file count that cannot be read is not scored as none.** When a snapshot was taken and a later `git status` lists more than 500 paths (changed or untracked, not only this turn's), the row says the count is unknown and that question is left out of the score. A tree already past that limit when the turn starts has no snapshot, so the count is the `Edit`, `Write` and `NotebookEdit` calls, the same as outside a repository. One path git cannot hash is skipped on its own, so the rest of the turn's files still count.
