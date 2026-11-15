@@ -29,7 +29,7 @@ export type ShipMode = 'all' | ArtifactKind | 'edit' | 'skip'
 export type ShipResult = {
   turnId: string
   mode: ShipMode
-  /** What was written, each a repository-relative path; empty for `skip`. */
+  /** What was written, each the path the receipt prints; empty for `skip`. */
   wrote: { kind: ArtifactKind; path: string }[]
 }
 

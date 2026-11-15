@@ -93,6 +93,26 @@ test('an unusable threshold falls back to 30 seconds', () => {
   expect(thresholdSecondsOf(45)).toBe(45)
 })
 
+test('a threshold of 0.5 seconds falls back to 30, the same as an explicit 0', () => {
+  expect(thresholdSecondsOf(0.5)).toBe(30)
+  expect(wholePositive(0.5, 30)).toBe(30)
+  expect(wholePositive(1.9, 30)).toBe(1)
+})
+
+test('a turn of 0 ms does not notify when the threshold was 0.5 seconds', () => {
+  const thresholdSeconds = thresholdSecondsOf(0.5)
+
+  expect(shouldPing({ ...gate, thresholdSeconds, durationMs: 0 })).toBe(false)
+  expect(pingPlan({ ...gate, thresholdSeconds, durationMs: 0, sound: false, platform: 'linux' })).toBeNull()
+})
+
+test('a turn of 7300 seconds names the hours', () => {
+  expect(formatDuration(7_300_000)).toBe('2h 1m 40s')
+  expect(stopBody(7_300_000)).toBe('You were away 2h 1m 40s')
+  expect(formatDuration(7_200_000)).toBe('2h')
+  expect(formatDuration(3_900_000)).toBe('1h 5m')
+})
+
 test('darwin is silent unless sound is on, and the command is osascript alone', () => {
   const silent = pingPlan({ ...gate, sound: false, platform: 'darwin' })
 

@@ -22,9 +22,12 @@ import {
   isTestFile,
   isUnder,
   kitOf,
+  draftAbsolute,
   parseDiffFiles,
   parseSubjects,
+  pathFromCwd,
   prBodyOf,
+  writtenRelative,
   receiptLines,
   scopeOf,
   subjectOf,
@@ -82,6 +85,11 @@ test('several diffs concatenated parse as one combined list', () => {
   const combined = added('src/a.ts') + modified('src/b.ts', ['+y'], ['-x'])
   const files = parseDiffFiles(combined)
   expect(files.map(one => one.path)).toEqual(['src/a.ts', 'src/b.ts'])
+})
+
+test('a removed "-- comment" and an added "++x" stay content of the real file', () => {
+  const files = parseDiffFiles(modified('src/notes.ts', ['++x'], ['-- comment']))
+  expect(files).toEqual([{ path: 'src/notes.ts', added: 1, removed: 1, kind: 'modified' }])
 })
 
 test('subjects parse one per line, blanks dropped', () => {
@@ -345,12 +353,23 @@ test('formatSize reads small text in bytes and larger text in kilobytes', () => 
   expect(formatSize(12000)).toBe('12KB')
 })
 
-test('applyCommandFor names the right command per artifact, and never one that runs it', () => {
+test('applyCommandFor names the right command per artifact, and single-quotes the path', () => {
   expect(applyCommandFor('commit', '.waitroom/ship/COMMIT_EDITMSG.txt')).toBe(
-    'git commit -F .waitroom/ship/COMMIT_EDITMSG.txt',
+    "git commit -F '.waitroom/ship/COMMIT_EDITMSG.txt'",
   )
-  expect(applyCommandFor('pr', '.waitroom/ship/PR_BODY.md')).toContain('gh pr create')
-  expect(applyCommandFor('changelog', '.waitroom/ship/CHANGELOG_ENTRY.md')).toContain('paste')
+  expect(applyCommandFor('pr', '.waitroom/ship/PR_BODY.md')).toBe(
+    "gh pr create --body-file '.waitroom/ship/PR_BODY.md'",
+  )
+  expect(applyCommandFor('changelog', '.waitroom/ship/CHANGELOG_ENTRY.md')).toBe(
+    "paste '.waitroom/ship/CHANGELOG_ENTRY.md' into CHANGELOG.md",
+  )
+  expect(applyCommandFor('commit', 'my drafts/COMMIT_EDITMSG.txt')).toBe(
+    "git commit -F 'my drafts/COMMIT_EDITMSG.txt'",
+  )
+  // A quote inside the path stays one shell word: end the quotes, add \', open them again.
+  expect(applyCommandFor('commit', "my 'drafts/COMMIT_EDITMSG.txt")).toBe(
+    "git commit -F 'my '\\''drafts/COMMIT_EDITMSG.txt'",
+  )
 })
 
 test('receiptLines names each draft written and the command that uses it, one line apiece', () => {
@@ -360,10 +379,30 @@ test('receiptLines names each draft written and the command that uses it, one li
       { kind: 'pr', path: '.waitroom/ship/PR_BODY.md' },
     ]),
   ).toEqual([
-    'Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F .waitroom/ship/COMMIT_EDITMSG.txt',
-    'Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file .waitroom/ship/PR_BODY.md',
+    "Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F '.waitroom/ship/COMMIT_EDITMSG.txt'",
+    "Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file '.waitroom/ship/PR_BODY.md'",
   ])
   expect(receiptLines([])).toEqual([])
+})
+
+test('pathFromCwd is the draft as a command in the session folder opens it', () => {
+  const file = '.waitroom/ship/COMMIT_EDITMSG.txt'
+  expect(pathFromCwd('/repo', '/repo', file)).toBe(file)
+  expect(pathFromCwd('/repo/', '/repo/packages/app/', file)).toBe(`../../${file}`)
+  expect(pathFromCwd('/repo', '/repo/packages/app', 'my drafts/COMMIT_EDITMSG.txt')).toBe(
+    '../../my drafts/COMMIT_EDITMSG.txt',
+  )
+  // No session folder yet: leave the repository-relative path, which is what the root prints.
+  expect(pathFromCwd('/repo', undefined, file)).toBe(file)
+  expect(pathFromCwd('/repo', '', file)).toBe(file)
+  // A folder that is not inside the root cannot be reached with `../` reliably.
+  expect(pathFromCwd('/repo', '/wt/feature', file)).toBe(`/repo/${file}`)
+})
+
+test('an absolute shipDir is written under the repository, and the receipt names that file', () => {
+  expect(draftAbsolute('/repo', '/tmp/drafts/COMMIT_EDITMSG.txt')).toBe('/repo/tmp/drafts/COMMIT_EDITMSG.txt')
+  expect(writtenRelative('/repo', '/tmp/drafts/COMMIT_EDITMSG.txt')).toBe('tmp/drafts/COMMIT_EDITMSG.txt')
+  expect(writtenRelative('/repo', '.waitroom/ship/COMMIT_EDITMSG.txt')).toBe('.waitroom/ship/COMMIT_EDITMSG.txt')
 })
 
 // ---------------------------------------------------------------------------
