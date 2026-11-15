@@ -98,11 +98,22 @@ const sessionIdOf = async ($: EngineInterface): Promise<string | undefined> => {
 
 type Config = { autoOpen: boolean }
 
-/** The stored history, or nothing when the store holds something else. */
-const loadTurns = async ($: EngineInterface): Promise<TurnRecord[]> => {
-  const raw = await $.store.get(STORE_KEY).catch(() => undefined)
+/**
+ * The stored history.
+ *
+ * `undefined` means the read failed. A missing key, and a value that is not
+ * a list, are both no data yet (`[]`). A caller that writes has to tell them
+ * apart and skip the write on `undefined`: saving the one record just built
+ * from `[]` would replace every turn the store still holds.
+ */
+const loadTurns = async ($: EngineInterface): Promise<TurnRecord[] | undefined> => {
+  const read = await $.store.get(STORE_KEY).then(
+    value => ({ value }),
+    () => undefined,
+  )
+  if (read === undefined) return undefined
 
-  return Array.isArray(raw) ? (raw as TurnRecord[]) : []
+  return Array.isArray(read.value) ? (read.value as TurnRecord[]) : []
 }
 
 /**
@@ -208,7 +219,16 @@ const showStatus = async ($: EngineInterface) => {
 
       return
     }
-    const found = report(await loadTurns($))
+    const records = await loadTurns($)
+    // Unreadable history is not an empty one. Clear the line: a turn that
+    // could not be recorded must not leave the running-turn prompt up, and
+    // must not ask about a verdict this read never saw.
+    if (records === undefined) {
+      $.ui.status(undefined)
+
+      return
+    }
+    const found = report(records)
     if (found.owed > 0) {
       $.ui.status(`did it land? ${found.owed === 1 ? '1 to answer' : `${found.owed} to answer`}`)
 
@@ -260,6 +280,7 @@ const declineBet = async ($: EngineInterface) => {
 
 const giveVerdict = async ($: EngineInterface, turnId: string, landed: boolean) => {
   const before = await loadTurns($)
+  if (before === undefined) return
   const fromRank = currentRank(before)
   const after = setVerdict(before, turnId, landed)
   await saveTurns($, after)
@@ -274,7 +295,9 @@ const giveVerdict = async ($: EngineInterface, turnId: string, landed: boolean) 
 }
 
 const waveVerdict = async ($: EngineInterface, turnId: string) => {
-  await saveTurns($, skipVerdict(await loadTurns($), turnId))
+  const records = await loadTurns($)
+  if (records === undefined) return
+  await saveTurns($, skipVerdict(records, turnId))
   await update($, lastVerdict, () => ({ turnId, result: 'skipped' }))
   await showStatus($)
 }
@@ -282,6 +305,7 @@ const waveVerdict = async ($: EngineInterface, turnId: string) => {
 /** Lets go of the verdicts too old to answer, so a session never opens on one. */
 const lapseStaleVerdicts = async ($: EngineInterface) => {
   const records = await loadTurns($)
+  if (records === undefined) return
   const kept = lapseVerdicts(records, await $.clock.now())
   if (kept !== records) await saveTurns($, kept)
 }
@@ -290,7 +314,9 @@ const lapseStaleVerdicts = async ($: EngineInterface) => {
 const undoLastVerdict = async ($: EngineInterface) => {
   const last = await read($, lastVerdict)
   if (!last) return
-  await saveTurns($, undoVerdict(await loadTurns($), last.turnId))
+  const records = await loadTurns($)
+  if (records === undefined) return
+  await saveTurns($, undoVerdict(records, last.turnId))
   await update($, lastVerdict, () => null)
   await showStatus($)
 }
@@ -392,13 +418,13 @@ export const register: Register = (on, options) => {
     void $.ui.open({ id: PANE, title: 'Bet on your agent' }).catch(() => undefined)
     const last = await read($, lastVerdict)
 
-    return { text: asText(report(await loadTurns($)), last?.rankUp, (await extrasWait($)) === 0) }
+    return { text: asText(report((await loadTurns($)) ?? []), last?.rankUp, (await extrasWait($)) === 0) }
   })
 
   // Every extra is here from the first day, the badge wall included: in a new
   // person's first week this is where they are found rather than pushed.
   on('command.run', { command: 'bet-recap' }, async ($, e) => {
-    const all = await loadTurns($)
+    const all = (await loadTurns($)) ?? []
     const startedAt = await read($, sessionStartedAt)
     const sessionId = await sessionIdOf($)
     // Another window writes the same store. A record made after this session
@@ -532,46 +558,51 @@ export const register: Register = (on, options) => {
       ...(bonusActual === undefined ? {} : { bonusActual }),
     }
     const before = await loadTurns($)
-    const after = keepRecord(before, record)
-    await saveTurns($, after)
-    await noteBadges($, before, after)
+    // A failed read is not an empty history. Skip this turn's record — and
+    // the challenge scored against that history — so the store is left as it
+    // was. The status line below still moves off the running-turn prompt.
+    if (before !== undefined) {
+      const after = keepRecord(before, record)
+      await saveTurns($, after)
+      await noteBadges($, before, after)
 
-    // The daily challenge, like the bonus question, needs no human verdict:
-    // it is scored the moment the turn lands, against the threshold its own
-    // history stood at before this turn (the very history `before` already is).
-    const challengeDim = isThisTurn ? bet.dailyChallengeDim : undefined
-    if (challengeDim !== undefined && !e.isAborted) {
-      const challengeToday = localDateKey(await $.clock.now())
-      const threshold = challengeThreshold(before, challengeDim)
-      const value = challengeDim === 'duration' ? e.durationMs : challengeDim === 'files' ? files : bet.toolCalls
-      const actual = dailyOutcome(value, threshold)
-      const guess = bet.saidDailyChallenge
-      const dailyLog = await loadDailyChallenges($)
-      if (bet.isDailyChallengeDeclined === true) {
-        await saveDailyChallenges(
-          $,
-          keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isSkipped: true }),
-        )
-      } else if (guess !== undefined) {
-        await saveDailyChallenges(
-          $,
-          keepDailyChallenge(dailyLog, {
-            date: challengeToday,
-            dim: challengeDim,
-            guess,
-            actual,
-            correct: guess === actual,
-          }),
-        )
-      } else {
-        // Offered, but the turn landed before it was answered or declined.
-        // Still needs a record for today, else the identical question comes
-        // back on the next turn — just not a scored one, and not one that
-        // costs the streak.
-        await saveDailyChallenges(
-          $,
-          keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isNotTaken: true }),
-        )
+      // The daily challenge, like the bonus question, needs no human verdict:
+      // it is scored the moment the turn lands, against the threshold its own
+      // history stood at before this turn (the very history `before` already is).
+      const challengeDim = isThisTurn ? bet.dailyChallengeDim : undefined
+      if (challengeDim !== undefined && !e.isAborted) {
+        const challengeToday = localDateKey(await $.clock.now())
+        const threshold = challengeThreshold(before, challengeDim)
+        const value = challengeDim === 'duration' ? e.durationMs : challengeDim === 'files' ? files : bet.toolCalls
+        const actual = dailyOutcome(value, threshold)
+        const guess = bet.saidDailyChallenge
+        const dailyLog = await loadDailyChallenges($)
+        if (bet.isDailyChallengeDeclined === true) {
+          await saveDailyChallenges(
+            $,
+            keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isSkipped: true }),
+          )
+        } else if (guess !== undefined) {
+          await saveDailyChallenges(
+            $,
+            keepDailyChallenge(dailyLog, {
+              date: challengeToday,
+              dim: challengeDim,
+              guess,
+              actual,
+              correct: guess === actual,
+            }),
+          )
+        } else {
+          // Offered, but the turn landed before it was answered or declined.
+          // Still needs a record for today, else the identical question comes
+          // back on the next turn — just not a scored one, and not one that
+          // costs the streak.
+          await saveDailyChallenges(
+            $,
+            keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isNotTaken: true }),
+          )
+        }
       }
     }
 
@@ -702,7 +733,7 @@ export const register: Register = (on, options) => {
           // The same history `challengeThreshold` scores this turn's challenge
           // against at turn.complete: no new turn lands while this is showing,
           // so reading it fresh here can never drift from what it is judged by.
-          const question = challengeQuestion(await loadTurns($), dim)
+          const question = challengeQuestion((await loadTurns($)) ?? [], dim)
 
           // Wrapped, not cut: the question is fixed text with nothing to give
           // way, and cut at the band's edge it lost what it was asking.
@@ -747,7 +778,7 @@ export const register: Register = (on, options) => {
         )
       }
 
-      const owed = owedVerdict(await loadTurns($))
+      const owed = owedVerdict((await loadTurns($)) ?? [])
       const badgeLine = await read($, badgeNote)
       if (!owed) {
         const last = await read($, lastVerdict)
@@ -826,7 +857,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     await read($, revision)
-    const found = report(await loadTurns($))
+    const found = report((await loadTurns($)) ?? [])
     const last = await read($, lastVerdict)
     const width = Math.max(20, e.props.bodyColumns)
     const tag = (
