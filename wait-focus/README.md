@@ -19,7 +19,9 @@ Needs Claude Code 2.1.318 or later. Restart after installing.
 | `/wait-focus` | Shows the list. With none, prints `/wait-focus src/auth/ or package.json · up to 3` |
 | `/wait-focus clear` | Clears it. The status line goes with it |
 
-The reply is the command's own text. It does not start a turn. A fourth path is refused, and the list you already had stays. A path outside the project is refused the same way.
+The command is `/wait-focus`. `/focus` is already a Claude Code command.
+
+The reply is the command's own text. It does not start a turn. A fourth path is refused, and the list you already had stays. A path outside the project is refused the same way. So is a glob (`src/**/*.ts`, `src/auth/*`): name a file or a folder.
 
 `/wait-focus clear` is the clear command only when `clear` is the whole line.
 
@@ -35,7 +37,7 @@ Claude Code puts its own mark and this mod's name in front of that sentence. A f
 
 A path that is not on disk yet is still watched. It reads untouched until a turn creates it. The reply says `(not on disk yet)` so you can see that when you set it.
 
-The line comes down while the next turn runs, then the new verdict replaces it. Past 48 columns it ends in `…`. With no paths, it sets no line.
+The line comes down while the next turn runs, then the new verdict replaces it. Past 48 columns, folders are shortened from the left (`…/LoginForm.tsx touched`) so every `touched` or `untouched` stays. With no paths, it sets no line.
 
 This mod does not draw in the row above the prompt, so the bet's question and its keys stay as they are. It does not open a pane.
 
@@ -72,7 +74,7 @@ A subagent's turn does not count and does not clear the line.
 
 ```sh
 claude plugin validate ./wait-focus
-claude plugin test     ./wait-focus   # 32 tests
+claude plugin test     ./wait-focus   # 34 tests
 ```
 
 `hooks/focus.ts` is the list, the path checks, and the touched or untouched line, with no engine. `hooks/register.ts` is the hooks. `tests/flow.test.ts` is the engine run, with git answered by the test. `tests/load-shape.test.ts` checks that `$` is only passed to a top-level helper, which is the rule that kept a hooks module from loading on Claude Code 2.1.318.

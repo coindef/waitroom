@@ -6,6 +6,7 @@ import {
   decide,
   EMPTY_PATH,
   focusKey,
+  globLine,
   HELP,
   MAX_STAMPED,
   normalizeWatch,
@@ -160,11 +161,39 @@ test('a missing hash fails the stamps, so the caller cannot call that file untou
   ])
 })
 
-test('the status line stops at 48 columns on a character boundary', () => {
-  const line = statusLine([{ path: `src/${'a'.repeat(40)}.ts`, touched: true }])
-  expect(line?.endsWith('…')).toBe(true)
-  expect([...(line ?? '')].length).toBeLessThanOrEqual(48)
-  expect(line).not.toBe(`src/${'a'.repeat(40)}.ts touched`)
+test('a long path loses folders from the left, and every touched or untouched stays', () => {
+  expect(
+    statusLine([
+      { path: 'src/auth/', touched: true },
+      { path: 'package.json', touched: false },
+    ]),
+  ).toBe('src/auth/ touched · package.json untouched')
+  expect(
+    statusLine([
+      { path: 'src/auth/', touched: true },
+      { path: 'package.json', touched: false },
+      { path: 'README.md', touched: false },
+    ]),
+  ).toBe('…/auth/ touched · package.json untouched · README.md untouched')
+  expect(
+    statusLine([
+      { path: 'src/components/auth/LoginForm.tsx', touched: true },
+      { path: 'package.json', touched: false },
+    ]),
+  ).toBe('…/LoginForm.tsx touched · package.json untouched')
+  const longName = statusLine([{ path: `src/${'a'.repeat(40)}.ts`, touched: true }])
+  expect(longName).toBe(`…/${'a'.repeat(40)}.ts touched`)
+  expect(longName?.endsWith('touched')).toBe(true)
+})
+
+test('a glob is refused and does not become a path that would always read untouched', () => {
+  expect(decide('src/**/*.ts', ROOT)).toEqual({
+    type: 'reject',
+    text: 'src/**/*.ts looks like a glob · name a file or folder, like src/auth/ or package.json',
+  })
+  expect(decide('src/auth/*', ROOT)).toEqual({ type: 'reject', text: globLine('src/auth/*') })
+  expect(decide('package.json src/**/*.ts', ROOT).type).toBe('reject')
+  expect(decide('src/[ab].ts', ROOT).type).toBe('reject')
 })
 
 test('the reply names a path that is not on disk, and a directory that is not a git repo', () => {

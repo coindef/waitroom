@@ -240,6 +240,18 @@ test('a path outside the repo is refused and the list already stored stays', asy
   expect(said.at(-1)).toBeUndefined()
 })
 
+test('a glob is refused and the list already stored stays', async ($, on) => {
+  engineBottom(on, { nameStatus: '', untracked: [], hashes: {} })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'wait-focus', args: 'package.json' } as never)
+  const glob = await $.command.run({ command: 'wait-focus', args: 'src/**/*.ts' } as never)
+  expect(glob.text).toBe('src/**/*.ts looks like a glob · name a file or folder, like src/auth/ or package.json')
+  const star = await $.command.run({ command: 'wait-focus', args: 'src/auth/*' } as never)
+  expect(star.text).toBe('src/auth/* looks like a glob · name a file or folder, like src/auth/ or package.json')
+  const shownList = await $.command.run({ command: 'wait-focus', args: '' } as never)
+  expect(shownList.text).toBe('watching package.json')
+})
+
 test('a fourth path is refused with a clear message and the previous list stays', async ($, on) => {
   const git: Git = { nameStatus: '', untracked: [], hashes: {} }
   engineBottom(on, git)

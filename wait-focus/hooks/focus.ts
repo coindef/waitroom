@@ -17,7 +17,10 @@ export const MAX_PATHS = 3
  */
 export const MAX_STAMPED = 40
 
-/** Columns the status line may use. One column past this becomes an ellipsis. */
+/**
+ * Columns the status line tries to stay inside. Folders are shortened from
+ * the left until the line fits. A verdict is never the part that is cut.
+ */
 export const STATUS_COLUMNS = 48
 
 /** What `/wait-focus` prints when nothing is watched. */
@@ -113,6 +116,18 @@ export const outsideLine = (token: string): string => {
   return shown === '' ? EMPTY_PATH : `${shown} is outside this repo · name a path inside it`
 }
 
+/** `*`, `?`, or a `[` class. Stored as a path, one of these would always read untouched. */
+export const looksLikeGlob = (token: string): boolean => /[*?\[]/.test(token)
+
+/** `${token} looks like a glob · name a file or folder, like src/auth/ or package.json`. */
+export const globLine = (token: string): string => {
+  const shown = displayToken(token)
+
+  return shown === ''
+    ? EMPTY_PATH
+    : `${shown} looks like a glob · name a file or folder, like src/auth/ or package.json`
+}
+
 /**
  * One path as the list keeps it: relative to the project root, trailing slash
  * kept when you wrote a folder. Absolute, and `..` that leaves the root, are
@@ -150,8 +165,8 @@ const watchId = (path: string): string => (path === '.' ? '.' : path.replace(/\/
  * What `/wait-focus` does to the list.
  *
  * `clear` is the only word that clears, and only when it is the whole
- * command. More than three paths, or a path outside the project, changes
- * nothing. A missing root changes nothing.
+ * command. More than three paths, a glob, or a path outside the project,
+ * changes nothing. A missing root changes nothing.
  */
 export const decide = (args: string, root: string | undefined): Decision => {
   if (root === undefined || canonicalRoot(root) === undefined) return { type: 'reject', text: NO_ROOT }
@@ -161,6 +176,7 @@ export const decide = (args: string, root: string | undefined): Decision => {
   const paths: string[] = []
   const seen = new Set<string>()
   for (const token of tokens) {
+    if (looksLikeGlob(token)) return { type: 'reject', text: globLine(token) }
     const one = normalizeWatch(root, token)
     if (!one.ok) return { type: 'reject', text: one.reason === 'outside' ? outsideLine(token) : EMPTY_PATH }
     const id = watchId(one.path)
@@ -431,25 +447,61 @@ export const touchedPaths = (before: readonly FileStamp[], after: readonly FileS
 export const verdicts = (watches: readonly string[], changed: readonly string[]): Verdict[] =>
   watches.map(path => ({ path, touched: changed.some(one => covers(path, one)) }))
 
-const chars = (text: string): string[] => [...text]
+const columns = (text: string): number => [...text].length
 
-/** Cut to `max` code points. The last one is an ellipsis when anything is cut. */
-export const truncateColumns = (text: string, max: number): string => {
-  const all = chars(text)
-  if (all.length <= max) return text
+type ShownPath = { segments: string[]; folder: boolean; shortened: boolean }
 
-  return all.slice(0, Math.max(0, max - 1)).join('') + ELLIPSIS
+/** The path as folders plus a final name. `.` is the project itself. */
+const shownPath = (path: string): ShownPath => {
+  if (path === '.') return { segments: ['.'], folder: false, shortened: false }
+  const folder = path.endsWith('/')
+  const body = path.replace(/\/+$/, '')
+
+  return { segments: body.split('/').filter(segment => segment !== ''), folder, shortened: false }
 }
+
+/** Leading folders already dropped are `…/`. The final name stays whole. */
+const renderPath = (path: ShownPath): string => {
+  const tail = path.segments.join('/') + (path.folder ? '/' : '')
+
+  return path.shortened ? `${ELLIPSIS}/${tail}` : tail
+}
+
+const verdictWord = (touched: boolean): string => (touched ? 'touched' : 'untouched')
 
 /**
  * The status line after a turn: each path, then `touched` or `untouched`.
  * Undefined when nothing is watched, so an empty list draws no line.
+ *
+ * Past 48 columns, folders come off the left (`…/LoginForm.tsx`) until every
+ * verdict still fits. The words `touched` and `untouched` are never the part
+ * that is cut. A final name that is itself too long stays whole.
  */
 export const statusLine = (rows: readonly Verdict[]): string | undefined => {
   if (rows.length === 0) return undefined
+  const shown = rows.map(row => shownPath(row.path))
+  const line = (): string =>
+    shown.map((path, index) => `${renderPath(path)} ${verdictWord(rows[index]?.touched === true)}`).join(' · ')
 
-  return truncateColumns(
-    rows.map(row => `${row.path} ${row.touched ? 'touched' : 'untouched'}`).join(' · '),
-    STATUS_COLUMNS,
-  )
+  let text = line()
+  while (columns(text) > STATUS_COLUMNS) {
+    let longest = -1
+    let width = -1
+    for (let index = 0; index < shown.length; index += 1) {
+      const path = shown[index]
+      if (path === undefined || path.segments.length <= 1) continue
+      const size = columns(renderPath(path))
+      if (size > width) {
+        longest = index
+        width = size
+      }
+    }
+    const path = shown[longest]
+    if (path === undefined) break
+    path.segments.shift()
+    path.shortened = true
+    text = line()
+  }
+
+  return text
 }

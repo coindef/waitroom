@@ -32,6 +32,7 @@ claude plugin install wait-scope@waitroom
 claude plugin install wait-secret@waitroom
 claude plugin install wait-ping@waitroom
 claude plugin install wait-anchor@waitroom
+claude plugin install wait-cards@waitroom
 claude plugin install wait-focus@waitroom
 ```
 
@@ -42,6 +43,8 @@ wait-secret flags lines a turn wrote that look like a key or token. Masked, loca
 wait-ping is the legacy notifier: local OS notification when a long turn ends or a permission confirm is waiting. Prefer wait-notify on macOS. [What it sends](../wait-ping).
 
 wait-anchor keeps a note you set: the goal, and what to check when you come back. Quiet until `/anchor`. It needs Claude Code 2.1.318 or later. [Leave a note for future you](../wait-anchor).
+
+wait-cards shows one flashcard from a deck you write in `~/.waitroom/cards.md`, and stays quiet until that file has cards. [One card per wait](../wait-cards).
 
 wait-focus watches one to three paths you name with `/wait-focus`. After a turn, the status line says whether each one was touched. It only reports. It needs a git repository to have anything to say, and Claude Code 2.1.318 or later. [Name it](../wait-focus).
 
@@ -103,6 +106,7 @@ disk straight away but only loaded by the next session:
 /plugin update wait-scope@waitroom
 /plugin update wait-secret@waitroom
 /plugin update wait-anchor@waitroom
+/plugin update wait-cards@waitroom
 /plugin update wait-focus@waitroom
 ```
 
