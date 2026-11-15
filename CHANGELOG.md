@@ -102,7 +102,7 @@ First release: warns when a Claude Code turn edits files outside the scope you s
   (`You were away 0s`). It floors, then keeps the number only when it is at
   least 1. The setting's minimum is 1.
 - **A long turn names the hours.** `You were away 2h`, `You were away 1h 5m`,
-  or `You were away 2h 1m 40s`. Under an hour the line is unchanged (`45s`,
+  or `You were away 2h 1m`. Under an hour the line is unchanged (`45s`,
   `1m`, `1m 30s`).
 
 ## wait-ping 0.1.0
