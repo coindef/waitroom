@@ -242,6 +242,36 @@ export const verbFor = (files: readonly FileChange[]): 'add' | 'update' | 'remov
   return deleted > modified ? 'remove' : 'update'
 }
 
+type Verb = 'add' | 'update' | 'remove'
+
+const VERBS: readonly Verb[] = ['add', 'update', 'remove']
+
+/**
+ * Files grouped by the action on each one, in add / update / remove order.
+ * A directory's majority action is the wrong word once the directory holds
+ * more than one: a new file must not call an edit an add.
+ */
+const byVerb = (files: readonly FileChange[]): Array<{ verb: Verb; files: FileChange[] }> => {
+  const groups = new Map<Verb, FileChange[]>()
+  for (const file of files) {
+    const verb = verbFor([file])
+    const list = groups.get(verb)
+    if (list) list.push(file)
+    else groups.set(verb, [file])
+  }
+
+  return VERBS.filter(verb => groups.has(verb)).map(verb => ({
+    verb,
+    files: groups.get(verb) as FileChange[],
+  }))
+}
+
+/** `add a.ts, update b.ts` — one clause per action. */
+const verbPhrase = (files: readonly FileChange[]): string =>
+  byVerb(files)
+    .map(one => `${one.verb} ${fileList(one.files)}`)
+    .join(', ')
+
 const PAST_TENSE: Record<string, string> = { add: 'added', update: 'updated', remove: 'removed' }
 
 const pastTenseOf = (verb: string): string => PAST_TENSE[verb] ?? `${verb}ed`
@@ -274,6 +304,22 @@ export const subjectOf = (
   type: ConventionalType,
   scope: string | undefined,
 ): string => {
+  const actions = byVerb(files)
+  if (actions.length > 1) {
+    const clauses = actions
+      .map(one => {
+        const word = style.kind !== 'conventional' && style.tense === 'past' ? pastTenseOf(one.verb) : one.verb
+
+        return `${word} ${fileList(one.files)}`
+      })
+      .join(', ')
+    if (style.kind === 'conventional') {
+      return truncate(`${type}${scope ? `(${scope})` : ''}: ${clauses}`, SUBJECT_MAX)
+    }
+
+    return truncate(style.capitalized ? capitalize(clauses) : clauses, SUBJECT_MAX)
+  }
+
   const verb = verbFor(files)
   const noun =
     files.length === 1
@@ -297,7 +343,7 @@ export const bodyOf = (files: readonly FileChange[]): string[] => {
   if (areas.size > 1) {
     return [...areas.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([area, items]) => `- ${area}: ${verbFor(items)} ${fileList(items)}`)
+      .map(([area, items]) => `- ${area}: ${verbPhrase(items)}`)
   }
 
   const capped = files.slice(0, FILES_PER_BODY_BULLET_CAP)
@@ -340,15 +386,27 @@ const SUMMARY_LINE: Record<ConventionalType, (area: string) => string> = {
  * Each area's own kind drives its own bullet's wording, rather than the
  * single kind the whole diff reads as: an area that only deleted files reads
  * as a removal even where another area in the same diff added a new one.
+ * An area that both adds a file and edits one gets a bullet per action, so
+ * the edit is not described as new functionality.
  */
 export const summaryBullets = (files: readonly FileChange[]): string[] => {
   const areas = [...areasOf(files).entries()].sort(([a], [b]) => a.localeCompare(b))
-  const bullets = areas
-    .slice(0, 4)
-    .map(
-      ([area, items]) =>
-        `- ${SUMMARY_LINE[typeOf(items)](area === '.' ? 'the repository root' : area)} (${fileList(items)})`,
-    )
+  const bullets: string[] = []
+  for (const [area, items] of areas) {
+    if (bullets.length >= 4) break
+    const where = area === '.' ? 'the repository root' : area
+    const actions = byVerb(items)
+    const mixed = actions.length > 1
+    for (const action of actions) {
+      if (bullets.length >= 4) break
+      const kind = typeOf(action.files)
+      const line =
+        mixed && action.verb === 'update' && kind === 'fix'
+          ? `Updates existing files in ${where}`
+          : SUMMARY_LINE[kind](where)
+      bullets.push(`- ${line} (${fileList(action.files)})`)
+    }
+  }
 
   const hasTests = files.some(one => isTestFile(one.path))
   const allTests = files.every(one => isTestFile(one.path))
@@ -403,22 +461,30 @@ export const bulletStyleOf = (changelogContent: string): 'bold-lead-in' | 'plain
 const HEADING_ORDER: Array<'Added' | 'Changed' | 'Fixed'> = ['Added', 'Changed', 'Fixed']
 
 /**
- * 1-2 bullets, one per area up to two, in the file's own bullet style, each
- * under the heading its own area's kind picks — a feature added in one area
- * and a fix in another land under separate `### Added` / `### Fixed`
- * sections rather than both under whichever kind the whole diff reads as.
+ * Bullets in the file's own style, one per action, for up to two areas.
+ * A feature in one area and a fix in another land under separate
+ * `### Added` / `### Fixed` sections. A new file and an edit in the same
+ * directory do too: only the new file goes under Added, and the edit goes
+ * under Changed rather than being pulled into Added with it. A directory
+ * of only edits keeps the heading its type already picks, so a lone fix
+ * stays under Fixed.
  */
 export const changelogEntryOf = (files: readonly FileChange[], style: 'bold-lead-in' | 'plain'): string => {
   const areas = [...areasOf(files).entries()].sort(([a], [b]) => a.localeCompare(b)).slice(0, 2)
   const byHeading = new Map<'Added' | 'Changed' | 'Fixed', string[]>()
   for (const [area, items] of areas) {
-    const verb = verbFor(items)
-    const lead = capitalize(area === '.' ? `${verb} ${fileList(items)}` : `${verb} ${fileList(items)} in ${area}`)
-    const bullet = style === 'bold-lead-in' ? `- **${lead}.**` : `- ${lead}.`
-    const heading = changelogHeadingFor(typeOf(items))
-    const bucket = byHeading.get(heading)
-    if (bucket) bucket.push(bullet)
-    else byHeading.set(heading, [bullet])
+    const actions = byVerb(items)
+    const mixed = actions.length > 1
+    for (const action of actions) {
+      const names = fileList(action.files)
+      const lead = capitalize(area === '.' ? `${action.verb} ${names}` : `${action.verb} ${names} in ${area}`)
+      const bullet = style === 'bold-lead-in' ? `- **${lead}.**` : `- ${lead}.`
+      const kind = typeOf(action.files)
+      const heading = mixed && action.verb === 'update' ? 'Changed' : changelogHeadingFor(kind)
+      const bucket = byHeading.get(heading)
+      if (bucket) bucket.push(bullet)
+      else byHeading.set(heading, [bullet])
+    }
   }
 
   return (

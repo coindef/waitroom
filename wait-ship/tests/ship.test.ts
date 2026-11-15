@@ -326,6 +326,34 @@ test('changelogEntryOf: areas of different kinds land under their own heading, n
   expect(fixedSection).not.toContain('added/new.ts')
 })
 
+test('a new file and a modified file in the same directory are not both called an add', () => {
+  const edited: FileChange = { path: 'src/count.ts', added: 1, removed: 0, kind: 'modified' }
+  const created: FileChange = { path: 'src/new.ts', added: 4, removed: 0, kind: 'added' }
+  const files = [edited, created]
+
+  expect(commitOf(files, ['feat: a', 'fix: b', 'chore: c']).subject).toBe(
+    'feat(src): add src/new.ts, update src/count.ts',
+  )
+
+  const body = prBodyOf(files)
+  const summary = body.slice(body.indexOf('## Summary'), body.indexOf('## Changes'))
+  expect(summary).toContain('- Adds new functionality in src (src/new.ts)')
+  expect(summary).toContain('- Updates existing files in src (src/count.ts)')
+  expect(summary).not.toContain('src/count.ts, src/new.ts')
+
+  const sections = changelogEntryOf(files, 'plain').trim().split('\n\n')
+  const addedSection = sections.find(one => one.startsWith('### Added'))
+  const changedSection = sections.find(one => one.startsWith('### Changed'))
+  expect(addedSection).toContain('src/new.ts')
+  expect(addedSection).not.toContain('src/count.ts')
+  expect(changedSection).toContain('src/count.ts')
+  expect(changedSection).not.toContain('src/new.ts')
+
+  // Another directory forces the grouped line. count.ts was only modified.
+  const elsewhere: FileChange = { path: 'db/schema.sql', added: 0, removed: 1, kind: 'modified' }
+  expect(bodyOf([edited, created, elsewhere])).toContain('- src: add src/new.ts, update src/count.ts')
+})
+
 // ---------------------------------------------------------------------------
 // The whole kit
 // ---------------------------------------------------------------------------
