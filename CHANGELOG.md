@@ -4,8 +4,8 @@
 
 ### waitroom 0.1.2
 
-- **The three-room install is what an update installs.** `waitroom@waitroom` depends on bet-on-your-agent, wait-ship, and wait-breathe. 0.1.1 kept that version string after `wait-review` left the dependency list, so `claude plugin update` stayed on the cached copy and the bundle failed to load with `Dependency "wait-review@waitroom" is not installed`. The first interactive session logs three lines: the three rooms are in, wait-breathe stays off until `/breathe`, and the optional `claude plugin install wait-ping@waitroom`. It does not return. No pane and no row.
-- **Removed plugins are marked removed.** The marketplace maps `wait-review`, `wait-changed`, and `wait-shell` to `null` in `renames`, so an install of a plugin that left the catalog is no longer a load error (`Plugin "…" not found in marketplace`).
+- **If you already have waitroom installed, update it.** Version 0.1.1 still asked for `wait-review` after that plugin left the catalog, so the bundle failed to load with `Dependency "wait-review@waitroom" is not installed`. This release is 0.1.2, so the update actually runs. Run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`. You should see `Plugin "waitroom" updated from 0.1.1 to 0.1.2 for scope user. Restart to apply changes.` Restart once. After that, waitroom loads again and keeps bet-on-your-agent, wait-ship, and wait-breathe.
+- **Three old plugins are now disabled, and that is expected.** `wait-review`, `wait-changed`, and `wait-shell` are no longer in the catalog. After the update they show as disabled (or `Removed from the "waitroom" marketplace`) instead of failing to load. You don't need to uninstall them, and you don't need to install anything in their place.
 
 ### wait-cards 0.1.0
 
