@@ -1138,6 +1138,127 @@ test('/bet-recap prints a shareable, plain-text card for this session', async ($
   expect(reply.text).not.toMatch(/\u001b/)
 })
 
+test("a subagent's tool calls stay off the open turn's tool-call count", async ($, on) => {
+  fullEngine(on)
+  on('tool.call', { tool: 'Edit' }, () => ({ result: {} as never }))
+  on('tool.call', { tool: 'Read' }, () => ({ result: {} as never }))
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  // Duration, then files, so the turn under test asks about tool calls.
+  for (const turnId of ['rot-1', 'rot-2']) {
+    await $.turn.start({ text: 'rotate', turnId })
+    await $.turn.complete({
+      turnId,
+      answer: 'done',
+      durationMs: 1000,
+      isAborted: false,
+      reason: 'answer',
+    })
+  }
+
+  await $.turn.start({ text: 'main turn', turnId: 'm1' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await band.press({ key: 'p80' })
+  await band.press({ key: 'f0' })
+  expect(await band.find({ text: /how many tool calls will it make\?/ })).toBeDefined()
+  // 3-6 is what this turn's own calls land on. Five subagent calls would push it to 7+.
+  await band.press({ key: 'b3-6' })
+  expect(await band.find({ text: /0 written so far/ })).toBeDefined()
+
+  // The file still counts: the question is how many files the turn touches.
+  // The five calls do not count toward the tool-call bonus.
+  await $.tool.call({
+    tool: 'Edit',
+    file_path: '/work/sub.ts',
+    old_string: 'x',
+    new_string: 'y',
+    agentId: 'agent-1',
+  } as never)
+  for (let at = 0; at < 4; at++) {
+    await $.tool.call({ tool: 'Read', file_path: '/work/sub-read.ts', agentId: 'agent-1' } as never)
+  }
+  expect(await band.find({ text: /1 written so far/ })).toBeDefined()
+
+  // The main turn's own calls still count: a second file, and three tool calls in all.
+  await $.tool.call({ tool: 'Edit', file_path: '/work/main.ts', old_string: 'x', new_string: 'y' })
+  expect(await band.find({ text: /2 written so far/ })).toBeDefined()
+  for (let at = 0; at < 2; at++) {
+    await $.tool.call({ tool: 'Read', file_path: `/work/main-${at}.ts` } as never)
+  }
+  await band.unmount()
+  await $.turn.complete({
+    turnId: 'm1',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /Bonus: 1\/1 correct/ })).toBeDefined()
+  await pane.unmount()
+})
+
+test('/bet-recap this session leaves out a turn another window recorded', async ($, on) => {
+  const other = {
+    turnId: 'other-session-turn',
+    at: 5,
+    durationMs: 1000,
+    files: 0,
+    filesBucket: '0',
+    toolCalls: 0,
+    isAborted: false,
+    saidConfidence: 0.95,
+    landed: false,
+    ask: 'something from another window',
+    sessionId: 'other-window',
+  }
+  fullEngine(on, { ...PAST_FIRST_WEEK, turns: [other] })
+  on('session.id', () => ({ value: 'this-window' }))
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+  // This window's own call stays on the card. The other window's does not.
+  await $.turn.start({ text: 'the turn this window made', turnId: 'mine' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await band.press({ key: 'p80' })
+  await band.press({ key: 'f0' })
+  await band.press({ key: 'decline' })
+  await band.press({ key: 'decline' })
+  await band.unmount()
+  await $.turn.complete({
+    turnId: 'mine',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  const reply = await $.command.run({ command: 'bet-recap' } as never)
+
+  expect(reply.text).toMatch(/Turns bet\s+1/)
+  expect(reply.text).not.toContain('something from ano')
+  // 80% and it landed: (0.8 - 1) squared is 0.040. The other window's 0.902 is not in the mean.
+  expect(reply.text).toMatch(/Session Brier\s+0\.040/)
+})
+
 test('/bet-recap draws its card to fit the terminal it is printed in', async ($, on) => {
   fullEngine(on)
   await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
