@@ -205,6 +205,38 @@ test('the file forecast is scored on the exact bucket', async () => {
   expect(found.files).toEqual({ right: 1, of: 2 })
 })
 
+test('an unknown file count is left out of the score instead of counting as none', async () => {
+  // The placeholders are what a count of zero would have stored. They must
+  // not grade the call, and they must not move the median the challenge uses.
+  const unknown = turn({
+    saidFiles: '0',
+    files: 0,
+    filesBucket: '0',
+    filesUnknown: true,
+    saidBonus: '1',
+    bonusActual: '1',
+    bonusDim: 'files',
+  })
+
+  expect(report([unknown]).files).toBeUndefined()
+  expect(asText(report([unknown]))).not.toContain('File count called right')
+  expect(report([unknown, turn({ saidFiles: '1', filesBucket: '4+' })]).files).toEqual({ right: 0, of: 1 })
+  // The files bonus is the same question. A duration bonus does not use the count.
+  expect(report([unknown]).bonus).toBeUndefined()
+  const duration = turn({
+    filesUnknown: true,
+    files: 0,
+    filesBucket: '0',
+    saidBonus: '<30s',
+    bonusActual: '<30s',
+    bonusDim: 'duration',
+  })
+  expect(report([duration]).bonus).toEqual({ right: 1, of: 1 })
+
+  const history = [1, 2, 3, 4, 5].map(files => turn({ saidConfidence: 0.8, landed: true, files }))
+  expect(challengeThreshold([...history, unknown], 'files')).toBe(3)
+})
+
 test('git status entries are read whole, renames by their new path', async () => {
   const out = [' M src/retry.ts', '?? notes/new file.md', ' D old.ts', 'R  src/moved.ts', 'src/was.ts', ''].join('\0')
 
@@ -769,6 +801,18 @@ test('in a 60-column terminal the recap card keeps its frame: the quoted asks gi
   expect(narrow).toContain('Platinum')
 })
 
+test('an unscored daily challenge keeps the recap card’s frame', async () => {
+  const card = recapCard(
+    recapOf([], [], [{ date: '2024-01-01', dim: 'files', guess: 'yes', isUnmeasured: true }], '2024-01-01'),
+  )
+  const lines = card.split('\n')
+
+  expect(card).toContain('not scored')
+  expect(card).not.toContain('right today')
+  expect(card).not.toContain('missed today')
+  expect(new Set(lines.map(line => line.length)).size).toBe(1)
+})
+
 test('a thin recap still draws a complete card, an em dash standing in for what has not happened yet', async () => {
   const card = recapCard({ turnsBet: 0, turnsScored: 0, rank: 'Unranked', streak: 0, badges: badges([]), dailyChallenge: '—' })
 
@@ -1026,6 +1070,10 @@ test('the streak counts back consecutive right days, broken by a wrong or skippe
     dailyChallengeStreak([right('d1'), right('d2'), { date: 'd3', dim: 'files', isNotTaken: true }]),
   ).toBe(2)
   expect(dailyChallengeStreak([{ date: 'd1', dim: 'files', isNotTaken: true }])).toBe(0)
+  // Answered, but the count could not be read: same as never touched, not a miss.
+  expect(
+    dailyChallengeStreak([right('d1'), right('d2'), { date: 'd3', dim: 'files', guess: 'yes', isUnmeasured: true }]),
+  ).toBe(2)
 })
 
 test('the recap value is the streak once it is worth naming, else today’s own result', async () => {
@@ -1040,6 +1088,7 @@ test('the recap value is the streak once it is worth naming, else today’s own 
   // Offered and left untouched reads distinctly from a day with no turns at
   // all, which stays a plain em dash.
   expect(dailyChallengeValue([{ date: 'd1', dim: 'files', isNotTaken: true }], 'd1')).toBe('not taken')
+  expect(dailyChallengeValue([{ date: 'd1', dim: 'files', guess: 'yes', isUnmeasured: true }], 'd1')).toBe('not scored')
   expect(dailyChallengeValue([], 'd1')).toBe('—')
 })
 

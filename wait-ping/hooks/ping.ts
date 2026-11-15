@@ -32,11 +32,13 @@ export type PingReason = 'stop' | 'permission'
 
 export type Platform = 'darwin' | 'linux' | 'other'
 
-/** A positive whole number from config, or `fallback` for anything else. */
+/** A whole number of at least 1 from config, or `fallback` for anything else. */
 export const wholePositive = (value: unknown, fallback: number): number => {
   const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  const whole = Math.floor(parsed)
 
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
+  return whole >= 1 ? whole : fallback
 }
 
 /** The stop threshold, in seconds. Anything unusable stays at the default, so a bad value cannot notify every turn. */
@@ -100,15 +102,18 @@ export const shouldPing = (input: PingInput): boolean => {
   return input.durationMs >= input.thresholdSeconds * 1000
 }
 
-/** `45s`, `1m`, `1m 30s`. Whole seconds, rounded down. */
+/** `45s`, `1m`, `1m 30s`, and from an hour `2h`, `1h 5m`, `2h 1m 40s`. Whole seconds, rounded down. */
 export const formatDuration = (durationMs: number): string => {
   const total = Math.max(0, Math.floor(durationMs / 1000))
-  const minutes = Math.floor(total / 60)
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
   const seconds = total % 60
-  if (minutes === 0) return `${seconds}s`
-  if (seconds === 0) return `${minutes}m`
+  const parts: string[] = []
+  if (hours > 0) parts.push(`${hours}h`)
+  if (minutes > 0) parts.push(`${minutes}m`)
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`)
 
-  return `${minutes}m ${seconds}s`
+  return parts.join(' ')
 }
 
 /**
@@ -116,7 +121,8 @@ export const formatDuration = (durationMs: number): string => {
  *
  * "Away" here is the turn's own wall-clock (`durationMs`), not a separate
  * tracker and not a network call. Under a minute it is `45s`. An exact
- * minute is `1m`. Anything between is `1m 30s`.
+ * minute is `1m`. Anything between is `1m 30s`. From an hour it is `2h`,
+ * `1h 5m`, or `2h 1m 40s`.
  */
 export const stopBody = (durationMs: number): string => `You were away ${formatDuration(durationMs)}`
 
