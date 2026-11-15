@@ -104,12 +104,15 @@ surface that actually exists.
   `tool/bash`, `tool/read`, `tool/glob`, `tool/grep`, `tool/webfetch`,
   `tool/websearch`, `tool/todowrite`, `tool/question`, `tool/skill` (no
   `tool/apply_patch` turned up by that search — it may be registered through
-  a different, non-literal path). `plugin/track.ts#filePathOf` treats
+  a different, non-literal path).   `plugin/track.ts#filePathOf` treats
   `"edit"` and `"write"` as file-touching and reads `input.filePath`, a field
   name inferred from the same docs page's contrast with `apply_patch`'s
   `patchText` ("`apply_patch` uses `output.args.patchText` instead of
   `output.args.filePath`") — reasonably well evidenced, but not independently
-  confirmed against `edit`/`write`'s own schema.
+  confirmed against `edit`/`write`'s own schema. The forecast is not only
+  those two tools: `plugin/tui.tsx` also counts `api.state.session.diff`,
+  paths named in `apply_patch` text and in a `patch` message part, and, when
+  the diff call is missing, a `git status` scan of the worktree.
 - **A `turnId`.** OpenCode doesn't hand out one. The latest user message's id
   is used instead, on first sight of a busy status.
 
@@ -117,19 +120,24 @@ surface that actually exists.
 
 - The confidence band (1: 50% … 5: 95%, 0: skip) and the file-count band (1:
   0, 2: 1, 3: 2-3, 4: 4+), as real digit hotkeys through
-  `api.keymap.registerLayer`, rendered in a `session_prompt_right` slot.
+  `api.keymap.registerLayer`, rendered in a `session_prompt_right` slot. The
+  layer is on only while a question is showing, and a digit that is not an
+  answer reports that it was not handled, so 0–5 reach OpenCode's prompt
+  whenever the band is quiet.
 - The rotating bonus question — duration, files (again, as a three-way
   bucket), or tool calls, one dimension per turn, same buckets and wording as
   the Claude Code mod. Tool calls are counted the same unfiltered way the mod's
-  `tool.call` hook does: every completed tool part, not only the file-touching
-  ones `track.ts#filePathOf` already watched for (see `tui.tsx`'s
-  `message.part.updated` handler and `track.ts#isNewCompletion`).
+  `tool.call` hook does: every tool part that finishes, including one that
+  errors, not only the file-touching ones `track.ts#filePathOf` already
+  watched for (see `tui.tsx`'s `message.part.updated` handler and
+  `track.ts#isNewCompletion`).
 - Calibration ranks: `rankOf`, `currentRank` and the Brier cutoffs are
   imported unmodified, so `/bet`'s report already names the rank for free. The
   rank-up moment itself — "Rank up: Silver → Gold" — is tracked per session
-  (`lastVerdict`, a plain `Map`, the same pattern `open`/`tracking` already
-  use here) and shown once beside the post-turn "Recorded: ..." line, mirroring
-  the Claude Code mod's band.
+  on the same Solid store as the open bet (`plugin/band.ts`) and shown once
+  beside the post-turn "Recorded: ..." line, mirroring the Claude Code mod's
+  band. The slot reads that store while it renders, so a keypress that
+  changes the bet repaints the band.
 - The post-turn verdict (landed / needed fixing / skip), same mechanism.
 - Scoring: `bet-on-your-agent/hooks/bet.ts` imported unmodified — `report`,
   `calibration`, `worstCalls`, `asText`, `rankOf`, `currentRank`, all of it.
@@ -159,9 +167,6 @@ Claude Code-only features for now; a later pass can bring them here.
   So this stays on `api.command`: best-effort against a surface the types
   say may disappear, rather than against an unexported convention just as
   likely to move without notice.
-- **Counting files an `apply_patch` call touched.** Its tool input carries
-  patch text covering possibly several files, not a single `filePath`; this
-  prototype does not parse the patch to extract them (see `track.ts`).
 
 ## Confirmed by tracing the shipped binary, then by running it for real
 
@@ -249,15 +254,29 @@ that is now fixed.
   the same design as `bet-on-your-agent/hooks/bet.ts`:
 
   ```
-  node --experimental-strip-types --test bet-on-your-agent-opencode/tests/track.test.ts
+  node --conditions=browser --experimental-strip-types --test bet-on-your-agent-opencode/tests/*.test.ts
   ```
 
-  12 tests, all passing: busy detection, which tools count as file-touching
-  and which don't (including the deliberate `apply_patch` exclusion),
-  flattening a user message's text parts, which tool-part updates count
-  toward the bonus question's tool-call tally (the first `'completed'` sight
-  of a part, deduped against a re-fired one), and the `TURNS_KV_KEY`
-  namespacing fix above.
+  `--conditions=browser` matters for the band test: Node's default condition
+  loads `solid-js`'s server build, whose `createEffect` is empty, so a
+  repaint assertion would pass nothing. OpenCode's TUI resolves the client
+  build, the same one that flag selects. 23 tests, all passing: the track
+  cases above (busy detection, which tools name a `filePath`, flattening a
+  user message, the first finished sight of a tool part — `completed` or
+  `error` — and the `TURNS_KV_KEY` namespacing), plus regressions for digits
+  that are not a bet answer, a retry that must not end the turn, a save that
+  waits for `api.kv` and keeps other keys, `apply_patch` and `patch` paths,
+  a real `git status` scan, and the band repainting.
+- **Digits on a real session screen.** OpenCode 1.19.5, this package loaded
+  from its directory (the path the Plugins dialog stores, written here into
+  `tui.json`). No provider was connected and no API key was set. An owed
+  verdict seeded in `kv.json` drew the question on the session prompt row.
+  Digits 0, 4, and 5 appeared in the prompt. Digits 1, 2, and 3 did not: the
+  row changed to "Recorded" and the history file stored a landed verdict, a
+  needed-fixing verdict, and a skip. With that question gone, 1, 2, and 3 then appeared in the
+  prompt. A confidence question during a busy turn was not opened, because
+  that needs a model. The plugin's own `node_modules` was moved aside for
+  this run so OpenCode resolved one copy of `solid-js`.
 - The bonus-bet dimensions, buckets, and rank thresholds `tui.tsx` wires in
   are `bet-on-your-agent/hooks/bet.ts`'s own exports, already covered by that
   package's own test suite — nothing here reimplements them.
@@ -268,14 +287,16 @@ that is now fixed.
 
 ## Status
 
-An unpublished prototype: no version bump, not published to npm, not
-registered in any marketplace. It can be loaded into a real OpenCode
+An unpublished prototype at package version `0.0.1`: not published to npm,
+not registered in any marketplace. It can be loaded into a real OpenCode
 session locally, though, the same way any local package can: open the
 Plugins dialog (command palette → "Plugins" → "Install plugin"), enter this
 folder's absolute path, and OpenCode reads its `package.json` `exports` map
 to find the `./tui` entry point. That is how it was loaded for the real
 2026-10-24 verification pass described above. To just type-check it
 yourself without running it, install `@opencode-ai/plugin`, `@opentui/core`,
-`@opentui/keymap`, and `@opentui/solid` next to a copy of this folder plus
-`../bet-on-your-agent/hooks` and `../bet-on-your-agent/types` (it imports
-both by relative path), then run `tsc --noEmit`.
+`@opentui/keymap`, `@opentui/solid`, and `solid-js` next to a copy of this
+folder plus `../bet-on-your-agent/hooks` and `../bet-on-your-agent/types`
+(it imports both by relative path), then run `tsc --noEmit`. `solid-js` is a
+peer dependency on purpose: a second copy inside this folder's
+`node_modules` renders the slot once and never again.

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### bet-on-your-agent-opencode 0.0.1
+
+- **Digits 0–5 type into the prompt** unless a bet question is on screen. A digit that answers the question on screen is taken. Any other digit, and every digit when the band is quiet, reaches OpenCode.
+- **A retry does not close the bet.** The turn ends when the session goes idle.
+- **History waits for the file.** A turn that ends before `api.kv` has read `kv.json` is held and then merged into that file. It does not replace other plugins' keys.
+- **The file forecast counts a turn that wrote files another way.** `session.diff`, `apply_patch` text, a `patch` message part, and, when the diff call is missing, `git status`. A tool part that errors counts once, the same as one that completes.
+- **The band repaints.** The open bet and the rank-up line live in a Solid store the slot reads while it renders.
+
 ### bet-on-your-agent 0.6.2
 
 - **A failed read of the history no longer replaces it.** One error reading
