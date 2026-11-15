@@ -32,7 +32,7 @@ claude plugin validate ./wait-cards
 claude plugin test     ./wait-cards           # 47 tests
 
 claude plugin validate ./wait-focus
-claude plugin test     ./wait-focus           # 41 tests
+claude plugin test     ./wait-focus           # 42 tests
 
 claude plugin validate ./waitroom
 claude plugin test     ./waitroom             # 6 tests

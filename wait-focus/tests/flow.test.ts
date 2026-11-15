@@ -369,17 +369,20 @@ test('a subagent turn does not clear the line', async ($, on) => {
   expect(said.at(-1)).toBe('package.json touched')
 })
 
-test('a commit during the turn is touched, and a range diff that fails shows nothing', async ($, on) => {
+test('an edit committed during the turn is touched, never untouched, and a range diff that fails shows nothing', async ($, on) => {
   const git: Git = { head: HEAD_A, nameStatus: '', rangeStatus: '', untracked: [], hashes: {} }
   const { said, argvs } = engineBottom(on, git)
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   await $.command.run({ command: 'wait-focus', args: 'package.json' } as never)
   await $.turn.start(begin('turn-commit'))
+  // The edit is committed before the turn ends, so the work tree matches the new HEAD.
   git.head = 'b'.repeat(40)
+  git.nameStatus = ''
   git.rangeStatus = 'M\0package.json\0'
   const answer = await $.turn.complete(finish('turn-commit'))
   expect(answer.text).toBe('done')
   expect(said.at(-1)).toBe('package.json touched')
+  expect(said.at(-1)).not.toContain('untouched')
   const range = argvs.find(argv => argv.includes(HEAD_A) && argv.includes('HEAD') && argv.includes('--'))
   expect(range?.slice(range.indexOf('diff'))).toEqual([
     'diff',

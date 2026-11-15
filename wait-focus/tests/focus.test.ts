@@ -185,14 +185,6 @@ test('a long path loses folders from the left, and every touched or untouched st
   ).toBe('src/auth/ touched · package.json untouched')
   expect(
     statusLine([
-      { path: 'src/auth/', touched: true },
-      { path: 'package.json', touched: false },
-      { path: 'README.md', touched: false },
-    ]),
-  ).toBe('…/auth/ yes · package.json no · README.md no')
-  expect(columnWidth('…/auth/ yes · package.json no · README.md no')).toBeLessThanOrEqual(48)
-  expect(
-    statusLine([
       { path: 'src/components/auth/LoginForm.tsx', touched: true },
       { path: 'package.json', touched: false },
     ]),
@@ -200,6 +192,19 @@ test('a long path loses folders from the left, and every touched or untouched st
   const longName = statusLine([{ path: `src/${'a'.repeat(40)}.ts`, touched: true }])
   expect(longName).toBe(`…/${'a'.repeat(40)}.ts touched`)
   expect(longName?.endsWith('touched')).toBe(true)
+})
+
+test('three typical paths fit in 48 columns and every verdict stays', () => {
+  const line = statusLine([
+    { path: 'src/auth/', touched: true },
+    { path: 'package.json', touched: false },
+    { path: 'README.md', touched: false },
+  ])
+  expect(line).toBe('…/auth/ yes · package.json no · README.md no')
+  expect(columnWidth(line ?? '')).toBeLessThanOrEqual(48)
+  expect(line?.includes('…/auth/ yes')).toBe(true)
+  expect(line?.includes('package.json no')).toBe(true)
+  expect(line?.includes('README.md no')).toBe(true)
 })
 
 test('bidi marks and C1 controls are stripped from a displayed path', () => {
