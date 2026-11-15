@@ -8,6 +8,11 @@
 - **One path git cannot hash no longer pauses on every other file.** The rest of the turn's files are still counted.
 - **Five hundred changed paths still count as five hundred.** The running total was cut off at 200. More than 500 paths in `git status` is still not a count.
 
+### wait-anchor 0.1.1
+
+- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
+- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
+
 ### bet-on-your-agent 0.6.4
 
 - **A subagent's work does not raise this turn's tool-call count.** The bonus question "how many tool calls will it make?" counts only the calls on your turn. Files the subagent writes still show in "N written so far": an edit, a write, or a notebook edit counts when it actually runs, and a shell command still updates that count from the files on disk.
