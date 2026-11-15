@@ -84,6 +84,11 @@ test('several diffs concatenated parse as one combined list', () => {
   expect(files.map(one => one.path)).toEqual(['src/a.ts', 'src/b.ts'])
 })
 
+test('a removed "-- comment" and an added "++x" stay content of the real file', () => {
+  const files = parseDiffFiles(modified('src/notes.ts', ['++x'], ['-- comment']))
+  expect(files).toEqual([{ path: 'src/notes.ts', added: 1, removed: 1, kind: 'modified' }])
+})
+
 test('subjects parse one per line, blanks dropped', () => {
   expect(parseSubjects('Add retry\n\nFix typo\n')).toEqual(['Add retry', 'Fix typo'])
 })
