@@ -2,6 +2,9 @@ import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 import { expect, test } from 'claude-code/testing'
 
+/** The hang stand-in. Timers are not in this mod's `es2023` lib. */
+declare function setTimeout(callback: () => void, delayMs: number): number
+
 /**
  * The whole loop through the engine: git answered by the test (`$.process.run`
  * is an event like any other), the band drawn after a turn with changes, and

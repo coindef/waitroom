@@ -36,6 +36,14 @@ const lastSeen = atom({ plugin: 'wait-ship', key: 'lastSeen' } as const, null as
 /** How long a turn-start snapshot may run before it is unknown and the turn starts. */
 const SNAPSHOT_CAP_MS = 4000
 
+/**
+ * Timers are not in this mod's `es2023` lib. The snapshot cap only needs a
+ * handle it can clear. These stay local so the DOM lib is not pulled in.
+ */
+type TimeoutHandle = number
+declare function setTimeout(callback: () => void, delayMs: number): TimeoutHandle
+declare function clearTimeout(handle: TimeoutHandle | undefined): void
+
 type Config = { enabled: boolean; shipDir: string; includeChangelog: boolean }
 
 const ARTIFACT_NAME: Record<ArtifactKind, string> = {
@@ -155,7 +163,7 @@ const readTree = async ($: EngineInterface, root: string, config: Config) => {
  * counts as moved, and the turn starts either way.
  */
 const takeBaseline = async ($: EngineInterface, config: Config, capMs: number) => {
-  let timer: ReturnType<typeof setTimeout> | undefined
+  let timer: TimeoutHandle | undefined
   const cap = new Promise<'cap'>(resolve => {
     timer = setTimeout(() => resolve('cap'), capMs)
   })
