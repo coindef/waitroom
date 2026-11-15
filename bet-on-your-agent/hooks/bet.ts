@@ -220,7 +220,7 @@ export const challengeThreshold = (records: readonly TurnRecord[], dim: BonusDim
     dim === 'duration'
       ? live.map(one => one.durationMs)
       : dim === 'files'
-        ? live.map(one => one.files)
+        ? live.filter(one => one.filesUnknown !== true).map(one => one.files)
         : live.map(one => one.toolCalls)
 
   return median(values) ?? FALLBACK_MEDIAN[dim]
@@ -273,14 +273,15 @@ export const challengeFor = (
  * challenge was both answered and right. A day that was never offered (no
  * turns ran) leaves no record and so cannot break it; a wrong or skipped day
  * does, the same way `currentStreak` treats a miss. A day offered but left
- * untouched (`isNotTaken`) is neither: it is skipped over, counting neither
- * for nor against the run, the same as a day with no record at all.
+ * untouched (`isNotTaken`), or answered when the count could not be read
+ * (`isUnmeasured`), is neither: it is skipped over, counting neither for nor
+ * against the run, the same as a day with no record at all.
  */
 export const dailyChallengeStreak = (records: readonly DailyChallengeRecord[]): number => {
   let streak = 0
   for (let at = records.length - 1; at >= 0; at--) {
     const record = records[at]
-    if (record?.isNotTaken === true) continue
+    if (record?.isNotTaken === true || record?.isUnmeasured === true) continue
     if (record?.correct !== true) break
     streak++
   }
@@ -301,6 +302,7 @@ export const dailyChallengeValue = (records: readonly DailyChallengeRecord[], to
   if (!mine) return '—'
   if (mine.isSkipped) return 'skipped today'
   if (mine.isNotTaken) return 'not taken'
+  if (mine.isUnmeasured) return 'not scored'
 
   return mine.correct === undefined ? '—' : mine.correct ? 'right today' : 'missed today'
 }
@@ -618,8 +620,12 @@ export type Report = {
 export const report = (records: readonly TurnRecord[]): Report => {
   const scored = scorable(records)
   const live = records.filter(one => !one.isAborted)
-  const filesBet = live.filter(one => one.saidFiles !== undefined)
-  const bonusBet = live.filter(one => one.saidBonus !== undefined)
+  // An unknown count is not a zero: leaving it in would grade the call against
+  // a bucket the turn never earned.
+  const filesBet = live.filter(one => one.saidFiles !== undefined && one.filesUnknown !== true)
+  const bonusBet = live.filter(
+    one => one.saidBonus !== undefined && (one.bonusDim !== 'files' || one.filesUnknown !== true),
+  )
   const owed = records.filter(isOwed).length
 
   const base: Report = {
