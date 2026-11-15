@@ -463,7 +463,8 @@ const lookAtWorktree = async (
     }
     // No answer for this path. Dropping it would look like the file was
     // changed back. Keep the hash from the turn's baseline when there is one.
-    if (hashed.unread.has(one.path) && kept !== undefined && full in kept) look[full] = kept[full]
+    const keptHash = kept?.[full]
+    if (hashed.unread.has(one.path) && typeof keptHash === 'string') look[full] = keptHash
   }
 
   return look
