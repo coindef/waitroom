@@ -213,6 +213,10 @@ test('bidi marks and C1 controls are stripped from a displayed path', () => {
   expect(displayPath('src/\u0085auth\u009F.ts')).toBe('src/auth.ts')
   expect(statusLine([{ path: 'src/\u202Eauth/login.ts', touched: true }])).toBe('src/auth/login.ts touched')
   expect(watchingLine(['src/\u200Eauth'], [], true)).toBe('watching src/auth')
+  expect(outsideLine('../\u202Esecret\u0085')).toBe('../secret is outside this repo · name a path inside it')
+  expect(globLine('src/\u202Eauth/*\u009F')).toBe(
+    'src/auth/* looks like a glob · name a file or folder, like src/auth/ or package.json',
+  )
 })
 
 test('a CJK path is measured in display columns and stays within 48', () => {

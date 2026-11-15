@@ -79,7 +79,7 @@ A subagent's turn does not count and does not clear the line.
 
 ```sh
 claude plugin validate ./wait-focus
-claude plugin test     ./wait-focus   # 42 tests
+claude plugin test     ./wait-focus   # 48 tests
 ```
 
 `hooks/focus.ts` is the list, the path checks, and the touched or untouched line, with no engine. `hooks/register.ts` is the hooks. `tests/flow.test.ts` is the engine run, with git answered by the test. `tests/load-shape.test.ts` checks that `$` is only passed to a top-level helper, which is the rule that kept a hooks module from loading on Claude Code 2.1.318.

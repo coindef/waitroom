@@ -141,7 +141,9 @@ const shoot = async ($: EngineInterface, root: string, watches: readonly string[
 }
 
 /**
- * Paths a commit between the turn's start HEAD and the current HEAD changed.
+ * Paths that differ between the turn's start HEAD and the current HEAD.
+ * Two commits (`git diff <start> HEAD`), not three-dot: a reset back to an
+ * ancestor has no merge-base range, and three-dot would show nothing.
  * Undefined when that diff cannot be read: the caller shows nothing, because
  * a clean work tree would otherwise be reported untouched.
  */
