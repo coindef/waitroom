@@ -82,7 +82,12 @@ const attach = (review: Review, registerEnabled: boolean): TestKeymapHarness => 
   return harness
 }
 
-const press = (harness: TestKeymapHarness, key: string): TestKeymapEvent => harness.host.press(key)
+const ALT = { meta: true }
+
+const press = (harness: TestKeymapHarness, key: string, modifiers?: { meta?: boolean }): TestKeymapEvent =>
+  harness.host.press(key, modifiers)
+
+const pressAlt = (harness: TestKeymapHarness, key: string): TestKeymapEvent => press(harness, key, ALT)
 
 const assertPassedThrough = (event: TestKeymapEvent, key: string): void => {
   assert.equal(event.defaultPrevented, false, `${key} was consumed`)
@@ -94,14 +99,17 @@ const assertConsumed = (event: TestKeymapEvent, key: string): void => {
   assert.equal(event.propagationStopped, true, `${key} kept propagating`)
 }
 
-test('OC-2: with no hunk on screen, o/f/l/x/u are not handled and reach the prompt', async () => {
+test('OC-2: with no hunk on screen, o/f/l/x/u and alt+o/f/l/x/u reach the prompt', async () => {
   const review = await sessionReview('')
   assert.equal(review.layerEnabled(), false)
   for (const key of KEYS) assert.equal(review.command(key as ReviewCommand), false)
 
   for (const registerEnabled of [true, false]) {
     const harness = attach(review, registerEnabled)
-    for (const key of KEYS) assertPassedThrough(press(harness, key), key)
+    for (const key of KEYS) {
+      assertPassedThrough(press(harness, key), key)
+      assertPassedThrough(pressAlt(harness, key), `alt+${key}`)
+    }
     harness.cleanup()
   }
 })
@@ -117,12 +125,13 @@ test('OC-2: off the session screen a queued hunk does not take o/f/l/x/u', async
   for (const key of KEYS) {
     assert.equal(review.command(key as ReviewCommand), false)
     assertPassedThrough(press(harness, key), key)
+    assertPassedThrough(pressAlt(harness, key), `alt+${key}`)
   }
   assert.equal(review.pane('ses').showing, true)
   harness.cleanup()
 })
 
-test('OC-2: a showing hunk takes o/f/l/x, and u only when there is something to undo', async () => {
+test('OC-2: a showing hunk takes alt+o/f/l/x, and alt+u only when there is something to undo', async () => {
   const review = await sessionReview(TWO)
   const before = review.pane('ses')
   assert.equal(before.showing, true)
@@ -132,31 +141,47 @@ test('OC-2: a showing hunk takes o/f/l/x, and u only when there is something to 
   assert.equal(review.command('undo'), false)
 
   const harness = attach(review, true)
-  assertPassedThrough(press(harness, 'u'), 'u')
+  assertPassedThrough(pressAlt(harness, 'u'), 'alt+u')
   const held = review.pane('ses')
   assert.equal(held.showing, true)
   if (held.showing) assert.equal(held.path, 'a.ts')
 
-  assertConsumed(press(harness, 'o'), 'o')
+  assertConsumed(pressAlt(harness, 'o'), 'alt+o')
   const next = review.pane('ses')
   assert.equal(next.showing, true)
   if (next.showing) assert.equal(next.path, 'b.ts')
 
-  assertConsumed(press(harness, 'u'), 'u')
+  assertConsumed(pressAlt(harness, 'u'), 'alt+u')
   const restored = review.pane('ses')
   assert.equal(restored.showing, true)
   if (restored.showing) assert.equal(restored.path, 'a.ts')
 
-  assertConsumed(press(harness, 'f'), 'f')
-  assertConsumed(press(harness, 'l'), 'l')
+  assertConsumed(pressAlt(harness, 'f'), 'alt+f')
+  assertConsumed(pressAlt(harness, 'l'), 'alt+l')
   const last = review.pane('ses')
   assert.equal(last.showing, true)
   if (last.showing) assert.equal(last.path, 'b.ts')
-  assertConsumed(press(harness, 'x'), 'x')
+  assertConsumed(pressAlt(harness, 'x'), 'alt+x')
   assert.equal(review.pane('ses').showing, false)
-  // Skip-file clears the stored decision, so `u` is not handled once the pane is empty.
+  // Skip-file clears the stored decision, so undo is not handled once the pane is empty.
   assert.equal(review.command('undo'), false)
-  assertPassedThrough(press(harness, 'u'), 'u')
+  assertPassedThrough(pressAlt(harness, 'u'), 'alt+u')
+  harness.cleanup()
+})
+
+test('a prompt sentence reaches the prompt while a hunk is showing', async () => {
+  const review = await sessionReview(TWO)
+  const before = review.pane('ses')
+  assert.equal(before.showing, true)
+  const harness = attach(review, true)
+  const sentence = 'fix the login flow'
+
+  for (const char of sentence) {
+    const key = char === ' ' ? 'space' : char
+    assertPassedThrough(press(harness, key), key)
+  }
+
+  assert.deepEqual(review.pane('ses'), before)
   harness.cleanup()
 })
 

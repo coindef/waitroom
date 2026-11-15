@@ -108,7 +108,7 @@ export const tui: TuiPlugin = async api => {
               {view.path} · file {view.atFile} of {view.ofFiles} · {view.totalLeft} left
             </text>
             <diff source={view.text} />
-            <text>o: ok  f: flag  l: later  x: skip file  u: undo</text>
+            <text>alt+o: ok · alt+f: flag · alt+l: later · alt+x: skip file · alt+u: undo</text>
             {view.flagged > 0 && <text>{view.flagged} flagged</text>}
           </box>
         )

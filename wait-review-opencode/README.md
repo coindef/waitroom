@@ -1,8 +1,12 @@
 # wait-review (OpenCode prototype)
 
-An unpublished, uncommitted prototype of wait-review for
-[OpenCode](https://opencode.ai). It is not a plugin you can install — see
-"Status" below.
+An unpublished prototype of wait-review for [OpenCode](https://opencode.ai).
+
+## Try it
+
+OpenCode 1.19.3: command palette → Plugins → Install plugin, then this folder's path.
+After a turn leaves a hunk in the sidebar, review it without leaving the prompt:
+`alt+o` ok, `alt+f` flag, `alt+l` later, `alt+x` skip file, `alt+u` undo.
 
 ## Can an OpenCode plugin do this at all?
 
@@ -54,14 +58,15 @@ finding of this prototype: the portable core really is portable.
 
 ## What's ported
 
-- The scan, the queue, and `o` / `f` / `l` / `x` / `u` as real keymap hotkeys
-  bound through `api.keymap.registerLayer` (confirmed against
-  `@opentui/keymap`'s real `Keymap.registerLayer`, not guessed from a type
-  name). The layer's `enabled` gate is on only while the pane is showing a
-  hunk, and each command returns not-handled when it changes nothing (`u`
-  only when a decision can be undone), so those keys still reach the prompt
-  otherwise. OpenCode installs that gate via `registerEnabledFields` in
-  `createDefaultOpenTuiKeymap`.
+- The scan, the queue, and `alt+o` / `alt+f` / `alt+l` / `alt+x` / `alt+u` as
+  real keymap hotkeys bound through `api.keymap.registerLayer` (confirmed
+  against `@opentui/keymap`'s real `Keymap.registerLayer`, not guessed from a
+  type name). The chords are `alt+` because the prompt stays focused while a
+  hunk is on screen, so the bare letters have to remain available for the
+  next prompt. The layer's `enabled` gate is on only while the pane is
+  showing a hunk, and each command returns not-handled when it changes
+  nothing (`alt+u` only when a decision can be undone). OpenCode installs
+  that gate via `registerEnabledFields` in `createDefaultOpenTuiKeymap`.
 - A `sidebar_content` slot rendering the current hunk (path, position, a
   `<diff>` element for the hunk text, the hotkey legend, the flagged count).
   The queue lives in a Solid store, and the slot reads it, so a keypress or
@@ -88,14 +93,14 @@ finding of this prototype: the portable core really is portable.
   does not load a TUI plugin. The Plugins dialog does: command palette →
   Plugins → Install plugin, then this folder's path. That writes
   `.opencode/tui.json`. With the sidebar open and the pane reading
-  `wait-review: nothing to read`, `u` `o` `f` `l` `x` landed in the prompt.
-  After a later turn, with `new.ts` on screen, `o` advanced the pane to the
-  next file and `u` restored it, both without reaching the prompt. `f`
-  flagged and moved on, `l` stayed on that later hunk, and `x` replaced the
-  card with the summary; none of those three reached the prompt. Before any
-  decision, `u` still reached the prompt. No provider login and no API key:
-  the session used OpenCode's built-in Big Pickle model. See the tests below
-  for the same rules without a TUI.
+  `wait-review: nothing to read`, bare `u` `o` `f` `l` `x` landed in the prompt.
+  With a hunk on screen those bare keys were captured, which is the bug this
+  change fixes: the prompt stays focused. After the chords moved to `alt+`,
+  the same TUI was restarted against this tree. With `third.ts` on screen,
+  `fix the login flow` landed in the prompt intact and the card stayed, then
+  `alt+o` replaced the card with `1 read` and did not put `o` in the prompt.
+  No provider login and no API key: the session used OpenCode's built-in
+  Big Pickle model.
 - **`plugin/scan.ts` is actually run and tested.** It has zero OpenCode
   types, by the same design as `wait-review/hooks/diff.ts`, so it runs under
   Node directly:

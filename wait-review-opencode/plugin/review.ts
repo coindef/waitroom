@@ -251,17 +251,21 @@ export const createReview = (options: ReviewOptions): Review => {
  * The layer OpenCode registers. `enabled` is consulted on each key by
  * `@opentui/keymap`'s `registerEnabledFields` (OpenCode calls that from
  * `createDefaultOpenTuiKeymap`). A command that returns `false` is rejected
- * and does not `preventDefault`, so the key still reaches the prompt when
- * the gate is off or when `u` has nothing to undo.
+ * and does not `preventDefault`, so the chord still reaches the prompt when
+ * the gate is off or when `alt+u` has nothing to undo.
+ *
+ * The chords are `alt+`, not the bare letters. The prompt keeps focus while
+ * the sidebar shows a hunk, so bare `o`/`f`/`l`/`x`/`u` have to stay
+ * available for the next prompt.
  */
 export const reviewLayer = (review: Review) => ({
   enabled: () => review.layerEnabled(),
   bindings: [
-    { key: 'o', cmd: 'wait-review.ok' },
-    { key: 'f', cmd: 'wait-review.flag' },
-    { key: 'l', cmd: 'wait-review.later' },
-    { key: 'x', cmd: 'wait-review.drop-file' },
-    { key: 'u', cmd: 'wait-review.undo' },
+    { key: 'alt+o', cmd: 'wait-review.ok' },
+    { key: 'alt+f', cmd: 'wait-review.flag' },
+    { key: 'alt+l', cmd: 'wait-review.later' },
+    { key: 'alt+x', cmd: 'wait-review.drop-file' },
+    { key: 'alt+u', cmd: 'wait-review.undo' },
   ],
   commands: [
     { name: 'wait-review.ok', run: () => review.command('ok') },
