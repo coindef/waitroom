@@ -156,6 +156,44 @@ test(
   },
 )
 
+test('a corrupt record self-heals', SHORT_FUSE, async ($, on) => {
+  // lastPromptAt is inside the ten minutes, and the history is not a list of
+  // events. Trusting it would stay quiet forever. It is stale: the next due
+  // nudge starts a fresh record, and a later long turn still gets one.
+  const seed = { rotation: 3, lastPromptAt: 0, history: { not: 'a list' } }
+  const { clock, store, writes } = wire(on, { seed })
+  await $.turn.start({ text: 'long', turnId: 'heal-1' })
+  await clock.advance(4999)
+  expect(writes.count).toBe(0)
+  expect(store.state).toEqual(seed)
+
+  await clock.advance(1)
+  const first = await mountBand($)
+  expect((await first.find({ text: NUDGE }))?.text).toContain('posture check: reset how you are sitting')
+  await first.unmount()
+  expect(store.state).toEqual({ rotation: 1, lastPromptAt: 5000, history: [] })
+  await $.turn.complete({
+    turnId: 'heal-1',
+    answer: 'done',
+    durationMs: 5000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  expect(store.state).toEqual({
+    rotation: 1,
+    lastPromptAt: 5000,
+    history: [{ at: 5000, taken: false }],
+  })
+
+  await clock.advance(10 * 60 * 1000)
+  await $.turn.start({ text: 'later', turnId: 'heal-2' })
+  await clock.advance(5000)
+  const second = await mountBand($)
+  expect((await second.find({ text: NUDGE }))?.text).toContain('20-20-20: look at something about 20 feet away for 20 seconds')
+  await second.unmount()
+  expect(writes.count).toBe(3)
+})
+
 test(
   'a stored history that is not an array is replaced the next time a nudge is due',
   SHORT_FUSE,
