@@ -74,11 +74,27 @@ const revision = atom({ plugin: 'bet-on-your-agent', key: 'revision' } as const,
 const badgeNote = atom({ plugin: 'bet-on-your-agent', key: 'badgeNote' } as const, null as string | null)
 /** How many turns have offered a bonus question so far; drives the rotation. */
 const bonusRotation = atom({ plugin: 'bet-on-your-agent', key: 'bonusRotation' } as const, 0)
-/** When this session began, for the recap card's "this session". */
+/** When this session began, for the recap card's "this session" when it has no id. */
 const sessionStartedAt = atom(
   { plugin: 'bet-on-your-agent', key: 'sessionStartedAt' } as const,
   null as number | null,
 )
+
+/**
+ * The id of the session now running, or undefined when the host has none.
+ *
+ * A throw is the same as none: the recap then falls back to the start time,
+ * and a turn is recorded without an id rather than not recorded.
+ */
+const sessionIdOf = async ($: EngineInterface): Promise<string | undefined> => {
+  try {
+    const id = await $.session.id()
+
+    return typeof id === 'string' && id !== '' ? id : undefined
+  } catch {
+    return undefined
+  }
+}
 
 type Config = { autoOpen: boolean }
 
@@ -287,8 +303,10 @@ const noteFile = async ($: EngineInterface, path: string | undefined) => {
 }
 
 /**
- * Counts every tool call the turn makes, whichever tool and whether or not it
- * was denied — the bonus question asks "how many", not "how many that ran".
+ * Counts one tool call on the open main turn, whichever tool and whether or
+ * not it was denied — the bonus question asks "how many", not "how many that
+ * ran". The caller leaves out a call that carries an agentId: that call is a
+ * subagent's, not this turn's.
  */
 const noteToolCall = async ($: EngineInterface) => {
   await update($, open, bet => ({ ...bet, toolCalls: bet.toolCalls + 1 }))
@@ -382,7 +400,15 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'bet-recap' }, async ($, e) => {
     const all = await loadTurns($)
     const startedAt = await read($, sessionStartedAt)
-    const session = startedAt === null ? all : all.filter(one => one.at >= startedAt)
+    const sessionId = await sessionIdOf($)
+    // Another window writes the same store. A record made after this session
+    // began is not this session's; the id is what says whose it is.
+    const session =
+      sessionId === undefined
+        ? startedAt === null
+          ? all
+          : all.filter(one => one.at >= startedAt)
+        : all.filter(one => one.sessionId === sessionId)
     const dailyChallenges = await loadDailyChallenges($)
     const today = localDateKey(await $.clock.now())
     const recap = recapOf(session, all, dailyChallenges, today, await extrasWait($))
@@ -394,21 +420,21 @@ export const register: Register = (on, options) => {
   // One hook per tool so `e` narrows to that tool's own input.
   on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
     const ran = await next(e)
-    if (!ran.deny && !ran.isError) await noteFile($, e.file_path)
+    if (e.agentId === undefined && !ran.deny && !ran.isError) await noteFile($, e.file_path)
 
     return ran
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'Write' }, async ($, e, next) => {
     const ran = await next(e)
-    if (!ran.deny && !ran.isError) await noteFile($, e.file_path)
+    if (e.agentId === undefined && !ran.deny && !ran.isError) await noteFile($, e.file_path)
 
     return ran
   }).catch(($, e, next) => next(e))
 
   on('tool.call', { tool: 'NotebookEdit' }, async ($, e, next) => {
     const ran = await next(e)
-    if (!ran.deny && !ran.isError) await noteFile($, e.notebook_path)
+    if (e.agentId === undefined && !ran.deny && !ran.isError) await noteFile($, e.notebook_path)
 
     return ran
   }).catch(($, e, next) => next(e))
@@ -416,16 +442,17 @@ export const register: Register = (on, options) => {
   // A failed command can still have written files, so only a denied one is skipped.
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     const ran = await next(e)
-    if (!ran.deny) await noteWorktreeFiles($)
+    if (e.agentId === undefined && !ran.deny) await noteWorktreeFiles($)
 
     return ran
   }).catch(($, e, next) => next(e))
 
-  // Unfiltered: every tool the turn calls, not only the ones the hooks above
-  // already watch for files, is a tool call toward the bonus question.
+  // Unfiltered: every tool the main turn calls, not only the ones the hooks
+  // above already watch for files, is a tool call toward the bonus question.
+  // A call with an agentId is a subagent's and stays off this turn's count.
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
-    await noteToolCall($)
+    if (e.agentId === undefined) await noteToolCall($)
 
     return ran
   }).catch(($, e, next) => next(e))
@@ -484,6 +511,7 @@ export const register: Register = (on, options) => {
     const bonusActual = isThisTurn
       ? actualFor(dim === 'duration' ? e.durationMs : dim === 'files' ? files : bet.toolCalls)
       : undefined
+    const sessionId = await sessionIdOf($)
     const record: TurnRecord = {
       turnId: e.turnId,
       at: await $.clock.now(),
@@ -491,6 +519,7 @@ export const register: Register = (on, options) => {
       files,
       filesBucket: bucketOf(files),
       toolCalls: isThisTurn ? bet.toolCalls : 0,
+      ...(sessionId === undefined ? {} : { sessionId }),
       isAborted: e.isAborted,
       ...(ask === '' ? {} : { ask }),
       ...(isThisTurn && bet.saidConfidence !== undefined

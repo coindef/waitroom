@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### bet-on-your-agent 0.6.2
+
+- **A subagent's tool call stays off the open turn.** A `tool.call` that carries an `agentId` is that subagent's, so it is not one of the main turn's tool calls and it does not add a file to "N written so far". The main turn's own calls still count.
+- **`/bet-recap` counts this session.** "This session" is the turns stamped with the current session id. A turn another window recorded, even one made after this session began, stays out of the card. The rank and the badge wall still read the whole history. With no session id from the host, the card falls back to the turns since this session started.
+
 ### wait-cards 0.1.0
 
 First release: one flashcard from a deck you write, one card per wait.
