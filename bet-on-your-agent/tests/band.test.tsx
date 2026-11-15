@@ -610,42 +610,64 @@ test('a tree already past 500 paths still scores the Edit and Write calls', asyn
   await pane.unmount()
 })
 
-test('untracked files already in the tree do not use up the 500-path cap', async ($, on) => {
+test('exactly 500 changed paths are still a count', async ($, on) => {
   engineBottom(on)
-  const prior = Array.from({ length: 600 }, (_, at) => `dist/f${at}.js`)
-  const priorHashes = prior.map((_, at) => `p${at}`)
-  const repo = {
-    status: [...prior.map(path => `?? ${path}`), ''].join('\0'),
-    hashes: priorHashes.join('\n') + '\n',
-  }
+  const paths = Array.from({ length: 500 }, (_, at) => `gen/f${at}.ts`)
+  const repo = { status: '', hashes: '' }
   trackGit(on, repo)
   on('tool.call', { tool: 'Bash' }, () => {
-    const written = ['src/a.ts', 'src/b.ts']
-    repo.status = [...prior.map(path => `?? ${path}`), ...written.map(path => `?? ${path}`), ''].join('\0')
-    repo.hashes = [...priorHashes, 'aaa', 'bbb'].join('\n') + '\n'
+    repo.status = [...paths.map(path => `?? ${path}`), ''].join('\0')
+    repo.hashes = paths.map((_, at) => `h${at}`).join('\n') + '\n'
 
     return { result: { stdout: '', stderr: '', interrupted: false } } as never
   })
 
-  await $.turn.start({ text: 'write two sources from the shell', turnId: 'turn-preexisting' })
+  await $.turn.start({ text: 'generate exactly 500', turnId: 'turn-500' })
   const band = await $.ui.mount({
     plugin: 'bet-on-your-agent',
     surface: 'terminal',
     ...BAND,
     props: bandProps(true),
   })
-  await band.press({ key: 'p80' })
-  await band.press({ key: 'f2-3' })
-  // The bonus question and the daily challenge are not under test here.
-  await band.press({ key: 'decline' })
-  await band.press({ key: 'decline' })
-  await $.tool.call({ tool: 'Bash', command: 'cat > src/a.ts <<EOF\n' } as never)
-  expect(await band.find({ text: /2 written so far/ })).toBeDefined()
+  await betNone(band)
+  await $.tool.call({ tool: 'Bash', command: 'node gen.js' } as never)
+  expect(await band.find({ text: /500 written so far/ })).toBeDefined()
   expect(await band.find({ text: /file count unknown/ })).toBeUndefined()
+  await band.unmount()
+})
+
+test('crossing 500 paths during the turn makes the file count unknown', async ($, on) => {
+  engineBottom(on)
+  const prior = Array.from({ length: 499 }, (_, at) => `gen/f${at}.ts`)
+  const repo = {
+    status: [...prior.map(path => `?? ${path}`), ''].join('\0'),
+    hashes: prior.map((_, at) => `h${at}`).join('\n') + '\n',
+  }
+  trackGit(on, repo)
+  on('tool.call', { tool: 'Bash' }, () => {
+    const paths = [...prior, 'gen/extra-a.ts', 'gen/extra-b.ts']
+    repo.status = [...paths.map(path => `?? ${path}`), ''].join('\0')
+    repo.hashes = paths.map((_, at) => `h${at}`).join('\n') + '\n'
+
+    return { result: { stdout: '', stderr: '', interrupted: false } } as never
+  })
+
+  await $.turn.start({ text: 'the tree grows past the cap', turnId: 'turn-cross' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betNone(band)
+  expect(await band.find({ text: /0 written so far/ })).toBeDefined()
+  await $.tool.call({ tool: 'Bash', command: 'node gen.js' } as never)
+  expect(await band.find({ text: /file count unknown \(500\+ paths\)/ })).toBeDefined()
+  expect(await band.find({ text: /written so far/ })).toBeUndefined()
   await band.unmount()
 
   await $.turn.complete({
-    turnId: 'turn-preexisting',
+    turnId: 'turn-cross',
     answer: 'done',
     durationMs: 1000,
     isAborted: false,
@@ -660,10 +682,110 @@ test('untracked files already in the tree do not use up the 500-path cap', async
   await idle.press({ key: 'landed' })
   await idle.unmount()
 
-  // Called 2–3. The 600 untracked files were already there; the shell wrote two.
+  // Called none. The count was never read, so it is not a point for zero.
   const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
-  expect(await pane.find({ text: /File count called right 1\/1/ })).toBeDefined()
+  expect(await pane.find({ text: /File count called right/ })).toBeUndefined()
   await pane.unmount()
+})
+
+test('one unhashable path does not ask git about every other path', async ($, on) => {
+  engineBottom(on)
+  const paths = Array.from({ length: 32 }, (_, at) => `src/f${at}.ts`)
+  const repo = { status: '', hashes: '' }
+  let hashCalls = 0
+  on('process.run', ($$, e) => {
+    const argv = e.argv.join(' ')
+    if (argv.includes('--show-toplevel')) return gitRan('/work\n')
+    if (argv.includes('status')) return gitRan(repo.status)
+    if (argv.includes('hash-object')) {
+      hashCalls += 1
+      const dash = e.argv.lastIndexOf('--')
+      const asked = dash === -1 ? [] : e.argv.slice(dash + 1)
+      if (asked.some(path => isUnhashable(path))) return gitRan('', 128)
+      const lines = asked.map(path => {
+        const at = paths.indexOf(path)
+
+        return at === -1 ? 'x' : `h${at}`
+      })
+
+      return gitRan(lines.join('\n') + '\n')
+    }
+
+    return gitRan('')
+  })
+  on('tool.call', { tool: 'Bash' }, () => {
+    repo.status = [...paths.map(path => `?? ${path}`), '?? sub/', ''].join('\0')
+    hashCalls = 0
+
+    return { result: { stdout: '', stderr: '', interrupted: false } } as never
+  })
+
+  await $.turn.start({ text: 'write many files around a nested repo', turnId: 'turn-fast' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betNone(band)
+  await $.tool.call({ tool: 'Bash', command: 'node gen.js' } as never)
+  // One bad path used to turn into one git call per file. A split isolates it.
+  expect(hashCalls).toBeLessThanOrEqual(16)
+  expect(await band.find({ text: /32 written so far/ })).toBeDefined()
+  expect(await band.find({ text: /file count unknown/ })).toBeUndefined()
+  await band.unmount()
+})
+
+test('a path whose hash times out is not counted as written', async ($, on) => {
+  engineBottom(on)
+  const repo = {
+    status: [' M src/keep.ts', ' M src/slow.ts', ''].join('\0'),
+    later: false,
+  }
+  on('process.run', ($$, e) => {
+    const argv = e.argv.join(' ')
+    if (argv.includes('--show-toplevel')) return gitRan('/work\n')
+    if (argv.includes('status')) {
+      const lines = repo.later
+        ? [' M src/keep.ts', ' M src/slow.ts', '?? sub/', '']
+        : [' M src/keep.ts', ' M src/slow.ts', '']
+
+      return gitRan(lines.join('\0'))
+    }
+    if (argv.includes('hash-object')) {
+      const dash = e.argv.lastIndexOf('--')
+      const asked = dash === -1 ? [] : e.argv.slice(dash + 1)
+      if (asked.some(path => isUnhashable(path))) return gitRan('', 128)
+      // Any call that still has to read the slow path does not answer, the way a
+      // `hash-object` of that path hits its timeout.
+      if (repo.later && asked.includes('src/slow.ts')) throw new Error('timed out')
+      const lines = asked.map(path => (path === 'src/keep.ts' ? 'aaa' : 'bbb'))
+
+      return gitRan(lines.join('\n') + '\n')
+    }
+
+    return gitRan('')
+  })
+  on('tool.call', { tool: 'Bash' }, () => {
+    repo.later = true
+
+    return { result: { stdout: '', stderr: '', interrupted: false } } as never
+  })
+
+  await $.turn.start({ text: 'touch nothing, one hash stalls', turnId: 'turn-timeout' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await betNone(band)
+  expect(await band.find({ text: /0 written so far/ })).toBeDefined()
+  await $.tool.call({ tool: 'Bash', command: 'true' } as never)
+  expect(await band.find({ text: /0 written so far/ })).toBeDefined()
+  expect(await band.find({ text: /1 written so far/ })).toBeUndefined()
+  expect(await band.find({ text: /file count unknown/ })).toBeUndefined()
+  await band.unmount()
 })
 
 test('the band yields to a survey of the engine’s own', async ($, on) => {

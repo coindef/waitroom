@@ -48,17 +48,16 @@ export type TurnRecord = {
   /**
    * Distinct files the turn wrote.
    *
-   * Not a count when `filesUnknown` is set: this turn changed more paths than
-   * the cap, and `files` / `filesBucket` are then only placeholders.
+   * Not a count when `filesUnknown` is set: the working tree was too large to
+   * snapshot, and `files` / `filesBucket` are then only placeholders.
    */
   files: number
   filesBucket: FileBucket
   /**
-   * Set when this turn changed more paths than the cap.
+   * Set when the working tree was too large to snapshot.
    *
    * The file question is kept on the record and left out of the score, rather
-   * than graded against a count of zero. Paths already dirty or untracked
-   * when the turn started do not count toward the cap.
+   * than graded against a count of zero.
    */
   filesUnknown?: true
   /** Tool calls the turn made, of any kind, counted whether denied or not. */
@@ -144,7 +143,7 @@ export type OpenBet = {
   /** Distinct paths written so far this turn. Not the turn's count when `filesUnknown` is set. */
   files: string[]
   /**
-   * Set when a later look found more paths changed this turn than the cap.
+   * Set when a look at the working tree gave up.
    *
    * The paths in `files` are then not a count: the row says the count is
    * unknown, and the file question is not scored.

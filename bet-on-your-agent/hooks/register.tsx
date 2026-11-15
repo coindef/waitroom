@@ -308,7 +308,7 @@ const undoLastVerdict = async ($: EngineInterface) => {
 const noteFile = async ($: EngineInterface, path: string | undefined) => {
   if (path === undefined || path === '') return
   await update($, open, bet =>
-    bet.files.includes(path) ? bet : { ...bet, files: [...bet.files, path].slice(-200) },
+    bet.files.includes(path) ? bet : { ...bet, files: [...bet.files, path].slice(-WORKTREE_LIMIT) },
   )
 }
 
@@ -321,64 +321,105 @@ const noteToolCall = async ($: EngineInterface) => {
 }
 
 /**
- * Past this many paths changed since the turn started, a look is not a count.
+ * Past this many changed paths, a look at the working tree is not a count.
  *
- * The cap is that delta, not the length of `git status`. Paths already
- * dirty or untracked at the start are the baseline, so they do not use it
- * up. Giving up on the whole status list used to mark every later turn
- * unknown, and the file question was asked and then never scored.
+ * Giving up used to look the same as a clean tree, and the turn was scored
+ * as having written nothing.
  */
 const WORKTREE_LIMIT = 500
 
 const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string) =>
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
+/** Hashes git returned, and paths a call did not answer for. */
+type PresentHashes = { hashes: Map<string, string>; unread: Set<string> }
+
+const hashesOf = (paths: readonly string[], stdout: string) => {
+  const lines = stdout.split('\n')
+
+  return new Map(paths.map((path, at) => [path, lines[at] ?? '']))
+}
+
+/**
+ * Isolates paths git refuses without one `hash-object` per file.
+ *
+ * A call that does not answer marks its paths unread and stops. Splitting it
+ * would wait out the timeout again for each half.
+ */
+const hashSplit = async (
+  $: EngineInterface,
+  root: string,
+  paths: readonly string[],
+  hashes: Map<string, string>,
+  unread: Set<string>,
+): Promise<boolean> => {
+  if (paths.length === 0) return false
+  const ran = await runGit($, ['hash-object', '--', ...paths], root)
+  if (ran === undefined) {
+    for (const path of paths) unread.add(path)
+
+    return true
+  }
+  if (ran.exitCode === 0) {
+    for (const [path, hash] of hashesOf(paths, ran.stdout)) hashes.set(path, hash)
+
+    return true
+  }
+  if (paths.length === 1) return true
+  const mid = Math.ceil(paths.length / 2)
+  const [left, right] = await Promise.all([
+    hashSplit($, root, paths.slice(0, mid), hashes, unread),
+    hashSplit($, root, paths.slice(mid), hashes, unread),
+  ])
+
+  return left || right
+}
+
 /**
  * Content hashes for the paths still in the tree.
  *
  * One `hash-object` covers the lot. When any path in that call cannot be
  * hashed — a nested repository, a worktree — git exits non-zero for the
- * whole call, so the paths are hashed one at a time and only the one git
- * refuses is left out. Undefined only when git does not answer at all.
+ * whole call, so the list is split until the path git refuses is left out.
+ * A call that does not answer leaves those paths unread. Undefined only when
+ * the whole look gets no answer at all.
  */
 const hashPresent = async (
   $: EngineInterface,
   root: string,
   present: readonly string[],
-): Promise<Map<string, string> | undefined> => {
-  if (present.length === 0) return new Map()
+): Promise<PresentHashes | undefined> => {
+  if (present.length === 0) return { hashes: new Map(), unread: new Set() }
   const all = await runGit($, ['hash-object', '--', ...present], root)
   if (all === undefined) return undefined
-  if (all.exitCode === 0) {
-    const lines = all.stdout.split('\n')
+  if (all.exitCode === 0) return { hashes: hashesOf(present, all.stdout), unread: new Set() }
+  if (present.length === 1) return { hashes: new Map(), unread: new Set() }
+  const hashes = new Map<string, string>()
+  const unread = new Set<string>()
+  const mid = Math.ceil(present.length / 2)
+  const [left, right] = await Promise.all([
+    hashSplit($, root, present.slice(0, mid), hashes, unread),
+    hashSplit($, root, present.slice(mid), hashes, unread),
+  ])
+  if (!left && !right && hashes.size === 0 && unread.size === 0) return undefined
 
-    return new Map(present.map((path, at) => [path, lines[at] ?? '']))
-  }
-  const hashed = new Map<string, string>()
-  let answered = false
-  for (const path of present) {
-    const one = await runGit($, ['hash-object', '--', path], root)
-    if (one === undefined) continue
-    answered = true
-    if (one.exitCode !== 0) continue
-    hashed.set(path, one.stdout.split('\n')[0] ?? '')
-  }
-
-  return answered ? hashed : undefined
+  return { hashes, unread }
 }
 
 /**
  * Each file git sees changed in the repository, as path to content hash.
  *
  * Undefined outside a repository, or when git does not answer; the tool calls
- * are then the only count there is. A first look is the baseline, however
- * long `git status` is: files already there are not this turn's writes.
- * Passed that baseline, `'untrusted'` when more than `WORKTREE_LIMIT` paths
- * moved from it. The count can no longer be read, and it is not zero.
+ * are then the only count there is. `'untrusted'` when `git status` lists more
+ * paths than `WORKTREE_LIMIT` — changed or untracked, not only this turn's.
+ * A first look that returns that is no baseline, and the tool calls are the
+ * count. A later look, against a baseline already taken, means the count can
+ * no longer be read. `kept` is that baseline: a path whose hash did not come
+ * back keeps it, so a timeout is not counted as a write.
  */
 const lookAtWorktree = async (
   $: EngineInterface,
-  against?: Readonly<Record<string, string>>,
+  kept?: Readonly<Record<string, string>>,
 ): Promise<Record<string, string> | 'untrusted' | undefined> => {
   const top = await runGit($, ['rev-parse', '--show-toplevel'])
   const root = top?.exitCode === 0 ? top.stdout.trim() : ''
@@ -386,24 +427,26 @@ const lookAtWorktree = async (
   const status = await runGit($, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], root)
   if (status?.exitCode !== 0) return undefined
   const entries = parseStatus(status.stdout)
+  if (entries.length > WORKTREE_LIMIT) return 'untrusted'
   const present = entries.filter(one => !one.isDeleted).map(one => one.path)
   const hashed = await hashPresent($, root, present)
   if (hashed === undefined) return undefined
   const look: Record<string, string> = {}
   for (const one of entries) {
+    const full = `${root}/${one.path}`
     if (one.isDeleted) {
-      look[`${root}/${one.path}`] = 'deleted'
+      look[full] = 'deleted'
       continue
     }
-    const hash = hashed.get(one.path)
-    if (hash === undefined) continue
-    look[`${root}/${one.path}`] = hash
+    const hash = hashed.hashes.get(one.path)
+    if (hash !== undefined) {
+      look[full] = hash
+      continue
+    }
+    // No answer for this path. Dropping it would look like the file was
+    // changed back. Keep the hash from the turn's baseline when there is one.
+    if (hashed.unread.has(one.path) && kept !== undefined && full in kept) look[full] = kept[full]
   }
-  // The cap is paths this turn changed, not paths already dirty or untracked.
-  // A tree that starts over the cap still has a baseline, so a later look can
-  // tell a new file from one that was sitting there. Falling back to Edit and
-  // Write here would drop every shell write in that tree.
-  if (against !== undefined && changedSince(against, look).length > WORKTREE_LIMIT) return 'untrusted'
 
   return look
 }
@@ -412,10 +455,9 @@ const lookAtWorktree = async (
  * Counts every file whose content moved since the turn started, however it
  * was written: a shell heredoc or a script makes no Edit call.
  *
- * A later look whose delta from the baseline is past the cap marks the count
- * unknown. It does not leave the number where it stood, which is zero
- * whenever the writes came through the shell. A turn that never got a
- * baseline is left to the tool calls.
+ * A later look that gives up marks the count unknown. It does not leave the
+ * number where it stood, which is zero whenever the writes came through the
+ * shell. A turn that never got a baseline is left to the tool calls.
  */
 const noteWorktreeFiles = async ($: EngineInterface) => {
   const { baseline, filesUnknown } = await read($, open)
@@ -431,7 +473,7 @@ const noteWorktreeFiles = async ($: EngineInterface) => {
   await update($, open, bet => {
     const added = moved.filter(path => !bet.files.includes(path))
 
-    return added.length === 0 ? bet : { ...bet, files: [...bet.files, ...added].slice(-200) }
+    return added.length === 0 ? bet : { ...bet, files: [...bet.files, ...added].slice(-WORKTREE_LIMIT) }
   })
 }
 
@@ -554,10 +596,10 @@ export const register: Register = (on, options) => {
     await lapseStaleVerdicts($)
     await showStatus($)
     // Taken before the turn runs, so whatever it writes shows as a change.
-    // The list can already be past 500 paths. Those paths are the baseline,
-    // not this turn's writes, and the file question is still scored against
-    // what moves from here. Marking the count unknown here would ask that
-    // question on every turn in a dirty tree and then throw the answer away.
+    // A status list already past the limit is no baseline, same as outside a
+    // repository: Edit, Write and NotebookEdit stay the count, and the file
+    // question is still scored. Marking it unknown here would ask that
+    // question on every turn and then throw the answer away.
     const baseline = await lookAtWorktree($)
     if (baseline !== undefined && baseline !== 'untrusted') {
       await update($, open, bet => (bet.turnId === e.turnId ? { ...bet, baseline } : bet))
