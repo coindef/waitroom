@@ -459,12 +459,89 @@ export const formatSize = (chars: number): string => {
 
 export type ArtifactKind = 'commit' | 'pr' | 'changelog'
 
-/** The command the person runs to apply a written draft — printed, never run. */
-export const applyCommandFor = (kind: ArtifactKind, path: string): string => {
-  if (kind === 'commit') return `git commit -F ${path}`
-  if (kind === 'pr') return `gh pr create --body-file ${path}`
+/** Collapse `.` and `..` in a `/` path. An absolute path stays absolute. */
+const normalizePosix = (path: string): string => {
+  const absolute = path.startsWith('/')
+  const parts: string[] = []
+  for (const part of path.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') {
+      if (parts.length > 0 && parts[parts.length - 1] !== '..') parts.pop()
+      else if (!absolute) parts.push('..')
+      continue
+    }
+    parts.push(part)
+  }
+  const body = parts.join('/')
+  if (absolute) return body === '' ? '/' : `/${body}`
 
-  return `paste ${path} into CHANGELOG.md`
+  return body === '' ? '.' : body
+}
+
+/** `to` relative to `from`. Both are absolute `/` paths. */
+const relativePosix = (from: string, to: string): string => {
+  const fromParts = normalizePosix(from).split('/').filter(part => part !== '')
+  const toParts = normalizePosix(to).split('/').filter(part => part !== '')
+  let shared = 0
+  while (shared < fromParts.length && shared < toParts.length && fromParts[shared] === toParts[shared]) shared += 1
+  const parts: string[] = []
+  for (let i = shared; i < fromParts.length; i++) parts.push('..')
+  for (const part of toParts.slice(shared)) parts.push(part)
+
+  return parts.length === 0 ? '.' : parts.join('/')
+}
+
+/** Where a draft is written: under `root`, even when `repoPath` itself is absolute. */
+export const draftAbsolute = (root: string, repoPath: string): string => normalizePosix(`${root}/${repoPath}`)
+
+/** `repoPath` as a path under `root`, after the same collapse `draftAbsolute` uses. */
+export const writtenRelative = (root: string, repoPath: string): string => {
+  const abs = draftAbsolute(root, repoPath)
+  const base = normalizePosix(root)
+  if (abs === base) return '.'
+  if (base === '/') return abs.slice(1)
+  if (abs.startsWith(`${base}/`)) return abs.slice(base.length + 1)
+
+  return abs
+}
+
+/**
+ * The draft path a command run from the session folder can open. `repoPath`
+ * is relative to the repository root (see `writtenRelative`). From a session
+ * inside the repository the result is relative to `cwd`, so at the root it
+ * stays `repoPath`. A session folder outside the repository gets the absolute
+ * path, which still opens. With no session folder, `repoPath` is unchanged.
+ * Callers pass the physical root and folder (`git rev-parse`), so a logical
+ * symlink path is not compared with a physical root.
+ */
+export const pathFromCwd = (root: string, cwd: string | undefined, repoPath: string): string => {
+  if (repoPath.startsWith('/')) return repoPath
+  const abs = draftAbsolute(root, repoPath)
+  if (cwd === undefined || cwd === '' || !cwd.startsWith('/') || !root.startsWith('/')) return repoPath
+  const rootNorm = normalizePosix(root)
+  const cwdNorm = normalizePosix(cwd)
+  if (cwdNorm !== rootNorm && !cwdNorm.startsWith(`${rootNorm}/`)) return abs
+
+  return relativePosix(cwdNorm, abs)
+}
+
+/**
+ * One shell word in single quotes. A `'` in the path is written `'\''`:
+ * the quotes close, a literal quote is added, and the quotes open again,
+ * so the path stays a single word.
+ */
+export const shellQuote = (text: string): string => `'${text.split("'").join("'\\''")}'`
+
+/**
+ * The command the person runs to apply a written draft — printed, never run.
+ * The path is one quoted shell word, so a space or a quote in it stays one argument.
+ */
+export const applyCommandFor = (kind: ArtifactKind, path: string): string => {
+  const quoted = shellQuote(path)
+  if (kind === 'commit') return `git commit -F ${quoted}`
+  if (kind === 'pr') return `gh pr create --body-file ${quoted}`
+
+  return `paste ${quoted} into CHANGELOG.md`
 }
 
 /**
@@ -528,6 +605,17 @@ export const fingerprintOf = (text: string): string => {
 export type TreeSeen = {
   tree: string
   files: Record<string, string>
+}
+
+/**
+ * A stored baseline. This build keeps the whole diff and each file. An older
+ * build stored one fingerprint string for the whole diff and nothing per file.
+ */
+export const seenFrom = (stored: TreeSeen | string | null): TreeSeen | null => {
+  if (typeof stored === 'string') return { tree: stored, files: {} }
+  if (stored === null) return null
+
+  return stored
 }
 
 /**

@@ -29,7 +29,7 @@ export type ShipMode = 'all' | ArtifactKind | 'edit' | 'skip'
 export type ShipResult = {
   turnId: string
   mode: ShipMode
-  /** What was written, each a repository-relative path; empty for `skip`. */
+  /** What was written, each the path the receipt prints; empty for `skip`. */
   wrote: { kind: ArtifactKind; path: string }[]
 }
 
@@ -40,15 +40,20 @@ declare module 'claude-code' {
       offer: ShipOffer | null
       /**
        * The tree as the last scan read it — at session start, at the start
-       * of a turn, and at each turn's end — or null before the first. `tree`
-       * is the whole diff; `files` is each file's own chunk, so a kit names
-       * only the files that moved during the turn. A turn that leaves `tree`
-       * as it was changed nothing and gets no kit.
+       * of a turn, and at each turn's end — or null before the first and
+       * when a snapshot did not finish in time. `tree` is the whole diff;
+       * `files` is each file's own chunk, so a kit names only the files that
+       * moved during the turn. A string is the one fingerprint an older
+       * build stored for the whole diff. A turn that leaves `tree` as it was
+       * changed nothing and gets no kit. Unknown counts as moved.
        */
-      lastSeen: {
-        tree: string
-        files: Record<string, string>
-      } | null
+      lastSeen:
+        | {
+            tree: string
+            files: Record<string, string>
+          }
+        | string
+        | null
     }
   }
 }

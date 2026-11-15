@@ -5,6 +5,7 @@ import type { ArtifactKind, ShipMode, ShipOffer, ShipResult } from '../types'
 import {
   commitFileText,
   DRAFTS_GITIGNORE,
+  draftAbsolute,
   drawnBy,
   filesSince,
   formatSize,
@@ -13,8 +14,11 @@ import {
   kitOf,
   parseDiffFiles,
   parseSubjects,
+  pathFromCwd,
   receiptLines,
+  seenFrom,
   treeSeenOf,
+  writtenRelative,
   yieldsBand,
   type TreeSeen,
 } from './ship'
@@ -27,7 +31,10 @@ const RECENT_COMMIT_COUNT = 20
 const UNTRACKED_LIMIT = 100
 
 const offer = atom({ plugin: 'wait-ship', key: 'offer' } as const, null as ShipOffer | null)
-const lastSeen = atom({ plugin: 'wait-ship', key: 'lastSeen' } as const, null as TreeSeen | null)
+const lastSeen = atom({ plugin: 'wait-ship', key: 'lastSeen' } as const, null as TreeSeen | string | null)
+
+/** How long a turn-start snapshot may run before it is unknown and the turn starts. */
+const SNAPSHOT_CAP_MS = 4000
 
 type Config = { enabled: boolean; shipDir: string; includeChangelog: boolean }
 
@@ -41,11 +48,30 @@ const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string)
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
 /** The repository root, or undefined where the session is not in a repository. */
-const repoRoot = async ($: EngineInterface): Promise<string | undefined> => {
-  const found = await runGit($, ['rev-parse', '--show-toplevel'])
+const repoRoot = async ($: EngineInterface, cwd?: string): Promise<string | undefined> => {
+  const found = await runGit($, ['rev-parse', '--show-toplevel'], cwd)
   const root = found?.exitCode === 0 ? found.stdout.trim() : ''
 
   return root === '' ? undefined : root
+}
+
+/**
+ * Where the session is right now, as git sees that directory: the physical
+ * root and the physical folder. `git rev-parse --show-prefix` is taken from
+ * `cwd`, so a symlink (logical cwd, physical root) still yields a `../` path
+ * that opens, and a `/cd` or worktree switch is read at draft-write time.
+ */
+const placeOf = async (
+  $: EngineInterface,
+  cwd: string,
+  fallbackRoot: string,
+): Promise<{ root: string; cwd: string }> => {
+  const prefix = await runGit($, ['rev-parse', '--show-prefix'], cwd)
+  const physicalRoot = await repoRoot($, cwd)
+  if (prefix?.exitCode !== 0 || physicalRoot === undefined) return { root: fallbackRoot, cwd }
+  const pre = prefix.stdout.trim().replace(/\/+$/, '')
+
+  return { root: physicalRoot, cwd: pre === '' ? physicalRoot : `${physicalRoot}/${pre}` }
 }
 
 /**
@@ -114,7 +140,7 @@ const loadChangelog = async ($: EngineInterface, root: string, config: Config): 
 const readTree = async ($: EngineInterface, root: string, config: Config) => {
   const scanned = await scanTree($, root, config)
   const seen = treeSeenOf(scanned.text)
-  const before = await read($, lastSeen)
+  const before = seenFrom(await read($, lastSeen))
   await update($, lastSeen, () => seen)
 
   return { files: filesSince(before, seen, scanned.files), hasMoved: before === null || before.tree !== seen.tree }
@@ -125,16 +151,38 @@ const readTree = async ($: EngineInterface, root: string, config: Config) => {
  * failure leaves the previous read alone — session start, or the previous
  * turn's end — and does not throw. One unanswered command stops the read,
  * so a failed git cannot walk the rest of the tree before the turn starts.
+ * The whole read gives up at `capMs`: the baseline becomes unknown, which
+ * counts as moved, and the turn starts either way.
  */
-const takeBaseline = async ($: EngineInterface, config: Config) => {
+const takeBaseline = async ($: EngineInterface, config: Config, capMs: number) => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const cap = new Promise<'cap'>(resolve => {
+    timer = setTimeout(() => resolve('cap'), capMs)
+  })
+  const scan = (async (): Promise<TreeSeen | 'skip'> => {
+    try {
+      const root = await repoRoot($)
+      if (root === undefined) return 'skip'
+      const scanned = await scanTree($, root, config, true)
+      if (!scanned.ok) return 'skip'
+
+      return treeSeenOf(scanned.text)
+    } catch {
+      return 'skip'
+    }
+  })()
   try {
-    const root = await repoRoot($)
-    if (root === undefined) return
-    const scanned = await scanTree($, root, config, true)
-    if (!scanned.ok) return
-    await update($, lastSeen, () => treeSeenOf(scanned.text))
+    const result = await Promise.race([scan, cap])
+    if (timer !== undefined) clearTimeout(timer)
+    if (result === 'cap') {
+      await update($, lastSeen, () => null)
+
+      return
+    }
+    if (result === 'skip') return
+    await update($, lastSeen, () => result)
   } catch {
-    // Fail open: the previous baseline stands, and the turn is not failed.
+    if (timer !== undefined) clearTimeout(timer)
   }
 }
 
@@ -183,11 +231,18 @@ const applyOffer = async ($: EngineInterface, config: Config, kit: ShipOffer, mo
     await $.fs.write(ignore, DRAFTS_GITIGNORE).catch(() => undefined)
   }
 
+  // Read the folder at accept time. A cwd saved at session start is wrong
+  // after `/cd` or a worktree switch.
+  const here = await $.session.cwd().catch(() => '')
+  const place = here === '' ? { root, cwd: undefined } : await placeOf($, here, root)
+
   const wrote: ShipResult['wrote'] = []
   for (const { kind, text } of drafts) {
-    const path = `${config.shipDir}/${ARTIFACT_NAME[kind]}`
-    await $.fs.write(`${root}/${path}`, text)
-    wrote.push({ kind, path })
+    const repoPath = `${config.shipDir}/${ARTIFACT_NAME[kind]}`
+    // An absolute shipDir is still written under the repository root
+    // (`${root}/…`). The receipt names that file, not the absolute path.
+    await $.fs.write(draftAbsolute(root, repoPath), text)
+    wrote.push({ kind, path: pathFromCwd(place.root, place.cwd, writtenRelative(place.root, repoPath)) })
   }
 
   return { turnId: kit.turnId, mode, wrote }
@@ -217,6 +272,8 @@ export const register: Register = (on, options) => {
       typeof options.shipDir === 'string' && options.shipDir.trim() !== '' ? options.shipDir.trim() : DEFAULT_SHIP_DIR,
     includeChangelog: options.includeChangelog !== false,
   }
+  const capOption = (options as { snapshotCapMs?: unknown }).snapshotCapMs
+  const snapshotCapMs = typeof capOption === 'number' && capOption > 0 ? capOption : SNAPSHOT_CAP_MS
 
   // The tree as the session found it: what was already changed then is not a
   // turn's to ship, so the first turn is measured against it like any other.
@@ -237,7 +294,7 @@ export const register: Register = (on, options) => {
     // Before next(e), so the turn has not written yet. Anything the person
     // edited between turns is this baseline, not the turn's. A failed read
     // is caught and not stored, and the turn starts either way.
-    if (config.enabled) await takeBaseline($, config).catch(() => undefined)
+    if (config.enabled) await takeBaseline($, config, snapshotCapMs).catch(() => undefined)
 
     return next(e)
   }).catch(($, e, next) => next(e))
