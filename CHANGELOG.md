@@ -7,6 +7,11 @@
 - **From an hour, the away line drops the seconds.** `1h 0m 40s` is `1h`. `2h 1m 40s` is `2h 1m`. Under an hour is unchanged (`45s`, `1m`, `1m 30s`, `59m 59s`).
 - **An unusable threshold is named when you turn notifications on.** `(0.5 isn't usable, using 30s)`. A value that floors to at least 1 is kept and is not named.
 
+### wait-anchor 0.1.1
+
+- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
+- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
+
 ### bet-on-your-agent 0.6.4
 
 - **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
@@ -102,7 +107,7 @@ First release: warns when a Claude Code turn edits files outside the scope you s
   (`You were away 0s`). It floors, then keeps the number only when it is at
   least 1. The setting's minimum is 1.
 - **A long turn names the hours.** `You were away 2h`, `You were away 1h 5m`,
-  or `You were away 2h 1m`. Under an hour the line is unchanged (`45s`,
+  or `You were away 2h 1m 40s`. Under an hour the line is unchanged (`45s`,
   `1m`, `1m 30s`).
 
 ## wait-ping 0.1.0
