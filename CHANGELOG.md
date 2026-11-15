@@ -17,7 +17,7 @@
 
 - **If you already have waitroom installed, update it.** Version 0.1.1 still asked for `wait-review` after that plugin left the catalog, so the bundle failed to load with `Dependency "wait-review@waitroom" is not installed`. This release is 0.1.2, so the update actually runs. Run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`. You should see `Plugin "waitroom" updated from 0.1.1 to 0.1.2 for scope user. Restart to apply changes.` Restart once. After that, waitroom loads again and keeps bet-on-your-agent, wait-ship, and wait-breathe.
 
-- **Three old plugins are now disabled, and that is expected.** `wait-review`, `wait-changed`, and `wait-shell` are no longer in the catalog. After the update they show as disabled (or "Removed from the waitroom marketplace") instead of failing to load. You don't need to uninstall them, and you don't need to install anything in their place.
+- **Three old plugins are now disabled, and that is expected.** `wait-review`, `wait-changed`, and `wait-shell` are no longer in the catalog. After the update they stay installed locally and show as disabled (or "Removed from the waitroom marketplace"). Uninstall each one to clear it. You don't need to install anything in their place.
 
 ### wait-cards 0.1.0
 

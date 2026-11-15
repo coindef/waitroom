@@ -118,17 +118,24 @@ If you installed `waitroom@waitroom` when it still depended on the `wait-review`
 Dependency "wait-review@waitroom" is not installed
 ```
 
-The `wait-review` plugin was removed on purpose. That is not the old marketplace once named `wait-review` (see [Coming from the old name](#coming-from-the-old-name)). Uninstall the leftover plugin entry and `waitroom@waitroom`, then install it again.
+The `wait-review` plugin was removed on purpose. That is not the old marketplace once named `wait-review` (see [Coming from the old name](#coming-from-the-old-name)). Update the marketplace, then the bundle. You do not uninstall `waitroom@waitroom`, and you do not install it again.
 
-After the second command, Claude Code may suggest `claude plugin prune`. Don't run it. It would remove bet-on-your-agent, wait-ship, and wait-breathe and delete their saved data; the third command reinstalls them as dependencies but not that data.
+```bash
+claude plugin marketplace update waitroom
+claude plugin update waitroom@waitroom
+```
+
+You should see `Plugin "waitroom" updated from 0.1.1 to 0.1.2 for scope user. Restart to apply changes.` Restart Claude Code once. waitroom loads again and keeps bet-on-your-agent, wait-ship, and wait-breathe.
+
+`wait-review`, `wait-changed`, and `wait-shell` stay installed locally and show as disabled (or "Removed from the waitroom marketplace"). Uninstall each one to clear it:
 
 ```bash
 claude plugin uninstall wait-review@waitroom
-claude plugin uninstall waitroom@waitroom
-claude plugin install waitroom@waitroom
+claude plugin uninstall wait-changed@waitroom
+claude plugin uninstall wait-shell@waitroom
 ```
 
-Then restart Claude Code. Uninstalling only `waitroom@waitroom` and reinstalling it restores that plugin, but the failed `wait-review@waitroom` entry stays until you uninstall that too.
+Don't run `claude plugin prune`. It would remove bet-on-your-agent, wait-ship, and wait-breathe and delete their saved data.
 
 ## Coming from the old name
 
