@@ -6,7 +6,7 @@ import {
   commitFileText,
   DRAFTS_GITIGNORE,
   drawnBy,
-  fingerprintOf,
+  filesSince,
   formatSize,
   isOwnFolder,
   isUnder,
@@ -14,7 +14,9 @@ import {
   parseDiffFiles,
   parseSubjects,
   receiptLines,
+  treeSeenOf,
   yieldsBand,
+  type TreeSeen,
 } from './ship'
 
 const PANE_TAG = ' ship '
@@ -25,7 +27,7 @@ const RECENT_COMMIT_COUNT = 20
 const UNTRACKED_LIMIT = 100
 
 const offer = atom({ plugin: 'wait-ship', key: 'offer' } as const, null as ShipOffer | null)
-const lastSeen = atom({ plugin: 'wait-ship', key: 'lastSeen' } as const, null as string | null)
+const lastSeen = atom({ plugin: 'wait-ship', key: 'lastSeen' } as const, null as TreeSeen | null)
 
 type Config = { enabled: boolean; shipDir: string; includeChangelog: boolean }
 
@@ -50,13 +52,18 @@ const repoRoot = async ($: EngineInterface): Promise<string | undefined> => {
  * Every file changed against HEAD right now: staged and unstaged tracked
  * changes, plus untracked files, which plain `git diff` says nothing about.
  * This mod's own drafts are its output, not a change to ship, so the drafts
- * folder is left out. `text` is the diff as read, for `fingerprintOf`.
+ * folder is left out. `text` is the diff as read, for `treeSeenOf`.
  */
-const scanTree = async ($: EngineInterface, root: string, config: Config) => {
+const scanTree = async ($: EngineInterface, root: string, config: Config, stopWhenGitFails = false) => {
+  const failed = { files: [], text: '', ok: false }
   const tracked = await runGit($, ['diff', 'HEAD', '--no-color', '--no-prefix'], root)
+  // A baseline that git did not answer is not stored. Stopping here keeps one
+  // unanswered read from turning into a hundred more before the turn starts.
+  if (stopWhenGitFails && tracked === undefined) return failed
   const chunks: string[] = tracked?.exitCode === 0 ? [tracked.stdout] : []
 
   const others = await runGit($, ['ls-files', '--others', '--exclude-standard'], root)
+  if (stopWhenGitFails && others === undefined) return failed
   const untracked = (others?.stdout ?? '')
     .split('\n')
     .map(line => line.trim())
@@ -65,11 +72,16 @@ const scanTree = async ($: EngineInterface, root: string, config: Config) => {
   for (const path of untracked) {
     // --no-index exits 1 when the two sides differ, which is the point here.
     const one = await runGit($, ['diff', '--no-color', '--no-prefix', '--no-index', '--', '/dev/null', path], root)
+    if (stopWhenGitFails && one === undefined) return failed
     if (one && one.exitCode <= 1) chunks.push(one.stdout)
   }
   const text = chunks.join('\n')
 
-  return { files: parseDiffFiles(text).filter(one => !isUnder(one.path, config.shipDir)), text }
+  return {
+    files: parseDiffFiles(text).filter(one => !isUnder(one.path, config.shipDir)),
+    text,
+    ok: tracked !== undefined && others !== undefined,
+  }
 }
 
 const recentSubjects = async ($: EngineInterface, root: string) => {
@@ -88,17 +100,36 @@ const loadChangelog = async ($: EngineInterface, root: string, config: Config): 
 }
 
 /**
- * Reads the tree once, keeps its fingerprint as the one the next turn is
- * measured against, and says whether it moved since the last read. Unknown
- * (no earlier read) counts as moved, so a missed baseline never hides a kit.
+ * Reads the tree once, keeps it as the one the next comparison is measured
+ * against, and says whether it moved since the last read. Unknown (no
+ * earlier read) counts as moved, so a missed baseline never hides a kit.
+ * The files are only those whose own diff changed since that read.
  */
 const readTree = async ($: EngineInterface, root: string, config: Config) => {
   const scanned = await scanTree($, root, config)
-  const now = fingerprintOf(scanned.text)
+  const seen = treeSeenOf(scanned.text)
   const before = await read($, lastSeen)
-  await update($, lastSeen, () => now)
+  await update($, lastSeen, () => seen)
 
-  return { ...scanned, hasMoved: before !== now }
+  return { files: filesSince(before, seen, scanned.files), hasMoved: before === null || before.tree !== seen.tree }
+}
+
+/**
+ * The tree at the start of a turn, taken before the turn writes. A git
+ * failure leaves the previous read alone — session start, or the previous
+ * turn's end — and does not throw. One unanswered command stops the read,
+ * so a failed git cannot walk the rest of the tree before the turn starts.
+ */
+const takeBaseline = async ($: EngineInterface, config: Config) => {
+  try {
+    const root = await repoRoot($)
+    if (root === undefined) return
+    const scanned = await scanTree($, root, config, true)
+    if (!scanned.ok) return
+    await update($, lastSeen, () => treeSeenOf(scanned.text))
+  } catch {
+    // Fail open: the previous baseline stands, and the turn is not failed.
+  }
 }
 
 /**
@@ -197,6 +228,10 @@ export const register: Register = (on, options) => {
     // A new turn's own kit, once it lands, takes over the band; an ignored
     // kit from the last one has nothing left to say.
     await update($, offer, () => null)
+    // Before next(e), so the turn has not written yet. Anything the person
+    // edited between turns is this baseline, not the turn's. A failed read
+    // is caught and not stored, and the turn starts either way.
+    if (config.enabled) await takeBaseline($, config).catch(() => undefined)
 
     return next(e)
   }).catch(($, e, next) => next(e))

@@ -524,6 +524,47 @@ export const fingerprintOf = (text: string): string => {
   return `${text.length}:${hash.toString(16)}`
 }
 
+/** The whole diff, and each file's own chunk, as the last scan read them. */
+export type TreeSeen = {
+  tree: string
+  files: Record<string, string>
+}
+
+/**
+ * One fingerprint for the diff text and one per file. Chunks are slices of
+ * the original text, so a file that did not change keeps its fingerprint
+ * when another file is appended after it. A later scan can then name the
+ * files whose own chunk moved, not every file still dirty.
+ */
+export const treeSeenOf = (text: string): TreeSeen => {
+  const files: Record<string, string> = {}
+  const starts: number[] = []
+  for (const match of text.matchAll(/^diff --git |^diff --no-index /gm)) starts.push(match.index)
+  for (let at = 0; at < starts.length; at++) {
+    const from = starts[at]
+    if (from === undefined) continue
+    const to = starts[at + 1] ?? text.length
+    const body = text.slice(from, to)
+    const path = parseDiffFiles(body)[0]?.path
+    if (path !== undefined && path !== '') files[path] = fingerprintOf(body)
+  }
+
+  return { tree: fingerprintOf(text), files }
+}
+
+/**
+ * Files whose diff changed since `before`. No earlier read counts every file
+ * as changed. When the whole text moved but no file's chunk did, every file
+ * stays, which is what a scan that could not be split per file already did.
+ */
+export const filesSince = (before: TreeSeen | null, seen: TreeSeen, files: readonly FileChange[]): FileChange[] => {
+  if (before === null) return [...files]
+  const changed = files.filter(file => before.files[file.path] !== seen.files[file.path])
+  if (changed.length === 0 && before.tree !== seen.tree) return [...files]
+
+  return changed
+}
+
 // ---------------------------------------------------------------------------
 // The row above the prompt
 // ---------------------------------------------------------------------------

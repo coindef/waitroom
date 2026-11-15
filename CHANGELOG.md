@@ -106,6 +106,10 @@ First release: a read-only card once a Claude Code turn ends.
   "Did it land?"; `Close` is what gives them the row. It is not drawn while a
   turn runs.
 
+## wait-ship 0.1.3
+
+- **A turn that changed nothing stays quiet when the tree was edited between turns.** The baseline is read again at the start of the turn, and the kit names only the files that turn changed. If that read fails, the previous baseline stands and the turn still starts.
+
 ## wait-ship 0.1.2
 
 - **The shared row yields to wait-changed between turns** when that mod is

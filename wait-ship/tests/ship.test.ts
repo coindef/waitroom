@@ -13,6 +13,7 @@ import {
   drawnBy,
   type FileChange,
   fileList,
+  filesSince,
   fingerprintOf,
   formatSize,
   inferStyle,
@@ -30,6 +31,7 @@ import {
   subjectOf,
   summaryBullets,
   testPlanLines,
+  treeSeenOf,
   truncate,
   typeOf,
   verbFor,
@@ -436,4 +438,17 @@ test('the same changes read the same fingerprint, and any change reads another',
   expect(fingerprintOf(tree)).toBe(fingerprintOf(`${tree}`))
   expect(fingerprintOf(tree)).not.toBe(fingerprintOf(added('src/feature.ts', ['+two'])))
   expect(fingerprintOf('')).not.toBe(fingerprintOf(tree))
+})
+
+test('filesSince names only the files whose own diff changed since the baseline', () => {
+  const notes = added('notes.md', ['+a note written between turns'])
+  const feature = added('src/feature.ts')
+  const both = notes + feature
+  const before = treeSeenOf(notes)
+  const seen = treeSeenOf(both)
+  const files = parseDiffFiles(both)
+
+  expect(filesSince(before, seen, files).map(one => one.path)).toEqual(['src/feature.ts'])
+  expect(filesSince(null, seen, files).map(one => one.path)).toEqual(['notes.md', 'src/feature.ts'])
+  expect(filesSince(seen, seen, files)).toEqual([])
 })
