@@ -13,6 +13,7 @@ import {
   kitOf,
   parseDiffFiles,
   parseSubjects,
+  pathFromCwd,
   receiptLines,
   yieldsBand,
 } from './ship'
@@ -26,6 +27,8 @@ const UNTRACKED_LIMIT = 100
 
 const offer = atom({ plugin: 'wait-ship', key: 'offer' } as const, null as ShipOffer | null)
 const lastSeen = atom({ plugin: 'wait-ship', key: 'lastSeen' } as const, null as string | null)
+/** Folder the session started in: the receipt's command is run from there. */
+let sessionCwd: string | undefined
 
 type Config = { enabled: boolean; shipDir: string; includeChangelog: boolean }
 
@@ -148,9 +151,11 @@ const applyOffer = async ($: EngineInterface, config: Config, kit: ShipOffer, mo
 
   const wrote: ShipResult['wrote'] = []
   for (const { kind, text } of drafts) {
-    const path = `${config.shipDir}/${ARTIFACT_NAME[kind]}`
-    await $.fs.write(`${root}/${path}`, text)
-    wrote.push({ kind, path })
+    // Written under the repository root. The receipt is typed in the session's
+    // own folder, so the path it prints starts from there.
+    const repoPath = `${config.shipDir}/${ARTIFACT_NAME[kind]}`
+    await $.fs.write(`${root}/${repoPath}`, text)
+    wrote.push({ kind, path: pathFromCwd(root, sessionCwd, repoPath) })
   }
 
   return { turnId: kit.turnId, mode, wrote }
@@ -184,6 +189,7 @@ export const register: Register = (on, options) => {
   // The tree as the session found it: what was already changed then is not a
   // turn's to ship, so the first turn is measured against it like any other.
   on('session.start', async ($, e, next) => {
+    if (typeof e.cwd === 'string' && e.cwd !== '') sessionCwd = e.cwd
     const done = await next(e)
     if (!config.enabled || (await read($, lastSeen)) !== null) return done
     const root = await repoRoot($)
