@@ -338,33 +338,83 @@ const noteToolCall = async ($: EngineInterface) => {
   await update($, open, bet => ({ ...bet, toolCalls: bet.toolCalls + 1 }))
 }
 
-/** Past this many changed files, a look at the working tree is not worth its cost. */
+/**
+ * Past this many changed paths, a look at the working tree is not a count.
+ *
+ * Giving up used to look the same as a clean tree, and the turn was scored
+ * as having written nothing.
+ */
 const WORKTREE_LIMIT = 500
 
 const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string) =>
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
 /**
+ * Content hashes for the paths still in the tree.
+ *
+ * One `hash-object` covers the lot. When any path in that call cannot be
+ * hashed — a nested repository, a worktree — git exits non-zero for the
+ * whole call, so the paths are hashed one at a time and only the one git
+ * refuses is left out. Undefined only when git does not answer at all.
+ */
+const hashPresent = async (
+  $: EngineInterface,
+  root: string,
+  present: readonly string[],
+): Promise<Map<string, string> | undefined> => {
+  if (present.length === 0) return new Map()
+  const all = await runGit($, ['hash-object', '--', ...present], root)
+  if (all === undefined) return undefined
+  if (all.exitCode === 0) {
+    const lines = all.stdout.split('\n')
+
+    return new Map(present.map((path, at) => [path, lines[at] ?? '']))
+  }
+  const hashed = new Map<string, string>()
+  let answered = false
+  for (const path of present) {
+    const one = await runGit($, ['hash-object', '--', path], root)
+    if (one === undefined) continue
+    answered = true
+    if (one.exitCode !== 0) continue
+    hashed.set(path, one.stdout.split('\n')[0] ?? '')
+  }
+
+  return answered ? hashed : undefined
+}
+
+/**
  * Each file git sees changed in the repository, as path to content hash.
  *
  * Undefined outside a repository, or when git does not answer; the tool calls
- * are then the only count there is.
+ * are then the only count there is. `'untrusted'` when `git status` lists more
+ * paths than `WORKTREE_LIMIT` — changed or untracked, not only this turn's.
+ * A first look that returns that is no baseline, and the tool calls are the
+ * count. A later look, against a baseline already taken, means the count can
+ * no longer be read.
  */
-const lookAtWorktree = async ($: EngineInterface): Promise<Record<string, string> | undefined> => {
+const lookAtWorktree = async (
+  $: EngineInterface,
+): Promise<Record<string, string> | 'untrusted' | undefined> => {
   const top = await runGit($, ['rev-parse', '--show-toplevel'])
   const root = top?.exitCode === 0 ? top.stdout.trim() : ''
   if (root === '') return undefined
   const status = await runGit($, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], root)
   if (status?.exitCode !== 0) return undefined
   const entries = parseStatus(status.stdout)
-  if (entries.length > WORKTREE_LIMIT) return undefined
+  if (entries.length > WORKTREE_LIMIT) return 'untrusted'
   const present = entries.filter(one => !one.isDeleted).map(one => one.path)
-  const hashed = present.length === 0 ? undefined : await runGit($, ['hash-object', '--', ...present], root)
-  if (present.length > 0 && hashed?.exitCode !== 0) return undefined
-  const hashes = hashed?.stdout.split('\n') ?? []
+  const hashed = await hashPresent($, root, present)
+  if (hashed === undefined) return undefined
   const look: Record<string, string> = {}
   for (const one of entries) {
-    look[`${root}/${one.path}`] = one.isDeleted ? 'deleted' : (hashes[present.indexOf(one.path)] ?? '')
+    if (one.isDeleted) {
+      look[`${root}/${one.path}`] = 'deleted'
+      continue
+    }
+    const hash = hashed.get(one.path)
+    if (hash === undefined) continue
+    look[`${root}/${one.path}`] = hash
   }
 
   return look
@@ -373,11 +423,20 @@ const lookAtWorktree = async ($: EngineInterface): Promise<Record<string, string
 /**
  * Counts every file whose content moved since the turn started, however it
  * was written: a shell heredoc or a script makes no Edit call.
+ *
+ * A later look that gives up marks the count unknown. It does not leave the
+ * number where it stood, which is zero whenever the writes came through the
+ * shell. A turn that never got a baseline is left to the tool calls.
  */
 const noteWorktreeFiles = async ($: EngineInterface) => {
-  const { baseline } = await read($, open)
-  if (baseline === undefined) return
+  const { baseline, filesUnknown } = await read($, open)
+  if (filesUnknown === true || baseline === undefined) return
   const now = await lookAtWorktree($)
+  if (now === 'untrusted') {
+    await update($, open, bet => ({ ...bet, filesUnknown: true as const }))
+
+    return
+  }
   if (now === undefined) return
   const moved = changedSince(baseline, now)
   await update($, open, bet => {
@@ -516,8 +575,12 @@ export const register: Register = (on, options) => {
     await lapseStaleVerdicts($)
     await showStatus($)
     // Taken before the turn runs, so whatever it writes shows as a change.
+    // A status list already past the limit is no baseline, same as outside a
+    // repository: Edit, Write and NotebookEdit stay the count, and the file
+    // question is still scored. Marking it unknown here would ask that
+    // question on every turn and then throw the answer away.
     const baseline = await lookAtWorktree($)
-    if (baseline !== undefined) {
+    if (baseline !== undefined && baseline !== 'untrusted') {
       await update($, open, bet => (bet.turnId === e.turnId ? { ...bet, baseline } : bet))
     }
 
@@ -531,13 +594,16 @@ export const register: Register = (on, options) => {
     await noteWorktreeFiles($)
     const bet = await read($, open)
     const isThisTurn = bet.turnId === e.turnId
-    const files = isThisTurn ? bet.files.length : 0
+    const filesUnknown = isThisTurn && bet.filesUnknown === true
+    const files = isThisTurn && !filesUnknown ? bet.files.length : 0
     const ask = isThisTurn ? shortAsk(bet.ask) : ''
     const dim = isThisTurn ? bet.bonusDim : undefined
-    const actualFor = (value: number) => (dim === undefined ? undefined : bonusBucketOf(dim, value))
-    const bonusActual = isThisTurn
-      ? actualFor(dim === 'duration' ? e.durationMs : dim === 'files' ? files : bet.toolCalls)
-      : undefined
+    // A files bonus graded against a stand-in zero would be a right or wrong
+    // answer the turn never earned. The other dimensions do not use the count.
+    const bonusActual =
+      dim !== undefined && !(filesUnknown && dim === 'files')
+        ? bonusBucketOf(dim, dim === 'duration' ? e.durationMs : dim === 'files' ? files : bet.toolCalls)
+        : undefined
     const sessionId = await sessionIdOf($)
     const record: TurnRecord = {
       turnId: e.turnId,
@@ -545,6 +611,7 @@ export const register: Register = (on, options) => {
       durationMs: e.durationMs,
       files,
       filesBucket: bucketOf(files),
+      ...(filesUnknown ? { filesUnknown: true as const } : {}),
       toolCalls: isThisTurn ? bet.toolCalls : 0,
       ...(sessionId === undefined ? {} : { sessionId }),
       isAborted: e.isAborted,
@@ -581,6 +648,13 @@ export const register: Register = (on, options) => {
           await saveDailyChallenges(
             $,
             keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isSkipped: true }),
+          )
+        } else if (guess !== undefined && challengeDim === 'files' && filesUnknown) {
+          // Answered, but the count it was judged against is not a number. The
+          // day is handled so it is not asked again; the answer is not scored.
+          await saveDailyChallenges(
+            $,
+            keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, guess, isUnmeasured: true }),
           )
         } else if (guess !== undefined) {
           await saveDailyChallenges(
@@ -754,6 +828,22 @@ export const register: Register = (on, options) => {
                 </Button>
               </Box>
             </Box>
+          )
+        }
+
+        // No number, rather than 0: a snapshot that gave up is not a count, and
+        // a 0 here would read as the call having been right.
+        if (bet.filesUnknown === true) {
+          return (
+            <Text wrap="truncate-end">
+              <Text color="claude" weight="bold">
+                bet
+              </Text>
+              <Text dimColor>
+                {' '}
+                {asPercent(said)} · {filesPhrase(bet.saidFiles)} · file count unknown (500+ paths)
+              </Text>
+            </Text>
           )
         }
 
