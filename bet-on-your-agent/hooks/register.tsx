@@ -369,8 +369,11 @@ const hashPresent = async (
  * Each file git sees changed in the repository, as path to content hash.
  *
  * Undefined outside a repository, or when git does not answer; the tool calls
- * are then the only count there is. `'untrusted'` when the tree is past
- * `WORKTREE_LIMIT`: there is no count, and the file question is not scored.
+ * are then the only count there is. `'untrusted'` when `git status` lists more
+ * paths than `WORKTREE_LIMIT` — changed or untracked, not only this turn's.
+ * A first look that returns that is no baseline, and the tool calls are the
+ * count. A later look, against a baseline already taken, means the count can
+ * no longer be read.
  */
 const lookAtWorktree = async (
   $: EngineInterface,
@@ -403,8 +406,9 @@ const lookAtWorktree = async (
  * Counts every file whose content moved since the turn started, however it
  * was written: a shell heredoc or a script makes no Edit call.
  *
- * A look that gives up marks the count unknown. It does not leave the number
- * where it stood, which is zero whenever the writes came through the shell.
+ * A later look that gives up marks the count unknown. It does not leave the
+ * number where it stood, which is zero whenever the writes came through the
+ * shell. A turn that never got a baseline is left to the tool calls.
  */
 const noteWorktreeFiles = async ($: EngineInterface) => {
   const { baseline, filesUnknown } = await read($, open)
@@ -543,12 +547,12 @@ export const register: Register = (on, options) => {
     await lapseStaleVerdicts($)
     await showStatus($)
     // Taken before the turn runs, so whatever it writes shows as a change.
-    // A tree already past the limit has no baseline worth trusting: the count
-    // is unknown from the start, not zero.
+    // A status list already past the limit is no baseline, same as outside a
+    // repository: Edit, Write and NotebookEdit stay the count, and the file
+    // question is still scored. Marking it unknown here would ask that
+    // question on every turn and then throw the answer away.
     const baseline = await lookAtWorktree($)
-    if (baseline === 'untrusted') {
-      await update($, open, bet => (bet.turnId === e.turnId ? { ...bet, filesUnknown: true as const } : bet))
-    } else if (baseline !== undefined) {
+    if (baseline !== undefined && baseline !== 'untrusted') {
       await update($, open, bet => (bet.turnId === e.turnId ? { ...bet, baseline } : bet))
     }
 
@@ -807,7 +811,7 @@ export const register: Register = (on, options) => {
               </Text>
               <Text dimColor>
                 {' '}
-                {asPercent(said)} · {filesPhrase(bet.saidFiles)} · file count unknown
+                {asPercent(said)} · {filesPhrase(bet.saidFiles)} · file count unknown (500+ paths)
               </Text>
             </Text>
           )

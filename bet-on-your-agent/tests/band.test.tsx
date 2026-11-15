@@ -537,7 +537,7 @@ test('a turn that leaves more than 500 changed paths is not scored as writing no
   await betNone(band)
   expect(await band.find({ text: /0 written so far/ })).toBeDefined()
   await $.tool.call({ tool: 'Bash', command: 'node gen.js' } as never)
-  expect(await band.find({ text: /file count unknown/ })).toBeDefined()
+  expect(await band.find({ text: /file count unknown \(500\+ paths\)/ })).toBeDefined()
   expect(await band.find({ text: /0 written so far/ })).toBeUndefined()
   await band.unmount()
 
@@ -561,6 +561,52 @@ test('a turn that leaves more than 500 changed paths is not scored as writing no
   const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
   expect(await pane.find({ text: /Calibrating/ })).toBeDefined()
   expect(await pane.find({ text: /File count called right/ })).toBeUndefined()
+  await pane.unmount()
+})
+
+test('a tree already past 500 paths still scores the Edit and Write calls', async ($, on) => {
+  engineBottom(on)
+  const paths = Array.from({ length: 600 }, (_, at) => `dist/f${at}.js`)
+  const repo = { status: [...paths.map(path => `?? ${path}`), ''].join('\0'), hashes: '' }
+  trackGit(on, repo)
+
+  await $.turn.start({ text: 'edit two sources', turnId: 'turn-huge-start' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await band.press({ key: 'p80' })
+  await band.press({ key: 'f2-3' })
+  // The bonus question and the daily challenge are not under test here.
+  await band.press({ key: 'decline' })
+  await band.press({ key: 'decline' })
+  await $.tool.call({ tool: 'Edit', file_path: '/work/src/a.ts', old_string: 'x', new_string: 'y' })
+  await $.tool.call({ tool: 'Edit', file_path: '/work/src/b.ts', old_string: 'x', new_string: 'y' })
+  expect(await band.find({ text: /2 written so far/ })).toBeDefined()
+  expect(await band.find({ text: /file count unknown/ })).toBeUndefined()
+  await band.unmount()
+
+  await $.turn.complete({
+    turnId: 'turn-huge-start',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'landed' })
+  await idle.unmount()
+
+  // Called 2–3 and the two edits are the whole count: a right call, not a dropped one.
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /File count called right 1\/1/ })).toBeDefined()
   await pane.unmount()
 })
 
