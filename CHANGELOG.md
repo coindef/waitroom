@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### bet-on-your-agent 0.6.3
+
+- **A turn that could not be saved says so.** When the history cannot be read, one line: `couldn't save that turn`. The status line still goes blank.
+- **A failed read keeps the record on screen.** The pane, the recap and the row keep the last history that loaded, instead of looking like the rank and the score were wiped.
+- **A failed read of the daily challenges leaves them in place.** Today's result is not written over the streak.
+- **A history that is not a list is left as it is.** It is not replaced by the turn that just ended, and that is noted once: `couldn't read the saved history`.
+
 ### bet-on-your-agent 0.6.2
 
 - **A failed read of the history no longer replaces it.** One error reading

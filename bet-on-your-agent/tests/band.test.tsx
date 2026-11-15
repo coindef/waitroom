@@ -569,6 +569,205 @@ test('a failed read of the history leaves the stored turns in place', async ($, 
   expect(said.at(-1)).toBeUndefined()
 })
 
+/** One stored turn, owed or already scored, for the read-failure tests. */
+const storedTurn = (turnId: string, at: number, extra: { ask?: string; landed?: boolean } = {}) => ({
+  turnId,
+  at,
+  durationMs: 1000,
+  files: 0,
+  filesBucket: '0' as const,
+  toolCalls: 0,
+  isAborted: false,
+  saidConfidence: 0.8,
+  ...(extra.ask === undefined ? {} : { ask: extra.ask }),
+  ...(extra.landed === undefined ? {} : { landed: extra.landed }),
+})
+
+/**
+ * A store whose reads can be made to throw, or to hand back something else,
+ * so a test can show what a write does when the history cannot be trusted.
+ */
+const flakyStore = (on: On, entries: Record<string, unknown>) => {
+  mock.clock(on)
+  const data: Record<string, unknown> = { extrasFrom: '1900-01-01', ...entries }
+  let failReads: (key: string) => boolean = () => false
+  const logged: string[] = []
+  const said: (string | undefined)[] = []
+  on('store.get', ($, e) => {
+    if (failReads(e.key)) throw new Error('EIO: store unreadable for a moment')
+
+    return { value: data[e.key] }
+  })
+  on('store.set', ($, e) => {
+    data[e.key] = e.value
+
+    return { value: undefined }
+  })
+  on('ui.status', ($, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+  on('ui.log', ($, e) => {
+    logged.push(e.text)
+
+    return { value: undefined }
+  })
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box />
+  })
+
+  return {
+    data,
+    logged,
+    said,
+    fail(match: (key: string) => boolean = () => true) {
+      failReads = match
+    },
+  }
+}
+
+// Before the other non-array tests: the note is once per process, so a
+// later test would already have spent it.
+test('a history that is not a list is noted once', async ($, on) => {
+  const store = flakyStore(on, { turns: { not: 'a list' } })
+  await $.turn.start({ text: 'a turn', turnId: 'corrupt-note' })
+  await $.turn.complete({
+    turnId: 'corrupt-note',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  await pane.unmount()
+
+  expect(store.data.turns).toEqual({ not: 'a list' })
+  expect(store.logged.filter(line => line === "couldn't read the saved history")).toHaveLength(1)
+})
+
+test('a history that is not a list is not replaced when the turn is recorded', async ($, on) => {
+  const store = flakyStore(on, { turns: { not: 'a list' } })
+  await $.turn.start({ text: 'a turn', turnId: 'corrupt-record' })
+  await $.turn.complete({
+    turnId: 'corrupt-record',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  expect(store.data.turns).toEqual({ not: 'a list' })
+})
+
+test('a history that is not a list is not replaced when a verdict is skipped', async ($, on) => {
+  const owed = storedTurn('corrupt-skip', 0, { ask: 'tidy the imports' })
+  const store = flakyStore(on, { turns: [owed] })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  expect(await idle.find({ text: /tidy the imports/ })).toBeDefined()
+  store.data.turns = { not: 'a list' }
+  await idle.press({ key: 'skip' })
+  await idle.unmount()
+
+  expect(store.data.turns).toEqual({ not: 'a list' })
+})
+
+test('a history that is not a list is not replaced when a verdict is undone', async ($, on) => {
+  const owed = storedTurn('corrupt-undo', 0, { ask: 'undo me' })
+  const store = flakyStore(on, { turns: [owed] })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'landed' })
+  store.data.turns = { not: 'a list' }
+  await idle.press({ key: 'undo' })
+  await idle.unmount()
+
+  expect(store.data.turns).toEqual({ not: 'a list' })
+})
+
+test('a turn that could not be saved says so', async ($, on) => {
+  const old = [storedTurn('old-0', 0, { landed: true })]
+  const store = flakyStore(on, { turns: old })
+  await $.turn.start({ text: 'a turn', turnId: 'unlucky-log' })
+  store.fail()
+  await $.turn.complete({
+    turnId: 'unlucky-log',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  expect(store.data.turns).toEqual(old)
+  expect(store.logged).toContain("couldn't save that turn")
+  // The status line stays blank; the log line is what explains it.
+  expect(store.said.at(-1)).toBeUndefined()
+})
+
+test('a failed read keeps the last history on the pane, the recap and the band', async ($, on) => {
+  const history = [
+    ...Array.from({ length: 8 }, (_, at) => storedTurn(`old-${at}`, at, { landed: true, ask: 'an old turn' })),
+    storedTurn('owed-1', 8, { ask: 'keep the record' }),
+  ]
+  const store = flakyStore(on, { turns: history })
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  store.fail()
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /No turns yet/ })).toBeUndefined()
+  expect(await pane.find({ text: /Brier 0\.040/ })).toBeDefined()
+  await pane.unmount()
+
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  expect(await band.find({ text: /Did it land/ })).toBeDefined()
+  expect(await band.find({ text: /keep the record/ })).toBeDefined()
+  await band.unmount()
+
+  const reply = await $.command.run({ command: 'bet-recap' } as never)
+  expect(reply.text).toMatch(/Rank\s+Oracle/)
+  expect(reply.text).toMatch(/Session Brier\s+0\.040/)
+  expect(reply.text).not.toMatch(/Rank\s+Unranked/)
+})
+
+test('a failed read of the daily challenges leaves the streak in place', async ($, on) => {
+  const streak = [
+    { date: '2026-11-13', dim: 'duration' as const, guess: 'yes' as const, actual: 'yes' as const, correct: true },
+    { date: '2026-11-14', dim: 'files' as const, guess: 'no' as const, actual: 'no' as const, correct: true },
+  ]
+  const store = flakyStore(on, { dailyChallenges: streak, turns: [] })
+  await $.turn.start({ text: 'add a cache', turnId: 'daily-unlucky' })
+  store.fail(key => key === 'dailyChallenges')
+  await $.turn.complete({
+    turnId: 'daily-unlucky',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  expect(store.data.dailyChallenges).toEqual(streak)
+})
+
 /**
  * Someone past their first week: the day the extras surface on their own is
  * already behind the mock clock (which starts at 0), so every question and
