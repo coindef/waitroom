@@ -26,6 +26,13 @@ const NEW_FILE_DIFF = [
 type Repo = {
   /** undefined: not a repository at all. */
   root?: string
+  /** Where `$.session.cwd()` says the session is. Defaults to `root`. */
+  cwd?: string
+  /**
+   * `--show-prefix` for a cwd that is not a string prefix of `root`
+   * (a symlink: logical cwd, physical root).
+   */
+  prefixFor?: Record<string, string>
   diffHead?: string
   untracked?: string[]
   /** This untracked file's own `--no-index` diff, by path. */
@@ -50,9 +57,21 @@ const engineBottom = (on: On, repo: Repo, fs: Record<string, string> = {}, seen:
 
     return { value: undefined }
   })
+  on('session.cwd', () => ({ value: repo.cwd ?? repo.root ?? '' }))
   on('process.run', ($, e) => {
     seen.runs.push([...e.argv])
     const argv = e.argv.join(' ')
+    const asked = typeof e.init?.cwd === 'string' ? e.init.cwd : undefined
+    if (argv.includes('--show-prefix')) {
+      const cwd = asked ?? repo.cwd ?? repo.root ?? ''
+      const mapped = repo.prefixFor?.[cwd]
+      if (mapped !== undefined) return ran(mapped === '' ? '\n' : `${mapped.replace(/\/$/, '')}/\n`)
+      const root = repo.root ?? ''
+      if (root !== '' && cwd === root) return ran('\n')
+      if (root !== '' && cwd.startsWith(`${root}/`)) return ran(`${cwd.slice(root.length + 1)}/\n`)
+
+      return ran('', 128)
+    }
     if (argv.includes('--show-toplevel')) return repo.root === undefined ? ran('', 128) : ran(`${repo.root}\n`)
     if (argv.includes('diff HEAD')) return ran(repo.diffHead ?? '')
     if (argv.includes('ls-files')) return ran((repo.untracked ?? []).join('\n'))
@@ -131,9 +150,9 @@ test('a turn with changes offers a kit, and accepting all writes every drafted a
   // The receipt is in the transcript, one line per draft with the command to
   // use it; the row itself is free again at once.
   expect(seen.logged).toEqual([
-    'Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F .waitroom/ship/COMMIT_EDITMSG.txt',
-    'Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file .waitroom/ship/PR_BODY.md',
-    'Draft written: .waitroom/ship/CHANGELOG_ENTRY.md — paste .waitroom/ship/CHANGELOG_ENTRY.md into CHANGELOG.md',
+    "Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F '.waitroom/ship/COMMIT_EDITMSG.txt'",
+    "Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file '.waitroom/ship/PR_BODY.md'",
+    "Draft written: .waitroom/ship/CHANGELOG_ENTRY.md — paste '.waitroom/ship/CHANGELOG_ENTRY.md' into CHANGELOG.md",
   ])
   const written = await mountBand($)
   expect(await written.find({ text: /ship|Drafts/ })).toBeUndefined()
@@ -233,6 +252,109 @@ test(
     await offering.unmount()
 
     expect(fs[`${ROOT}/ship-drafts/COMMIT_EDITMSG.txt`]).toBeDefined()
+  },
+)
+
+test('a session in a subfolder prints the commit command from that folder', async ($, on) => {
+  const seen: Seen = { runs: [], logged: [] }
+  const repo: Repo = { root: ROOT, cwd: `${ROOT}/packages/app`, diffHead: NEW_FILE_DIFF, untracked: [] }
+  const fs = engineBottom(on, repo, {}, seen)
+  await landTurn($, 'turn-sub')
+
+  const offering = await mountBand($)
+  await offering.press({ key: 'all' })
+  await offering.unmount()
+
+  expect(seen.logged).toEqual([
+    "Draft written: ../../.waitroom/ship/COMMIT_EDITMSG.txt — git commit -F '../../.waitroom/ship/COMMIT_EDITMSG.txt'",
+    "Draft written: ../../.waitroom/ship/PR_BODY.md — gh pr create --body-file '../../.waitroom/ship/PR_BODY.md'",
+  ])
+  // The file itself still lands under the repository root, not the session folder.
+  expect(fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]).toBeDefined()
+  expect(fs[`${ROOT}/packages/app/.waitroom/ship/COMMIT_EDITMSG.txt`]).toBeUndefined()
+})
+
+test(
+  'a ship directory with a space is quoted in the commit command',
+  { options: { shipDir: 'my drafts' } },
+  async ($, on) => {
+    const seen: Seen = { runs: [], logged: [] }
+    const repo: Repo = { root: ROOT, cwd: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }
+    const fs = engineBottom(on, repo, {}, seen)
+    await landTurn($, 'turn-space')
+
+    const offering = await mountBand($)
+    await offering.press({ key: 'all' })
+    await offering.unmount()
+
+    expect(seen.logged).toEqual([
+      "Draft written: my drafts/COMMIT_EDITMSG.txt — git commit -F 'my drafts/COMMIT_EDITMSG.txt'",
+      "Draft written: my drafts/PR_BODY.md — gh pr create --body-file 'my drafts/PR_BODY.md'",
+    ])
+    expect(fs[`${ROOT}/my drafts/COMMIT_EDITMSG.txt`]).toBeDefined()
+  },
+)
+
+test('a worktree switch after the turn prints the path from the new folder', async ($, on) => {
+  const seen: Seen = { runs: [], logged: [] }
+  const repo: Repo = { root: ROOT, cwd: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }
+  const fs = engineBottom(on, repo, {}, seen)
+  await landTurn($, 'turn-wt')
+  // The offer was drafted in /repo. Accept happens after /cd into the worktree.
+  repo.root = '/wt/feature'
+  repo.cwd = '/wt/feature'
+
+  const offering = await mountBand($)
+  await offering.press({ key: 'all' })
+  await offering.unmount()
+
+  expect(seen.logged).toEqual([
+    "Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F '.waitroom/ship/COMMIT_EDITMSG.txt'",
+    "Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file '.waitroom/ship/PR_BODY.md'",
+  ])
+  expect(fs['/wt/feature/.waitroom/ship/COMMIT_EDITMSG.txt']).toBeDefined()
+  expect(fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]).toBeUndefined()
+})
+
+test('a session entered through a symlink prints a path git can open', async ($, on) => {
+  const seen: Seen = { runs: [], logged: [] }
+  const repo: Repo = {
+    root: '/private/repo',
+    cwd: '/tmp/repo/sub',
+    prefixFor: { '/tmp/repo/sub': 'sub/' },
+    diffHead: NEW_FILE_DIFF,
+    untracked: [],
+  }
+  const fs = engineBottom(on, repo, {}, seen)
+  await landTurn($, 'turn-link')
+
+  const offering = await mountBand($)
+  await offering.press({ key: 'all' })
+  await offering.unmount()
+
+  expect(seen.logged[0]).toBe(
+    "Draft written: ../.waitroom/ship/COMMIT_EDITMSG.txt — git commit -F '../.waitroom/ship/COMMIT_EDITMSG.txt'",
+  )
+  expect(fs['/private/repo/.waitroom/ship/COMMIT_EDITMSG.txt']).toBeDefined()
+})
+
+test(
+  'an absolute ship directory is printed as the path that was written',
+  { options: { shipDir: '/tmp/drafts' } },
+  async ($, on) => {
+    const seen: Seen = { runs: [], logged: [] }
+    const fs = engineBottom(on, { root: ROOT, cwd: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }, {}, seen)
+    await landTurn($, 'turn-abs')
+
+    const offering = await mountBand($)
+    await offering.press({ key: 'all' })
+    await offering.unmount()
+
+    expect(fs[`${ROOT}/tmp/drafts/COMMIT_EDITMSG.txt`]).toBeDefined()
+    expect(fs['/tmp/drafts/COMMIT_EDITMSG.txt']).toBeUndefined()
+    expect(seen.logged[0]).toBe(
+      "Draft written: tmp/drafts/COMMIT_EDITMSG.txt — git commit -F 'tmp/drafts/COMMIT_EDITMSG.txt'",
+    )
   },
 )
 
