@@ -4,8 +4,8 @@
 
 ### wait-notify 0.1.1
 
-- **A tool already running, other than the one you're answering, no longer cancels the reminder.** A parallel Read, or a subagent's tool, was treated as your answer. The reminder was dropped while Claude was still blocked, and a Read ending during the check could skip the notification itself. The reminder now stays until every main-loop tool that was already running has finished.
-- **An ended session no longer comes back as a live peer.** A prompt sent as the session ended could write that session's record again after it was removed. Another session would then treat it as live for a day. That write is skipped once the session id has changed.
+- **The reminder waits for your answer.** A quick Read or a subagent's tool finishing alongside the one you're answering no longer cancels it.
+- **A session you ended stays ended.** A prompt sent right as you exit or `/clear` no longer makes other sessions think it's still open.
 
 ### bet-on-your-agent 0.6.4
 

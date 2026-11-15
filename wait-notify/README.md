@@ -108,7 +108,8 @@ it runs.
 The recheck can't see an answer from your phone or the web, because that
 leaves no key press on the Mac. It also misses an answer you give before
 moving to another app, because the terminal is no longer in front. In both
-cases the reminder can still come.
+cases the reminder can still come. If you answer while another long tool
+call is still running and then switch apps, one reminder can still come.
 
 ## Config
 
