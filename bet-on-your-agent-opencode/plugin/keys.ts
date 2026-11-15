@@ -95,7 +95,8 @@ export const applyDigit = (digit: number, bet: OpenBet, owedTurnId: string | und
 
     return true
   }
-  if (digit === 3) {
+  // Same key as the Claude Code mod: 0 skips, so a 3 inside the next prompt is just a 3.
+  if (digit === 0) {
     act.waveVerdict(owedTurnId)
 
     return true
@@ -104,10 +105,22 @@ export const applyDigit = (digit: number, bet: OpenBet, owedTurnId: string | und
   return false
 }
 
+/**
+ * The prompt text before this key is inserted.
+ *
+ * OpenTUI's keymap listener is prepended, so it runs before the focused editor
+ * writes the character. An empty string is an empty prompt. Anything else,
+ * including a space, means the person is typing a sentence and the digit
+ * belongs in it.
+ */
+export const promptIsEmpty = (text: string): boolean => text === ''
+
 export type BetKeyActions = {
   sessionID: () => string | undefined
   bet: (sessionID: string) => OpenBet
   owedTurnId: () => string | undefined
+  /** Prompt text before this key. A missing editor is not an empty prompt. */
+  promptText: () => string
   placeConfidence: (sessionID: string, said: number) => void
   placeFiles: (sessionID: string, said: FileBucket) => void
   decline: (sessionID: string) => void
@@ -123,8 +136,8 @@ export type BetKeyActions = {
  * `enabled` is the keymap addon's layer predicate (`registerEnabledFields`).
  * `createDefaultOpenTuiKeymap` installs it; calling it here is a no-op
  * refcount bump when the host already did. The command also returns false
- * when that digit is not an answer, so a 5 on the files row still reaches
- * the prompt while the row is up.
+ * when that digit is not an answer, or when the prompt already holds text,
+ * so `fix issue 312` reaches the prompt while a verdict is on screen.
  */
 export const registerBetKeys = <Target extends object, Event extends KeymapEvent>(
   keymap: Keymap<Target, Event>,
@@ -135,6 +148,7 @@ export const registerBetKeys = <Target extends object, Event extends KeymapEvent
     enabled: () => {
       const sessionID = actions.sessionID()
       if (!sessionID) return false
+      if (!promptIsEmpty(actions.promptText())) return false
 
       return questionShowing(actions.bet(sessionID), actions.owedTurnId() !== undefined)
     },
@@ -144,6 +158,7 @@ export const registerBetKeys = <Target extends object, Event extends KeymapEvent
       run: () => {
         const sessionID = actions.sessionID()
         if (!sessionID) return false
+        if (!promptIsEmpty(actions.promptText())) return false
 
         return applyDigit(digit, actions.bet(sessionID), actions.owedTurnId(), {
           placeConfidence: said => actions.placeConfidence(sessionID, said),

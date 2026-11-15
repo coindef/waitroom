@@ -5,6 +5,10 @@ An unpublished prototype of [`bet-on-your-agent`](../bet-on-your-agent) for
 npm registry, but it can be, and has been, loaded into a real local OpenCode
 TUI session for verification — see "Status" below.
 
+## Try it
+
+Open the Plugins dialog (command palette → Plugins → Install plugin) and enter this folder's path. While a question is on screen, type 1–5 into an empty prompt and it answers. A digit inside a sentence stays in the prompt.
+
 ## Can a plugin capture a keypress mid-turn?
 
 This is the question the whole prototype turns on: can an OpenCode plugin
@@ -120,10 +124,9 @@ surface that actually exists.
 
 - The confidence band (1: 50% … 5: 95%, 0: skip) and the file-count band (1:
   0, 2: 1, 3: 2-3, 4: 4+), as real digit hotkeys through
-  `api.keymap.registerLayer`, rendered in a `session_prompt_right` slot. The
-  layer is on only while a question is showing, and a digit that is not an
-  answer reports that it was not handled, so 0–5 reach OpenCode's prompt
-  whenever the band is quiet.
+  `api.keymap.registerLayer`, rendered in a `session_prompt_right` slot. A
+  digit answers only when that prompt is empty. A digit inside a sentence,
+  and any digit while the band is quiet, reaches OpenCode.
 - The rotating bonus question — duration, files (again, as a three-way
   bucket), or tool calls, one dimension per turn, same buckets and wording as
   the Claude Code mod. Tool calls are counted the same unfiltered way the mod's
@@ -260,7 +263,7 @@ that is now fixed.
   `--conditions=browser` matters for the band test: Node's default condition
   loads `solid-js`'s server build, whose `createEffect` is empty, so a
   repaint assertion would pass nothing. OpenCode's TUI resolves the client
-  build, the same one that flag selects. 23 tests, all passing: the track
+  build, the same one that flag selects. 24 tests, all passing: the track
   cases above (busy detection, which tools name a `filePath`, flattening a
   user message, the first finished sight of a tool part — `completed` or
   `error` — and the `TURNS_KV_KEY` namespacing), plus regressions for digits
@@ -276,7 +279,10 @@ that is now fixed.
   needed-fixing verdict, and a skip. With that question gone, 1, 2, and 3 then appeared in the
   prompt. A confidence question during a busy turn was not opened, because
   that needs a model. The plugin's own `node_modules` was moved aside for
-  this run so OpenCode resolved one copy of `solid-js`.
+  this run so OpenCode resolved one copy of `solid-js`. That pass answered
+  a digit whenever the question was up. A digit now answers only when the
+  prompt is empty, and the verdict skip key is 0, covered by the harness
+  rather than a second live session.
 - The bonus-bet dimensions, buckets, and rank thresholds `tui.tsx` wires in
   are `bet-on-your-agent/hooks/bet.ts`'s own exports, already covered by that
   package's own test suite — nothing here reimplements them.

@@ -255,6 +255,8 @@ type KeyActions = {
   owed?: string
   sessionID?: string
   calls: string[]
+  /** Text already in the prompt before the next key. Absent means empty. */
+  prompt?: string
 }
 
 const harnessFor = (state: KeyActions) => {
@@ -266,6 +268,7 @@ const harnessFor = (state: KeyActions) => {
     sessionID: () => state.sessionID,
     bet: () => state.bet,
     owedTurnId: () => state.owed,
+    promptText: () => state.prompt ?? '',
     placeConfidence: (_id, said) => {
       state.calls.push(`confidence:${said}`)
       state.bet = { ...state.bet, saidConfidence: said }
@@ -340,8 +343,44 @@ test('a digit that answers the question on screen is consumed, and one that does
     assert.deepEqual(state.calls.at(-1), 'verdict:owed-1:true')
     const unused = harness.host.press('4')
     assert.equal(unused.defaultPrevented, false)
+    const notSkip = harness.host.press('3')
+    assert.equal(notSkip.defaultPrevented, false)
+    const skip = harness.host.press('0')
+    assert.equal(skip.defaultPrevented, true)
+    assert.deepEqual(state.calls.at(-1), 'wave:owed-1')
   } finally {
     harness.cleanup()
+  }
+})
+
+test('a sentence that contains digits reaches the prompt while each question is up', () => {
+  const questions: { bet: OpenBet; owed?: string; text: string }[] = [
+    { bet: openBet(), text: 'also bump node to 22 and retry 5 times' },
+    { bet: openBet({ saidConfidence: 0.8 }), text: 'touch 1 file and then 0 more' },
+    { bet: openBet({ saidConfidence: 0.8, saidFiles: '1', bonusDim: 'toolCalls' }), text: 'call tool 3 then skip with 0' },
+    { bet: noBet(), owed: 'owed-1', text: 'fix issue 312 then add 3 tests' },
+  ]
+
+  for (const question of questions) {
+    const state: KeyActions = {
+      bet: question.bet,
+      owed: question.owed,
+      sessionID: 's1',
+      calls: [],
+      prompt: '',
+    }
+    const harness = harnessFor(state)
+    try {
+      for (const ch of question.text) {
+        const event = harness.host.press(ch === ' ' ? 'space' : ch)
+        assert.equal(event.defaultPrevented, false, `${JSON.stringify(ch)} in ${question.text}`)
+        state.prompt += ch
+      }
+      assert.equal(state.prompt, question.text)
+      assert.deepEqual(state.calls, [])
+    } finally {
+      harness.cleanup()
+    }
   }
 })
 

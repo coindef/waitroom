@@ -305,6 +305,9 @@ export const tui: TuiPlugin = async api => {
       sessionID: activeSessionId,
       bet: openFor,
       owedTurnId: () => owedVerdict(log.load())?.turnId,
+      // The keymap runs before the editor inserts this key. No focused editor
+      // means the key is not landing in an empty prompt, so it is not an answer.
+      promptText: () => api.renderer.currentFocusedEditor?.editBuffer.getText() ?? ' ',
       placeConfidence,
       placeFiles,
       decline,
@@ -344,7 +347,7 @@ export const tui: TuiPlugin = async api => {
 
           if (bet.saidConfidence === undefined) {
             return (
-              <box flexDirection="row" gap={1} maxWidth="50%">
+              <box flexDirection="row" gap={2} maxWidth="50%">
                 <text wrapMode="none">
                   Will{about} land first try?
                 </text>
@@ -360,7 +363,7 @@ export const tui: TuiPlugin = async api => {
 
           if (bet.saidFiles === undefined) {
             return (
-              <box flexDirection="row" gap={1} maxWidth="50%">
+              <box flexDirection="row" gap={2} maxWidth="50%">
                 <text wrapMode="none">
                   {asPercent(bet.saidConfidence)} · how many files?
                 </text>
@@ -369,6 +372,7 @@ export const tui: TuiPlugin = async api => {
                     {at + 1}: {bucket}
                   </text>
                 ))}
+                <text wrapMode="none">0: skip</text>
               </box>
             )
           }
@@ -382,7 +386,7 @@ export const tui: TuiPlugin = async api => {
             const buckets = BONUS_BUCKETS[dim]
 
             return (
-              <box flexDirection="row" gap={1} maxWidth="50%">
+              <box flexDirection="row" gap={2} maxWidth="50%">
                 <text wrapMode="none">
                   Bonus: {BONUS_QUESTIONS[dim]}
                 </text>
@@ -423,13 +427,14 @@ export const tui: TuiPlugin = async api => {
         const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, room)
 
         return (
-          <box flexDirection="row" gap={1} maxWidth="50%">
+          <box flexDirection="row" gap={2} maxWidth="50%">
             <text wrapMode="none">
-              {quoted === '' ? 'That turn' : `"${quoted}"`} — you said {asPercent(owed.saidConfidence ?? 0)}.
+              you said {asPercent(owed.saidConfidence ?? 0)}
+              {quoted === '' ? '' : ` · "${quoted}"`}
             </text>
             <text wrapMode="none">1: landed</text>
             <text wrapMode="none">2: needed fixing</text>
-            <text wrapMode="none">3: skip</text>
+            <text wrapMode="none">0: skip</text>
           </box>
         )
       },
