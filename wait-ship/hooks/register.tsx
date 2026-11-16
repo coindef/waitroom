@@ -5,19 +5,22 @@ import type { ArtifactKind, ShipMode, ShipOffer, ShipResult } from '../types'
 import {
   commitFileText,
   DRAFTS_GITIGNORE,
+  draftAbsolute,
   drawnBy,
-  fingerprintOf,
+  filesSince,
   formatSize,
   isOwnFolder,
   isUnder,
   kitOf,
   parseDiffFiles,
-  draftAbsolute,
   parseSubjects,
   pathFromCwd,
   receiptLines,
+  seenFrom,
+  treeSeenOf,
   writtenRelative,
   yieldsBand,
+  type TreeSeen,
 } from './ship'
 
 const PANE_TAG = ' ship '
@@ -28,7 +31,18 @@ const RECENT_COMMIT_COUNT = 20
 const UNTRACKED_LIMIT = 100
 
 const offer = atom({ plugin: 'wait-ship', key: 'offer' } as const, null as ShipOffer | null)
-const lastSeen = atom({ plugin: 'wait-ship', key: 'lastSeen' } as const, null as string | null)
+const lastSeen = atom({ plugin: 'wait-ship', key: 'lastSeen' } as const, null as TreeSeen | string | null)
+
+/** How long a turn-start snapshot may run before it is unknown and the turn starts. */
+const SNAPSHOT_CAP_MS = 4000
+
+/**
+ * Timers are not in this mod's `es2023` lib. The snapshot cap only needs a
+ * handle it can clear. These stay local so the DOM lib is not pulled in.
+ */
+type TimeoutHandle = number
+declare function setTimeout(callback: () => void, delayMs: number): TimeoutHandle
+declare function clearTimeout(handle: TimeoutHandle | undefined): void
 
 type Config = { enabled: boolean; shipDir: string; includeChangelog: boolean }
 
@@ -72,13 +86,18 @@ const placeOf = async (
  * Every file changed against HEAD right now: staged and unstaged tracked
  * changes, plus untracked files, which plain `git diff` says nothing about.
  * This mod's own drafts are its output, not a change to ship, so the drafts
- * folder is left out. `text` is the diff as read, for `fingerprintOf`.
+ * folder is left out. `text` is the diff as read, for `treeSeenOf`.
  */
-const scanTree = async ($: EngineInterface, root: string, config: Config) => {
+const scanTree = async ($: EngineInterface, root: string, config: Config, stopWhenGitFails = false) => {
+  const failed = { files: [], text: '', ok: false }
   const tracked = await runGit($, ['diff', 'HEAD', '--no-color', '--no-prefix'], root)
+  // A baseline that git did not answer is not stored. Stopping here keeps one
+  // unanswered read from turning into a hundred more before the turn starts.
+  if (stopWhenGitFails && tracked === undefined) return failed
   const chunks: string[] = tracked?.exitCode === 0 ? [tracked.stdout] : []
 
   const others = await runGit($, ['ls-files', '--others', '--exclude-standard'], root)
+  if (stopWhenGitFails && others === undefined) return failed
   const untracked = (others?.stdout ?? '')
     .split('\n')
     .map(line => line.trim())
@@ -87,11 +106,22 @@ const scanTree = async ($: EngineInterface, root: string, config: Config) => {
   for (const path of untracked) {
     // --no-index exits 1 when the two sides differ, which is the point here.
     const one = await runGit($, ['diff', '--no-color', '--no-prefix', '--no-index', '--', '/dev/null', path], root)
+    if (stopWhenGitFails && one === undefined) return failed
     if (one && one.exitCode <= 1) chunks.push(one.stdout)
   }
-  const text = chunks.join('\n')
+  // Each diff already ends in a newline. A second one between chunks sticks
+  // to the previous file, so that file's fingerprint changes when a later
+  // file is appended even though its own diff did not.
+  const text = chunks
+    .filter(chunk => chunk !== '')
+    .map(chunk => (chunk.endsWith('\n') ? chunk : `${chunk}\n`))
+    .join('')
 
-  return { files: parseDiffFiles(text).filter(one => !isUnder(one.path, config.shipDir)), text }
+  return {
+    files: parseDiffFiles(text).filter(one => !isUnder(one.path, config.shipDir)),
+    text,
+    ok: tracked !== undefined && others !== undefined,
+  }
 }
 
 const recentSubjects = async ($: EngineInterface, root: string) => {
@@ -110,17 +140,54 @@ const loadChangelog = async ($: EngineInterface, root: string, config: Config): 
 }
 
 /**
- * Reads the tree once, keeps its fingerprint as the one the next turn is
- * measured against, and says whether it moved since the last read. Unknown
- * (no earlier read) counts as moved, so a missed baseline never hides a kit.
+ * Reads the tree once, keeps it as the one the next comparison is measured
+ * against, and says whether it moved since the last read. Unknown (no
+ * earlier read) counts as moved, so a missed baseline never hides a kit.
+ * The files are only those whose own diff changed since that read.
  */
 const readTree = async ($: EngineInterface, root: string, config: Config) => {
   const scanned = await scanTree($, root, config)
-  const now = fingerprintOf(scanned.text)
-  const before = await read($, lastSeen)
-  await update($, lastSeen, () => now)
+  const seen = treeSeenOf(scanned.text)
+  const before = seenFrom(await read($, lastSeen))
+  await update($, lastSeen, () => seen)
 
-  return { ...scanned, hasMoved: before !== now }
+  return { files: filesSince(before, seen, scanned.files), hasMoved: before === null || before.tree !== seen.tree }
+}
+
+/**
+ * The tree at the start of a turn, taken before the turn writes. A git
+ * failure leaves the previous read alone — session start, or the previous
+ * turn's end — and does not throw. One unanswered command stops the read,
+ * so a failed git cannot walk the rest of the tree before the turn starts.
+ * The whole read gives up at `capMs` the same way: the previous read stays,
+ * which is older than the turn, so nothing the turn writes is hidden, and a
+ * turn that writes nothing still gets no kit. The turn starts either way.
+ */
+const takeBaseline = async ($: EngineInterface, config: Config, capMs: number) => {
+  let timer: TimeoutHandle | undefined
+  const cap = new Promise<'cap'>(resolve => {
+    timer = setTimeout(() => resolve('cap'), capMs)
+  })
+  const scan = (async (): Promise<TreeSeen | 'skip'> => {
+    try {
+      const root = await repoRoot($)
+      if (root === undefined) return 'skip'
+      const scanned = await scanTree($, root, config, true)
+      if (!scanned.ok) return 'skip'
+
+      return treeSeenOf(scanned.text)
+    } catch {
+      return 'skip'
+    }
+  })()
+  try {
+    const result = await Promise.race([scan, cap])
+    if (timer !== undefined) clearTimeout(timer)
+    if (result === 'cap' || result === 'skip') return
+    await update($, lastSeen, () => result)
+  } catch {
+    if (timer !== undefined) clearTimeout(timer)
+  }
 }
 
 /**
@@ -209,6 +276,8 @@ export const register: Register = (on, options) => {
       typeof options.shipDir === 'string' && options.shipDir.trim() !== '' ? options.shipDir.trim() : DEFAULT_SHIP_DIR,
     includeChangelog: options.includeChangelog !== false,
   }
+  const capOption = (options as { snapshotCapMs?: unknown }).snapshotCapMs
+  const snapshotCapMs = typeof capOption === 'number' && capOption > 0 ? capOption : SNAPSHOT_CAP_MS
 
   // The tree as the session found it: what was already changed then is not a
   // turn's to ship, so the first turn is measured against it like any other.
@@ -226,6 +295,10 @@ export const register: Register = (on, options) => {
     // A new turn's own kit, once it lands, takes over the band; an ignored
     // kit from the last one has nothing left to say.
     await update($, offer, () => null)
+    // Before next(e), so the turn has not written yet. Anything the person
+    // edited between turns is this baseline, not the turn's. A failed read
+    // is caught and not stored, and the turn starts either way.
+    if (config.enabled) await takeBaseline($, config, snapshotCapMs).catch(() => undefined)
 
     return next(e)
   }).catch(($, e, next) => next(e))

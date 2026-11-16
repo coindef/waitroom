@@ -39,11 +39,22 @@ declare module 'claude-code' {
       /** The pending kit for the turn that just ended, or null once answered or superseded. */
       offer: ShipOffer | null
       /**
-       * The fingerprint of the tree's changes as the last scan read them (at
-       * session start, then at each turn's end), or null before the first: a
-       * turn that leaves it as it was changed nothing and gets no kit.
+       * The tree as the last scan read it — at session start, at the start
+       * of a turn, and at each turn's end — or null before the first. A
+       * turn-start read that fails or overruns its cap leaves the previous
+       * one in place. `tree` is the whole diff;
+       * `files` is each file's own chunk, so a kit names only the files that
+       * moved during the turn. A string is the one fingerprint an older
+       * build stored for the whole diff. A turn that leaves `tree` as it was
+       * changed nothing and gets no kit. Unknown counts as moved.
        */
-      lastSeen: string | null
+      lastSeen:
+        | {
+            tree: string
+            files: Record<string, string>
+          }
+        | string
+        | null
     }
   }
 }
