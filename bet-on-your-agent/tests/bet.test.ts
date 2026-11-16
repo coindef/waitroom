@@ -1163,6 +1163,9 @@ test('a store file is named the way the engine names it', () => {
   expect(storeFileName('a'.repeat(65))).toBe(`${'a'.repeat(64)}-635361c48bb9.json`)
   expect(storeFileName('con')).toBe('con-1143da2bc54c.json')
   expect(storeFileName('CON')).toBe('CON-a3dbc4b644a9.json')
+  // Non-ASCII hashes as UTF-8, the way the engine does.
+  expect(storeFileName('bet-on-your-agent@café')).toBe('bet-on-your-agent_caf_-b1aba5858a68.json')
+  expect(storeFileName('bet-on-your-agent@市场')).toBe('bet-on-your-agent___-d59459d1affa.json')
 })
 
 test('a cache install is that marketplace, and a loose directory proves no id', () => {

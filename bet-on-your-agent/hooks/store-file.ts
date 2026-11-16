@@ -382,8 +382,8 @@ async function backupPath($: EngineInterface, path: string): Promise<string> {
  * may only import `claude-code`, so this cannot be `node:crypto`.
  */
 const sha256 = (message: string): string => {
-  const bits = new Uint8Array(message.length)
-  for (let i = 0; i < message.length; i++) bits[i] = message.charCodeAt(i) & 0xff
+  // UTF-8, as the engine hashes the id: a non-ASCII marketplace name must land on the same file.
+  const bits = new TextEncoder().encode(message)
   const withPad = Math.ceil((bits.length + 9) / 64) * 64
   const padded = new Uint8Array(withPad)
   padded.set(bits)
