@@ -20,7 +20,8 @@ This install stays on its own. The four rooms are `/plugin install waitroom@wait
 Your globs are authoritative. Two places, the first one found wins:
 
 1. **`.claude/wait-scope`** at the project root — one glob per line, blank
-   lines and `#` comments ignored:
+   lines and `#` comments ignored. A comma stays on the line, so
+   `src/**/*.{ts,tsx}` is one glob:
 
    ```
    # this task
@@ -32,9 +33,14 @@ Your globs are authoritative. Two places, the first one found wins:
 2. **Files in scope** under `/plugin` → wait-scope — comma-separated
    (`src/auth/**, docs`).
 
-Globs are relative to the project root. `*` stays inside one folder, `**`
-crosses folders, `?` is one character, and a bare folder name covers
-everything inside it. An edit outside the project root is always outside.
+Globs are relative to the project root. `*` is the top level only, `src/*`
+is the files directly in that folder, `**` crosses folders, `?` is one
+character, and a bare folder name covers everything inside it. An edit
+outside the project root is always outside.
+
+If `.claude/wait-scope` is there but can't be read, the turn keeps the last
+scope that file gave, or skips the check, and says so once. It does not
+guess, and it does not use the setting in place of that file.
 
 ## What it shows
 
@@ -48,10 +54,10 @@ everything inside it. An edit outside the project root is always outside.
 ### No scope set
 
 With no file and no setting, wait-scope guesses from the paths your prompt
-names (`fix src/auth/login.ts`). Files the turn edited outside those are
-listed at turn end marked `(guess)`. A guess never reaches the status line and
-is never counted as outside scope. A prompt that names no path, with no scope
-set, shows nothing at all.
+names (`fix src/auth/login.ts`, or a folder such as `fix src/auth`). Files
+the turn edited outside those are listed at turn end marked `(guess)`. A
+guess never reaches the status line and is never counted as outside scope.
+A prompt that names no path, with no scope set, shows nothing at all.
 
 ## Limits
 
@@ -74,7 +80,7 @@ on — the same switch as *Warn when a turn edits outside the scope* under
 
 ```sh
 claude plugin validate ./wait-scope
-claude plugin test     ./wait-scope   # 47 tests
+claude plugin test     ./wait-scope   # 59 tests
 ```
 
 ## The first minute

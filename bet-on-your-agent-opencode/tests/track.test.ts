@@ -3,6 +3,9 @@
  * runner rather than `claude plugin test`. Run with:
  *
  *   node --experimental-strip-types --test bet-on-your-agent-opencode/tests/track.test.ts
+ *
+ * The full set, including the band repaint, needs `--conditions=browser`.
+ * See tests/findings.test.ts.
  */
 
 import assert from 'node:assert/strict'
@@ -40,7 +43,7 @@ test('a tool that does not touch a single file names none', () => {
   assert.equal(path, undefined)
 })
 
-test('apply_patch is left unparsed on purpose, not read as a bare path', () => {
+test('apply_patch has no filePath, so filePathOf does not invent one', () => {
   const path = filePathOf({ id: '5', tool: 'apply_patch', state: { status: 'completed', input: { patchText: '...' } } })
   assert.equal(path, undefined)
 })
@@ -59,6 +62,13 @@ test('a tool part still running or pending does not count yet', () => {
   const counted = new Set<string>()
   assert.equal(isNewCompletion({ id: 'a', tool: 'bash', state: { status: 'running' } }, counted), false)
   assert.equal(isNewCompletion({ id: 'a', tool: 'bash', state: { status: 'pending' } }, counted), false)
+})
+
+test('a tool part that errors counts once, the same as one that completes', () => {
+  const counted = new Set<string>()
+  assert.equal(isNewCompletion({ id: 'a', tool: 'bash', state: { status: 'error' } }, counted), true)
+  counted.add('a')
+  assert.equal(isNewCompletion({ id: 'a', tool: 'bash', state: { status: 'error' } }, counted), false)
 })
 
 test('a user message is flattened from its text parts, in order', () => {

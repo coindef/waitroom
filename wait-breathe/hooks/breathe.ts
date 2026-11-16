@@ -32,6 +32,33 @@ export const canPrompt = (lastPromptAt: number | null, now: number): boolean =>
 /** One prompt's outcome, kept only long enough to count it in a session's summary. */
 export type PromptEvent = { at: number; taken: boolean }
 
+/** The one record in `$.store`: rotation, cooldown, and the history the summary counts. */
+export type BreatheStore = { rotation: number; lastPromptAt: number | null; history: PromptEvent[] }
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+
+const isPromptEvent = (value: unknown): value is PromptEvent => {
+  if (typeof value !== 'object' || value === null) return false
+  const event = value as { at?: unknown; taken?: unknown }
+
+  return isFiniteNumber(event.at) && typeof event.taken === 'boolean'
+}
+
+/**
+ * A stored record this mod wrote. Undefined when a value is present but is
+ * not that record: not an object, a missing field, or a history that is not
+ * a list of prompt events. A failed read is not this function's job.
+ */
+export const storeFrom = (raw: unknown): BreatheStore | undefined => {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
+  const row = raw as { rotation?: unknown; lastPromptAt?: unknown; history?: unknown }
+  if (!isFiniteNumber(row.rotation)) return undefined
+  if (!(row.lastPromptAt === null || isFiniteNumber(row.lastPromptAt))) return undefined
+  if (!Array.isArray(row.history) || !row.history.every(isPromptEvent)) return undefined
+
+  return row as BreatheStore
+}
+
 /** Appends `event`, capped newest-last so a long-lived store does not grow forever. */
 export const keepHistory = (
   history: readonly PromptEvent[],

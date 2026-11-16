@@ -26,9 +26,9 @@ Two moments, and nothing else:
   use). If it ran at least `thresholdSeconds` — 30 by default — a notification
   says `You were away 45s`. That time is how long the turn ran. Under a
   minute it stays in seconds (`45s`). An exact minute is `1m`. A minute and
-  a half is `1m 30s`. From an hour it names the hours (`2h`, `1h 5m`). A
-  shorter turn sends nothing. A turn you interrupted, and a subagent's turn,
-  send nothing.
+  a half is `1m 30s`. From an hour the seconds stay off (`1h`, `1h 5m`,
+  `2h 1m`). An hour and 40 seconds, with no minutes, is `1h`. A shorter turn
+  sends nothing. A turn you interrupted, and a subagent's turn, send nothing.
 - **A permission confirm is waiting** (Claude Code's Notification hook, type
   `permission_prompt`). That type is sent once the confirm has been waiting,
   and it is not sent if you answer first. It notifies even when the turn is
@@ -47,6 +47,10 @@ flipped by that command.
 wait-ping: on · a local notification once a turn runs 30s, or when a permission confirm is waiting · sound off · /wait-ping again turns it off
 wait-ping: off · /wait-ping turns it on
 ```
+
+A threshold that cannot be used stays at 30, and turning notifications on
+names it: `(0.5 isn't usable, using 30s)`. The first number is the value that
+was set. The second is the fallback actually used.
 
 (Claude Code puts the plugin's name in front of every reply, so the reply
 itself starts at the state.)
@@ -103,7 +107,7 @@ The notification itself still does not ask for a sound unless sound is on.
 | --- | --- | --- |
 | `enabled` | `true` | Send the notifications. Off means nothing is sent. `/wait-ping` flips it. |
 | `sound` | `false` | Play a sound with the notification. Off leaves it silent. |
-| `thresholdSeconds` | `30` | How long a turn runs before a stop notification. At least 1 second; anything smaller stays at 30. A permission confirm does not wait for this. |
+| `thresholdSeconds` | `30` | How long a turn runs before a stop notification. At least 1 second; anything smaller stays at 30, and `/wait-ping` names the value it could not use. A permission confirm does not wait for this. |
 
 ## What it does not do
 

@@ -1,6 +1,6 @@
 {
   "name": "wait-ping",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Sends a local OS notification when a long turn ends or a permission confirm is waiting. Sound stays off until you turn it on.",
   "author": {
     "name": "coindef"
