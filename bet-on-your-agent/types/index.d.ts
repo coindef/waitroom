@@ -45,11 +45,31 @@ export type TurnRecord = {
   /** When the turn ended, epoch milliseconds. */
   at: number
   durationMs: number
-  /** Distinct files the turn wrote. */
+  /**
+   * Distinct files the turn wrote.
+   *
+   * Not a count when `filesUnknown` is set: the working tree was too large to
+   * snapshot, and `files` / `filesBucket` are then only placeholders.
+   */
   files: number
   filesBucket: FileBucket
+  /**
+   * Set when the working tree was too large to snapshot.
+   *
+   * The file question is kept on the record and left out of the score, rather
+   * than graded against a count of zero.
+   */
+  filesUnknown?: true
   /** Tool calls the turn made, of any kind, counted whether denied or not. */
   toolCalls: number
+  /**
+   * The session that recorded this turn.
+   *
+   * `/bet-recap`'s "this session" keeps the records that carry the id of the
+   * session asking. Absent on a turn recorded before sessions were stamped,
+   * which then stays out of a session that has an id.
+   */
+  sessionId?: string
   /** An interrupted turn is recorded but never scored. */
   isAborted: boolean
   /**
@@ -75,7 +95,12 @@ export type TurnRecord = {
   bonusDim?: BonusDim
   /** The person's guess at that dimension; absent when the bonus was skipped. */
   saidBonus?: BonusBucket
-  /** How that dimension actually turned out, set whenever `bonusDim` is. */
+  /**
+   * How that dimension actually turned out.
+   *
+   * Set whenever `bonusDim` is, except a files bonus whose count is unknown:
+   * that one is left unscored.
+   */
   bonusActual?: BonusBucket
 }
 
@@ -103,6 +128,11 @@ export type DailyChallengeRecord = {
    * happened is kept, only that today is handled so it is not asked again.
    */
   isNotTaken?: true
+  /**
+   * Set when the question was answered but the count it asks about could not
+   * be read. Not scored, and it does not break a streak. Today stays handled.
+   */
+  isUnmeasured?: true
 }
 
 /** The most recent verdict given, kept so one press can take it back. */
@@ -118,8 +148,15 @@ export type OpenBet = {
   turnId: string
   /** The opening of the prompt that started this turn. */
   ask: string
-  /** Distinct paths written so far this turn. */
+  /** Distinct paths written so far this turn. Not the turn's count when `filesUnknown` is set. */
   files: string[]
+  /**
+   * Set when a look at the working tree gave up.
+   *
+   * The paths in `files` are then not a count: the row says the count is
+   * unknown, and the file question is not scored.
+   */
+  filesUnknown?: true
   /**
    * What git saw changed when the turn started: path to content hash.
    *
@@ -190,8 +227,11 @@ declare module 'claude-code' {
       bonusRotation: number
       /**
        * When this session began, epoch milliseconds; null until `session.start`
-       * has set it once. The recap card's "this session" is every record at or
-       * after this.
+       * has set it once.
+       *
+       * The recap card's "this session" is the records stamped with the
+       * current session id. This timestamp is the fallback when the host
+       * gives no id: every record at or after it.
        */
       sessionStartedAt: number | null
     }
