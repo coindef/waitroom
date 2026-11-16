@@ -8,7 +8,7 @@ claude plugin validate ./bet-on-your-agent
 claude plugin test     ./bet-on-your-agent    # 144 tests
 
 claude plugin validate ./wait-ship
-claude plugin test     ./wait-ship            # 99 tests
+claude plugin test     ./wait-ship            # 104 tests
 
 claude plugin validate ./wait-breathe
 claude plugin test     ./wait-breathe         # 35 tests
