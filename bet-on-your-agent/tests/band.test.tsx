@@ -1149,21 +1149,24 @@ test('a store that will not take the write says so', async ($, on) => {
 // A pretend config dir. Nothing under the real ~/.claude/plugins/store is opened.
 const ISOLATED_CONFIG = '/tmp/bet-store-isolated'
 const STORE_DIR = `${ISOLATED_CONFIG}/plugins/store`
-// The engine names the file from `name@source`. `@` is not a filename
-// character, so it becomes `_` plus the first 12 hex digits of the sha256.
-// `bet-on-your-agent@inline` and `bet-on-your-agent@waitroom` are the two
-// names a real session writes. `bet-on-your-agent.json` is not one of them.
+// `claude plugin test` loads this folder as `bet-on-your-agent@claude-plugin-test`.
+// The engine's filename is that id with `@` turned into `_`, then a dash and
+// the first 12 hex digits of sha256(id). A real --plugin-dir session is
+// `bet-on-your-agent_inline-b4b76a335767.json` instead, and is not this file.
+const HARNESS_STORE = `${STORE_DIR}/bet-on-your-agent_claude-plugin-test-77af2076a5d5.json`
 const INLINE_STORE = `${STORE_DIR}/bet-on-your-agent_inline-b4b76a335767.json`
-const WAITROOM_STORE = `${STORE_DIR}/bet-on-your-agent_waitroom-34ea4b598520.json`
 
 /**
  * The store file as the engine keeps it: empty and unreadable JSON throw,
  * and a write lands back in the same bytes. The bytes live in `files`, not
  * on disk.
  */
-const diskStore = (on: On, path: string, bytes: string) => {
+const diskStore = (on: On, path: string, bytes: string, extras: Record<string, string> = {}) => {
   mock.clock(on)
-  const files = new Map<string, string>([[path, bytes]])
+  const files = new Map<string, string>([
+    [path, bytes],
+    ...Object.entries(extras),
+  ])
   const logged: string[] = []
   const read = (): Record<string, unknown> => {
     const text = files.get(path)
@@ -1236,17 +1239,17 @@ const finishTurn = async ($: Engine, turnId: string) => {
 }
 
 test('a store of zero bytes is initialized and the turn is saved', async ($, on) => {
-  const store = diskStore(on, INLINE_STORE, '')
+  const store = diskStore(on, HARNESS_STORE, '')
   await finishTurn($, 'empty-file')
 
-  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  const saved = JSON.parse(store.files.get(HARNESS_STORE) ?? '') as { turns?: { turnId: string }[] }
   expect(saved.turns?.map(one => one.turnId)).toEqual(['empty-file'])
-  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${HARNESS_STORE}.bak`)).toBe(false)
 })
 
 test('a corrupt store is backed up, rebuilt, and /bet says so', async ($, on) => {
   const original = 'not json{'
-  const store = diskStore(on, INLINE_STORE, original)
+  const store = diskStore(on, HARNESS_STORE, original)
   const reply = await $.command.run({ command: 'bet' } as never)
   const text = reply.text ?? ''
 
@@ -1254,27 +1257,39 @@ test('a corrupt store is backed up, rebuilt, and /bet says so', async ($, on) =>
   expect(text).toBe(text.toLowerCase())
   expect(text.includes('\n')).toBe(false)
   expect(text.length).toBeLessThanOrEqual(48)
-  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(original)
+  expect(store.files.get(`${HARNESS_STORE}.bak`)).toBe(original)
   expect(store.logged).toContain(REBUILT_NOTICE)
-  const rebuilt = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: unknown }
+  const rebuilt = JSON.parse(store.files.get(HARNESS_STORE) ?? '') as { turns?: unknown }
   expect(rebuilt.turns).toBeUndefined()
 
   await finishTurn($, 'after-rebuild')
-  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  const saved = JSON.parse(store.files.get(HARNESS_STORE) ?? '') as { turns?: { turnId: string }[] }
   expect(saved.turns?.map(one => one.turnId)).toEqual(['after-rebuild'])
 })
 
 test('a store whose turns are not a list is backed up and rebuilt', async ($, on) => {
   const listed = JSON.stringify({ turns: { not: 'a list' }, extrasFrom: '1900-01-01' })
-  const store = diskStore(on, WAITROOM_STORE, listed)
+  const store = diskStore(on, HARNESS_STORE, listed)
   const reply = await $.command.run({ command: 'bet' } as never)
 
   expect(reply.text).toBe(REBUILT_NOTICE)
   expect((reply.text ?? '').length).toBeLessThanOrEqual(48)
-  expect(store.files.get(`${WAITROOM_STORE}.bak`)).toBe(listed)
-  const rebuilt = JSON.parse(store.files.get(WAITROOM_STORE) ?? '') as { turns?: unknown; extrasFrom?: string }
+  expect(store.files.get(`${HARNESS_STORE}.bak`)).toBe(listed)
+  const rebuilt = JSON.parse(store.files.get(HARNESS_STORE) ?? '') as { turns?: unknown; extrasFrom?: string }
   expect(rebuilt.turns).toBeUndefined()
   expect(rebuilt.extrasFrom).toBe('1900-01-01')
+})
+
+test('repair uses the harness store and leaves another source untouched', async ($, on) => {
+  const other = 'not json{'
+  const store = diskStore(on, HARNESS_STORE, '', { [INLINE_STORE]: other, [`${STORE_DIR}/room-check.json`]: '{"turns":[]}\n' })
+  await finishTurn($, 'this-source')
+
+  const saved = JSON.parse(store.files.get(HARNESS_STORE) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['this-source'])
+  expect(store.files.get(INLINE_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.get(`${STORE_DIR}/room-check.json`)).toBe('{"turns":[]}\n')
 })
 
 test('an unreadable history with nothing loaded says turns are not being saved', async ($, on) => {
