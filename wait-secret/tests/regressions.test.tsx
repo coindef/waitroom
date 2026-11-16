@@ -140,9 +140,11 @@ test("a failed diff against HEAD is not an empty tree, and a repository with no 
   await quiet.unmount()
 })
 
-test('a secret in a new file past the first hundred names is still opened, and a short read says it stopped', async ($, on) => {
+test('past a hundred new files the scan stops and says so, and a short read says where it stopped', async ($, on) => {
   const many = [...Array.from({ length: 100 }, (_, index) => `a${String(index).padStart(2, '0')}.txt`), 'z-secret.ts']
   const few = ['a.ts', 'b.ts', 'c.ts']
+  const exact = Array.from({ length: 100 }, (_, index) => `b${String(index).padStart(2, '0')}.txt`)
+  const opened: string[] = []
   let scan = 0
   const { said } = harness(on, (argv, at) => {
     scan = at
@@ -155,12 +157,16 @@ test('a secret in a new file past the first hundred names is still opened, and a
     if (argv.includes('ls-files')) {
       if (at === 2) return ran(nul(many))
       if (at === 4) return ran(nul(few))
+      if (at === 6) return ran(nul(exact))
 
       return ran('')
     }
     if (argv.includes('--no-index')) {
       const path = argv.at(-1) ?? ''
-      if (path === 'z-secret.ts') return ran(added(path, [`const key = "${OPENAI}"`]), 1)
+      opened.push(path)
+      if (path === 'z-secret.ts' || path === 'a00.txt' || path === 'b99.txt') {
+        return ran(added(path, [`const key = "${OPENAI}"`]), 1)
+      }
       if (path === 'b.ts') return ran('', 128)
       if (path === 'a.ts') return ran(added(path, [`const key = "${OPENAI}"`]), 1)
       if (path === '') return ran('', 128)
@@ -174,18 +180,31 @@ test('a secret in a new file past the first hundred names is still opened, and a
 
   await $.turn.start({ text: 'many files', turnId: 'many' })
   await $.turn.complete(finish('many'))
-  expect(said.at(-1)).toBe('1 possible secret')
+  expect(said.at(-1)).toBe('scanned 100 of 101 new files')
+  expect(opened).toEqual(many.slice(0, 100))
   const band = await mountBand($)
-  expect(await band.find({ text: 'z-secret.ts:1  sk-…3f9a  (OpenAI key?)' })).toBeDefined()
+  expect(await band.find({ text: TITLE })).toBeUndefined()
+  expect(await band.find({ text: 'sk-…3f9a' })).toBeUndefined()
   await band.unmount()
 
+  opened.length = 0
   await $.turn.start({ text: 'one diff fails', turnId: 'short' })
   await $.turn.complete(finish('short'))
   expect(said.at(-1)).toBe('scanned 1 of 3 new files')
+  expect(opened).toEqual(['a.ts', 'b.ts'])
   const stopped = await mountBand($)
   expect(await stopped.find({ text: TITLE })).toBeUndefined()
   expect(await stopped.find({ text: 'sk-…3f9a' })).toBeUndefined()
   await stopped.unmount()
+
+  opened.length = 0
+  await $.turn.start({ text: 'exactly the cap', turnId: 'exact' })
+  await $.turn.complete(finish('exact'))
+  expect(said.at(-1)).toBe('1 possible secret')
+  expect(opened).toEqual(exact)
+  const full = await mountBand($)
+  expect(await full.find({ text: 'b99.txt:1  sk-…3f9a  (OpenAI key?)' })).toBeDefined()
+  await full.unmount()
 })
 
 test('a diff cut off before the end is not listed, and that prefix is not the next baseline', async ($, on) => {

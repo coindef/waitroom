@@ -39,8 +39,10 @@ This install stays on its own. The four rooms are `/plugin install waitroom@wait
 
 Only lines this turn added, read from the local `git diff`. Tracked
 changes are diffed against HEAD. A repository with no commit yet is diffed
-against the empty tree, so a staged file is still seen. Every untracked file
-is diffed. The scan does not stop after the first hundred names. Anything
+against the empty tree, so a staged file is still seen. New files are
+diffed too, up to 100 of them. Past that the scan stops, so a stray folder
+cannot hold up the turn, and the status line says how far it got
+(`scanned 100 of 5000 new files`). Anything
 committed during the turn is diffed from the revision at the start of the
 turn through HEAD. A line that
 was already uncommitted before the turn is not the turn's. A diff git could
@@ -71,7 +73,10 @@ It sees what git sees. A file git ignores (a `.env` in `.gitignore`, say) is
 not read, which is also a file that will not be committed. Outside a git
 repository it stays silent. A diff too big for one read, or a read git does
 not finish, is named on the status line instead of being treated as empty or
-as clean. Patterns are a guess: a key in an unusual format is missed, and a
+as clean. That line stays up after every turn while the diff stays too big;
+`/wait-secret` turns the warning off. More than 100 new files is the same
+kind of stop (`scanned 100 of 5000 new files`), not a finished scan. Patterns
+are a guess: a key in an unusual format is missed, and a
 random-looking test fixture is flagged.
 
 ## What it never does

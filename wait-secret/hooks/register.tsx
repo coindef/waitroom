@@ -30,6 +30,12 @@ import {
 /** `$.store` key for a disable the settings write could not persist. */
 const DISABLED_KEY = 'disabled'
 
+/**
+ * Untracked files diffed one by one per scan. `turn.start` waits for this
+ * before the turn begins, so a stray folder cannot be opened in full.
+ */
+const UNTRACKED_LIMIT = 100
+
 const baseline = atom({ plugin: 'wait-secret', key: 'baseline' } as const, null as Baseline | null)
 const card = atom({ plugin: 'wait-secret', key: 'card' } as const, null as SecretCard | null)
 
@@ -119,9 +125,11 @@ const trackedText = async (
 }
 
 /**
- * Every untracked name, in the order git lists them. Stopping after a prefix
- * would let a later name hide. A name whose diff does not come back whole
- * ends the scan: the files already read are not a finished tree.
+ * Untracked names, in the order git lists them, up to `UNTRACKED_LIMIT`.
+ * Each name is its own `git diff --no-index`, and the turn waits on the
+ * scan, so the rest of a long list is not opened. Past the cap, or when a
+ * name's diff does not come back whole, the files already read are not a
+ * finished tree.
  */
 const withUntracked = async (
   $: EngineInterface,
@@ -134,9 +142,10 @@ const withUntracked = async (
   if (others?.isStdoutTruncated) return { ok: false, gap: DIFF_TOO_BIG }
   if (others === undefined || others.exitCode !== 0) return { ok: false, gap: SCAN_UNREAD }
   const names = splitNul(others.stdout)
+  const capped = names.length > UNTRACKED_LIMIT
   const chunks = [tracked]
   let scanned = 0
-  for (const path of names) {
+  for (const path of names.slice(0, UNTRACKED_LIMIT)) {
     // --no-index exits 1 when the two sides differ, which is the point here.
     const one = await runGit(
       $,
@@ -145,9 +154,10 @@ const withUntracked = async (
     )
     const taken = takeDiff(one, true)
     if (!taken.ok) return { ok: false, gap: one?.isStdoutTruncated ? DIFF_TOO_BIG : partialFilesLine(scanned, names.length) }
-    chunks.push(taken.stdout)
+    if (!capped) chunks.push(taken.stdout)
     scanned += 1
   }
+  if (capped) return { ok: false, gap: partialFilesLine(scanned, names.length) }
 
   return { ok: true, text: chunks.join('\n') }
 }
@@ -173,7 +183,7 @@ const committedText = async (
   return { ok: true, text: diff.stdout }
 }
 
-/** The worktree now: tracked changes plus every untracked file. Not a repository is `ok: false` with no gap. */
+/** The worktree now: tracked changes plus untracked files, up to the cap. Not a repository is `ok: false` with no gap. */
 const readTree = async ($: EngineInterface): Promise<Read> => {
   const root = await repoRoot($)
   if (root === undefined) return { ok: false, files: [] }
