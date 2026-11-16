@@ -2,11 +2,13 @@
 
 ## Unreleased
 
-### bet-on-your-agent 0.6.5
+### bet-on-your-agent-opencode 0.0.1
 
-- **A file git is slow to read is not counted as written.** If a hash does not come back, that path stays as it was. It does not show up as a file this turn wrote.
-- **One path git cannot hash no longer pauses on every other file.** The rest of the turn's files are still counted.
-- **Five hundred changed paths still count as five hundred.** The running total was cut off at 200. More than 500 paths in `git status` is still not a count.
+- **Digits type into the prompt.** A digit answers the bet only when the bet row has focus. While the prompt has focus, every key, including a digit, stays in the prompt. Skip is labeled `0: Skip` on the confidence, file, bonus, and verdict rows.
+- **A retry does not close the bet.** The turn ends when the session goes idle.
+- **History waits for the file.** A turn that ends before `api.kv` has read `kv.json` is held and then merged into that file. It does not replace other plugins' keys.
+- **The file forecast counts a turn that wrote files another way.** `session.diff`, `apply_patch` text, a `patch` message part, and, when the diff call is missing, `git status`. A tool part that errors counts once, the same as one that completes.
+- **The band repaints.** The open bet and the rank-up line live in a Solid store the slot reads while it renders.
 
 ### wait-notify 0.1.1
 
@@ -20,7 +22,7 @@
 
 ### bet-on-your-agent 0.6.4
 
-- **A subagent's work does not raise this turn's tool-call count.** The bonus question "how many tool calls will it make?" counts only the calls on your turn. Files the subagent writes still show in "N written so far": an edit, a write, or a notebook edit counts when it actually runs, and a shell command still updates that count from the files on disk.
+- **A subagent's tool calls stay off the turn's tool-call count.** A `tool.call` that carries an `agentId` does not increment that count. `Edit`, `Write`, and `NotebookEdit` still add the path they name to "N written so far" when the call is not denied and not an error. `Bash` still reads the working tree.
 - **`/bet-recap` counts this session.** "This session" is the turns stamped with the current session id. A turn another window recorded, even one made after this session began, stays out of the card. The rank and the badge wall still read the whole history. With no session id from the host, the card falls back to the turns since this session started.
 
 ### bet-on-your-agent 0.6.3

@@ -124,7 +124,7 @@ no pane to stumble into otherwise.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 28 tests
+claude plugin test .         # 34 tests
 ```
 
 The rotation, the cooldown, the session counting and the `/breathe` reply
@@ -134,7 +134,8 @@ state contract. `tests/flow.test.tsx` drives the whole loop through the engine
 with the mock clock, arming the threshold at `turn.start` and advancing past it
 the way a real long turn would — including `/breathe` flipping the setting
 both ways, and the nudge taking the shared row from a bet question or a ship
-offer beneath it.
+offer beneath it. `tests/store.test.tsx` checks that a failed store read is left unwritten, and
+that a record this mod cannot read is replaced the next time a nudge is due.
 
 ## The first minute
 

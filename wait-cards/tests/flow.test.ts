@@ -11,6 +11,8 @@ import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 
+import { cardId } from '../hooks/cards'
+
 const HOME = '/home/me'
 const DECK_PATH = '/home/me/.waitroom/cards.md'
 const DECK = 'Q: HTTP status for too many requests?\nA: 429\n\nQ: What does `git reflog` show?\nA: Where HEAD has been.\n'
@@ -35,6 +37,13 @@ type Given = {
   deckReads?: { count: number }
   /** The deck path is there, but reading it fails, as with a folder or a file without read permission. */
   unreadable?: boolean
+  /** When this returns true, every `store.get` throws. A resolved missing key stays a missing key. */
+  failStoreGet?: () => boolean
+  /**
+   * After the first read of a card, another session writes this record.
+   * That first read still returns the value that was there before.
+   */
+  remarkAfterRead?: { box: number; due: number; shown: number }
 }
 
 const engineBottom = (on: On, given: Given = {}) => {
@@ -46,8 +55,21 @@ const engineBottom = (on: On, given: Given = {}) => {
   const readTranscript = { count: 0 }
   const disk = { deck: given.deck }
   const store: Record<string, unknown> = given.store ?? {}
+  let cardReads = 0
   mock.env(on, given.home === false ? {} : { HOME })
-  on('store.get', ($, e) => ({ value: store[e.key] === undefined ? undefined : JSON.parse(JSON.stringify(store[e.key])) }))
+  on('store.get', ($, e) => {
+    if (given.failStoreGet?.() === true) throw new Error('EIO: store unreadable for a moment')
+    if (e.key.startsWith('card/') && given.remarkAfterRead !== undefined && cardReads === 0) {
+      cardReads += 1
+      const stale = store[e.key] === undefined ? undefined : JSON.parse(JSON.stringify(store[e.key]))
+      const next = given.remarkAfterRead
+      store[e.key] = { v: 1, box: next.box, due: next.due, shown: next.shown }
+
+      return { value: stale }
+    }
+
+    return { value: store[e.key] === undefined ? undefined : JSON.parse(JSON.stringify(store[e.key])) }
+  })
   on('store.set', ($, e) => {
     store[e.key] = JSON.parse(JSON.stringify(e.value))
 
@@ -244,13 +266,15 @@ test('a stored hint stays quiet in a new process, and a deck turning up clears i
 })
 
 test('a deck with no valid cards is quiet, and /card says how to write one', async ($, on) => {
-  const { said, logged } = engineBottom(on, { deck: '# todo\nQ: no answer yet\n' })
+  const { said, logged, disk } = engineBottom(on, { deck: '# todo\nQ: no answer yet\n' })
   await start($)
   await $.turn.start(begin('turn-1'))
   await $.turn.complete(finish('turn-1'))
   expect(said.every(text => text === undefined)).toBe(true)
   expect(logged).toEqual([])
-  expect(await card($, '')).toBe('no cards in ~/.waitroom/cards.md yet · write a Q: line, then an A: line')
+  expect(await card($, '')).toBe('no cards in ~/.waitroom/cards.md yet · write a Q: line, then an A: line · 1 skipped')
+  disk.deck = '<!--\nQ: hidden\nA: no\n\nQ: also\nA: no\n'
+  expect(await card($, '')).toBe('no cards in ~/.waitroom/cards.md yet · write a Q: line, then an A: line · 2 skipped')
 })
 
 test('a deck file that is there but cannot be read logs no hint and shows no card, and /card says so', async ($, on) => {
@@ -311,4 +335,149 @@ test('/card miss says back next wait, and the next wait shows that card before t
   expect(await card($, 'miss')).toBe('missed · box 1 · back next wait')
   await $.turn.start(begin('turn-2'))
   expect(said.at(-1)).toBe('Q: one')
+})
+
+test('a card that is not due stays off the line, and got waits 2, then 4, then 8', async ($, on) => {
+  const { said, store } = engineBottom(on, { deck: 'Q: only\nA: one\n' })
+  await start($)
+  const questions: (string | undefined)[] = []
+  const replies: string[] = []
+  for (const turnId of ['t0', 't1', 't2', 't3', 't4', 't5', 't6']) {
+    await $.turn.start(begin(turnId))
+    const question = said.at(-1)
+    questions.push(question)
+    await $.turn.complete(finish(turnId))
+    if (question !== undefined) replies.push(await card($, 'got'))
+  }
+  const saved = store[`card/${cardId('only')}`] as { box?: number } | undefined
+
+  expect({ questions, replies, box: saved?.box }).toEqual({
+    questions: ['Q: only', undefined, 'Q: only', undefined, undefined, undefined, 'Q: only'],
+    replies: [
+      'got it · box 2 · back in 2 waits',
+      'got it · box 3 · back in 4 waits',
+      'got it · box 4 · back in 8 waits',
+    ],
+    box: 4,
+  })
+})
+
+test('a store read that throws writes nothing, and a bad record is reset once', async ($, on) => {
+  const key = `card/${cardId('only')}`
+  let fail = true
+  const { said, store } = engineBottom(on, {
+    deck: 'Q: only\nA: one\n',
+    store: {
+      tick: { v: 1, n: 7 },
+      [key]: { v: 1, box: 3, due: 12, shown: 4 },
+    },
+    failStoreGet: () => fail,
+  })
+  await start($)
+  await $.turn.start(begin('t1'))
+  expect({
+    tick: store.tick,
+    card: store[key],
+    status: said.at(-1),
+  }).toEqual({
+    tick: { v: 1, n: 7 },
+    card: { v: 1, box: 3, due: 12, shown: 4 },
+    status: undefined,
+  })
+
+  await $.turn.complete(finish('t1'))
+  fail = false
+  store.tick = { v: 2, n: 40 }
+  store[key] = { v: 1, box: 2, due: -3, shown: -4 }
+  await $.turn.start(begin('t2'))
+  expect({
+    status: said.at(-1),
+    tick: store.tick,
+    card: store[key],
+  }).toEqual({
+    status: 'Q: only',
+    tick: { v: 1, n: 1 },
+    card: { v: 1, box: 1, due: 0, shown: 0 },
+  })
+
+  // A resolved missing key is a new card, not a failed read.
+  delete store[key]
+  await $.turn.complete(finish('t2'))
+  await $.turn.start(begin('t3'))
+  expect(store[key]).toEqual({ v: 1, box: 1, due: 0, shown: 1 })
+  expect(store.tick).toEqual({ v: 1, n: 2 })
+})
+
+test('showing a card keeps a mark written after it was read', async ($, on) => {
+  const key = `card/${cardId('only')}`
+  const { said, store } = engineBottom(on, {
+    deck: 'Q: only\nA: one\n',
+    store: {
+      tick: { v: 1, n: 5 },
+      [key]: { v: 1, box: 2, due: 5, shown: 1 },
+    },
+    remarkAfterRead: { box: 4, due: 20, shown: 1 },
+  })
+  await start($)
+  await $.turn.start(begin('t1'))
+  expect(said.at(-1)).toBe('Q: only')
+  expect(store[key]).toEqual({ v: 1, box: 4, due: 20, shown: 5 })
+  expect(store.tick).toEqual({ v: 1, n: 6 })
+  await $.turn.complete(finish('t1'))
+  expect(await card($, 'got')).toBe('got it · box 4 · back in 15 waits')
+  expect(store[key]).toEqual({ v: 1, box: 4, due: 20, shown: 5 })
+})
+
+test('/card says when the deck was capped or cut', async ($, on) => {
+  const many = Array.from({ length: 1001 }, (_, i) => `Q: q${i}\nA: a${i}\n`).join('\n')
+  const { disk } = engineBottom(on, { deck: many })
+  await start($)
+  expect(await card($, '')).toBe(
+    '1000 of 1001 cards · deck capped at 1000 · 1000 due · mark an answer with /card got or /card miss',
+  )
+
+  disk.deck = `Q: q\nA: ${'y'.repeat(256 * 1024)}\n\nQ: later\nA: z\n`
+  expect(await card($, '')).toBe(
+    '1 card · deck cut at 256 KiB · 1 due · mark an answer with /card got or /card miss',
+  )
+})
+
+test('a corrupt wait counter resets to 0 and pulls every due wait with it', async ($, on) => {
+  const one = `card/${cardId('one')}`
+  const two = `card/${cardId('two')}`
+  const { said, store } = engineBottom(on, {
+    deck: 'Q: one\nA: 1\n\nQ: two\nA: 2\n',
+    store: {
+      tick: { v: 1, n: 'oops' },
+      [one]: { v: 1, box: 2, due: 2001, shown: 1999 },
+      [two]: { v: 1, box: 2, due: 2003, shown: 2001 },
+    },
+  })
+  await start($)
+  // Counting does not write. The next wait is what moves the dues.
+  expect(await card($, '')).toBe('2 cards · 1 due · mark an answer with /card got or /card miss')
+  expect(store[one]).toEqual({ v: 1, box: 2, due: 2001, shown: 1999 })
+  expect(store[two]).toEqual({ v: 1, box: 2, due: 2003, shown: 2001 })
+  await $.turn.start(begin('t1'))
+  expect(said.at(-1)).toBe('Q: one')
+  expect(store.tick).toEqual({ v: 1, n: 1 })
+  expect(store[one]).toEqual({ v: 1, box: 2, due: 0, shown: 0 })
+  expect(store[two]).toEqual({ v: 1, box: 2, due: 2, shown: 0 })
+})
+
+test('/card says the progress could not be read, and writes nothing', async ($, on) => {
+  const key = `card/${cardId('only')}`
+  const saved = {
+    tick: { v: 1, n: 7 },
+    [key]: { v: 1, box: 3, due: 12, shown: 4 },
+  }
+  const { store } = engineBottom(on, {
+    deck: 'Q: only\nA: one\n',
+    store: saved,
+    failStoreGet: () => true,
+  })
+  await start($)
+  expect(await card($, '')).toBe("couldn't read your progress · nothing was changed · try /card again")
+  expect(store.tick).toEqual({ v: 1, n: 7 })
+  expect(store[key]).toEqual({ v: 1, box: 3, due: 12, shown: 4 })
 })

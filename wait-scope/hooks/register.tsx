@@ -2,8 +2,10 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Scope, ScopeTurn } from '../types'
+import type { ScopeFileRead } from './scope'
 import {
   cardFor,
+  chooseScope,
   DISABLE_LABEL,
   DISMISS_LABEL,
   drawnBy,
@@ -22,6 +24,7 @@ import {
   turnedOffLine,
   turnedOffLocallyLine,
   turnedOnLine,
+  turnedOnUnreadLine,
   withEdit,
   withHints,
   yieldsBand,
@@ -40,14 +43,27 @@ const projectRoot = async ($: EngineInterface): Promise<string | undefined> => {
 }
 
 /**
- * The project's own scope file, or undefined where it has none. One read of
- * one file, and nothing is ever written.
+ * The project's scope file.
+ *
+ * `unreadable` means the check or the read failed. A missing file is
+ * `missing`. A caller must not treat `unreadable` as no file: that would
+ * drop the project's scope for the turn.
  */
-const scopeFileText = async ($: EngineInterface, root: string): Promise<string | undefined> => {
+const readScopeFile = async ($: EngineInterface, root: string): Promise<ScopeFileRead> => {
   const path = `${root.replace(/[\\/]+$/, '')}/${SCOPE_FILE}`
-  const exists = await $.fs.exists(path).catch(() => false)
+  const exists = await $.fs.exists(path).then(
+    value => ({ value }),
+    () => undefined,
+  )
+  if (exists === undefined) return { kind: 'unreadable' }
+  if (exists.value !== true) return { kind: 'missing' }
+  const read = await $.fs.read(path).then(
+    value => ({ value }),
+    () => undefined,
+  )
+  if (read === undefined || typeof read.value !== 'string') return { kind: 'unreadable' }
 
-  return exists ? await $.fs.read(path).catch(() => undefined) : undefined
+  return { kind: 'text', text: read.value }
 }
 
 const setEnabled = async ($: EngineInterface, want: boolean): Promise<{ deny?: string }> => {
@@ -74,6 +90,10 @@ let settingGlobs = ''
  * that is not theirs and starts a turn of its own clears it.
  */
 let pendingPrompt: string | null = null
+/** The last scope `.claude/wait-scope` actually parsed. A failed read keeps it. */
+let lastFileScope: Scope | undefined
+/** The unreadable line was already logged for this streak of failed reads. */
+let unreadAnnounced = false
 
 const silenced = (): boolean => !enabled || locallyOff
 
@@ -130,11 +150,35 @@ const noteEditSafely = async ($: EngineInterface, path: string | undefined, ran:
   }
 }
 
-/** The scope `/wait-scope` reports: read now, the way the next turn start reads it. */
-const currentScope = async ($: EngineInterface): Promise<Scope> => {
-  const root = await projectRoot($)
+/**
+ * The scope a turn, or `/wait-scope`, reads now.
+ *
+ * A failed read keeps `lastFileScope` and names a notice. A real read
+ * replaces that memory. The notice is not a scope: the command must not
+ * answer as if no scope were set.
+ */
+const readTurnScope = async (
+  $: EngineInterface,
+  root: string,
+): Promise<{ scope: Scope | undefined; notice: string | undefined }> => {
+  const read = await readScopeFile($, root)
+  const chosen = chooseScope(read, settingGlobs, lastFileScope)
+  if (read.kind !== 'unreadable') {
+    lastFileScope = chosen.remembered
+    unreadAnnounced = false
+  }
 
-  return resolveScope(root === undefined ? undefined : await scopeFileText($, root), settingGlobs)
+  return { scope: chosen.scope, notice: chosen.notice }
+}
+
+/** The scope `/wait-scope` reports: read now, the way the next turn start reads it. */
+const currentScope = async ($: EngineInterface): Promise<Scope | 'unreadable'> => {
+  const root = await projectRoot($)
+  if (root === undefined) return resolveScope(undefined, settingGlobs)
+  const { scope, notice } = await readTurnScope($, root)
+  if (notice !== undefined) return 'unreadable'
+
+  return scope ?? { source: 'none' }
 }
 
 /**
@@ -178,6 +222,8 @@ export const register: Register = (on, options) => {
   prefLoaded = false
   prefLoading = null
   pendingPrompt = null
+  lastFileScope = undefined
+  unreadAnnounced = false
 
   on('session.start', async ($, e, next) => {
     await ensurePref($)
@@ -203,8 +249,10 @@ export const register: Register = (on, options) => {
     await ensurePref($)
     if (silenced()) {
       const reason = await enableWarning($)
+      if (reason !== undefined) return { text: toggleRefusedLine(reason) }
+      const scope = await currentScope($)
 
-      return { text: reason === undefined ? turnedOnLine(await currentScope($)) : toggleRefusedLine(reason) }
+      return { text: scope === 'unreadable' ? turnedOnUnreadLine() : turnedOnLine(scope) }
     }
     const reason = await silenceForever($)
 
@@ -251,11 +299,18 @@ export const register: Register = (on, options) => {
       return next(e)
     }
     const root = await projectRoot($)
-    const scope = root === undefined ? undefined : resolveScope(await scopeFileText($, root), settingGlobs)
+    if (root === undefined) {
+      await update($, turn, () => null)
+
+      return next(e)
+    }
+    const { scope, notice } = await readTurnScope($, root)
+    if (notice !== undefined && !unreadAnnounced) {
+      unreadAnnounced = true
+      $.ui.log(notice)
+    }
     await update($, turn, () =>
-      root === undefined || scope === undefined
-        ? null
-        : startTurn({ turnId: e.turnId, root, scope, hints: hintsFrom(prompt, root) }),
+      scope === undefined ? null : startTurn({ turnId: e.turnId, root, scope, hints: hintsFrom(prompt, root) }),
     )
 
     return next(e)
