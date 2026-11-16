@@ -2,6 +2,8 @@ import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 
+import { runningPluginFolder } from '../hooks/store-file'
+
 /** The band is drawn on whatever surface the session has, not an assumed one. */
 const SURFACES = ['terminal', 'desktop', 'mobile'] as const
 
@@ -14,6 +16,7 @@ const BAND = {
 const bandProps = (isWorking: boolean) =>
   ({
     hasSurvey: false,
+    isCollapsed: false,
     isWorking,
     maxRows: 6,
     bodyColumns: 115,
@@ -208,7 +211,7 @@ test('files are counted from Edit, Write and NotebookEdit calls, the same path o
   await idle.unmount()
 
   const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
-  // Called 2-3 and landed on exactly 3 distinct files: a right call.
+  // Called 2–3 and landed on exactly 3 distinct files: a right call.
   expect(await pane.find({ text: /File count called right 1\/1\./ })).toBeDefined()
   await pane.unmount()
 })
@@ -803,7 +806,10 @@ test('the band yields to a survey of the engine’s own', async ($, on) => {
   await ui.unmount()
 })
 
-test('the record pane draws on every surface', async $ => {
+test('the record pane draws on every surface', async ($, on) => {
+  // A working store with no history yet. A thrown read is a different case:
+  // that one says the turns are not being saved.
+  mock.store(on)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'bet-on-your-agent', surface, ...PANE })
 
@@ -913,6 +919,10 @@ test('a failed read of the history leaves the stored turns in place', async ($, 
   const data: Record<string, unknown> = { extrasFrom: '1900-01-01', turns: old }
   let failReads = false
   const said: (string | undefined)[] = []
+  on('env.get', ($, e) => ({ value: e.name === 'CLAUDE_CONFIG_DIR' ? '/tmp/bet-store-flaky' : undefined }))
+  on('fs.exists', () => ({ value: false }))
+  on('session.root', () => ({ deny: 'not reachable in this test' }))
+  on('session.cwd', () => ({ deny: 'not reachable in this test' }))
   on('store.get', ($$, e) => {
     if (failReads) throw new Error('EIO: store unreadable for a moment')
 
@@ -950,6 +960,723 @@ test('a failed read of the history leaves the stored turns in place', async ($, 
   // The turn ended unrecorded, so the line is not left on the running prompt
   // and does not ask whether a turn the store never took landed.
   expect(said.at(-1)).toBeUndefined()
+})
+
+/** One stored turn, owed or already scored, for the read-failure tests. */
+const storedTurn = (turnId: string, at: number, extra: { ask?: string; landed?: boolean } = {}) => ({
+  turnId,
+  at,
+  durationMs: 1000,
+  files: 0,
+  filesBucket: '0' as const,
+  toolCalls: 0,
+  isAborted: false,
+  saidConfidence: 0.8,
+  ...(extra.ask === undefined ? {} : { ask: extra.ask }),
+  ...(extra.landed === undefined ? {} : { landed: extra.landed }),
+})
+
+/**
+ * A store whose reads can be made to throw, or to hand back something else,
+ * so a test can show what a write does when the history cannot be trusted.
+ */
+const flakyStore = (on: On, entries: Record<string, unknown>) => {
+  mock.clock(on)
+  const data: Record<string, unknown> = { extrasFrom: '1900-01-01', ...entries }
+  let failReads: (key: string) => boolean = () => false
+  let failWrites: (key: string) => boolean = () => false
+  const logged: string[] = []
+  const said: (string | undefined)[] = []
+  // No store file here. A repair must not go looking at the real
+  // ~/.claude/plugins/store files.
+  on('env.get', ($, e) => ({ value: e.name === 'CLAUDE_CONFIG_DIR' ? '/tmp/bet-store-flaky' : undefined }))
+  on('fs.exists', () => ({ value: false }))
+  on('session.root', () => ({ deny: 'not reachable in this test' }))
+  on('session.cwd', () => ({ deny: 'not reachable in this test' }))
+  on('store.get', ($, e) => {
+    if (failReads(e.key)) throw new Error('EIO: store unreadable for a moment')
+
+    return { value: data[e.key] }
+  })
+  on('store.set', ($, e) => {
+    if (failWrites(e.key)) throw new Error('EROFS: store will not take the write')
+    data[e.key] = e.value
+
+    return { value: undefined }
+  })
+  on('ui.status', ($, e) => {
+    said.push(e.text)
+
+    return { value: undefined }
+  })
+  on('ui.log', ($, e) => {
+    logged.push(e.text)
+
+    return { value: undefined }
+  })
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box />
+  })
+
+  return {
+    data,
+    logged,
+    said,
+    fail(match: (key: string) => boolean = () => true) {
+      failReads = match
+    },
+    failWrites(match: (key: string) => boolean = () => true) {
+      failWrites = match
+    },
+  }
+}
+
+const HISTORY_UNREAD = "couldn't read the saved history"
+const REBUILT_NOTICE = "couldn't read the saved history · rebuilt"
+
+// Before the other non-array tests: the note is once per process, so a
+// later test would already have spent it.
+test('a history that is not a list is noted once', async ($, on) => {
+  const store = flakyStore(on, { turns: { not: 'a list' } })
+  await $.turn.start({ text: 'a turn', turnId: 'corrupt-note' })
+  await $.turn.complete({
+    turnId: 'corrupt-note',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  await pane.unmount()
+
+  expect(store.data.turns).toEqual({ not: 'a list' })
+  expect(store.logged.filter(line => line === "couldn't read the saved history")).toHaveLength(1)
+})
+
+test('a history that is not a list is not replaced when the turn is recorded', async ($, on) => {
+  const store = flakyStore(on, { turns: { not: 'a list' } })
+  await $.turn.start({ text: 'a turn', turnId: 'corrupt-record' })
+  await $.turn.complete({
+    turnId: 'corrupt-record',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  expect(store.data.turns).toEqual({ not: 'a list' })
+})
+
+test('a history that is not a list is not replaced when a verdict is skipped', async ($, on) => {
+  const owed = storedTurn('corrupt-skip', 0, { ask: 'tidy the imports' })
+  const store = flakyStore(on, { turns: [owed] })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  expect(await idle.find({ text: /tidy the imports/ })).toBeDefined()
+  store.data.turns = { not: 'a list' }
+  await idle.press({ key: 'skip' })
+  await idle.unmount()
+
+  expect(store.data.turns).toEqual({ not: 'a list' })
+})
+
+test('a history that is not a list is not replaced when a verdict is undone', async ($, on) => {
+  const owed = storedTurn('corrupt-undo', 0, { ask: 'undo me' })
+  const store = flakyStore(on, { turns: [owed] })
+  const idle = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  await idle.press({ key: 'landed' })
+  store.data.turns = { not: 'a list' }
+  await idle.press({ key: 'undo' })
+  await idle.unmount()
+
+  expect(store.data.turns).toEqual({ not: 'a list' })
+})
+
+test('a turn that could not be saved says so', async ($, on) => {
+  const old = [storedTurn('old-0', 0, { landed: true })]
+  const store = flakyStore(on, { turns: old })
+  await $.turn.start({ text: 'a turn', turnId: 'unlucky-log' })
+  store.fail()
+  await $.turn.complete({
+    turnId: 'unlucky-log',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  expect(store.data.turns).toEqual(old)
+  expect(store.logged).toContain("couldn't save that turn")
+  // The status line stays blank; the log line is what explains it.
+  expect(store.said.at(-1)).toBeUndefined()
+})
+
+test('a store that will not take the write says so', async ($, on) => {
+  const old = [storedTurn('old-0', 0, { landed: true })]
+  const store = flakyStore(on, { turns: old })
+  await $.turn.start({ text: 'a turn', turnId: 'unwritable' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await band.press({ key: 'p80' })
+  expect(store.said.at(-1)).toBe('you said 80%')
+  store.failWrites()
+  await $.turn.complete({
+    turnId: 'unwritable',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  await band.unmount()
+
+  expect(store.data.turns).toEqual(old)
+  expect(store.logged).toContain("couldn't save that turn")
+  expect(store.said.at(-1)).not.toBe('you said 80%')
+})
+
+// A pretend config dir. Nothing under the real ~/.claude/plugins/store is opened.
+const ISOLATED_CONFIG = '/tmp/bet-store-isolated'
+const STORE_DIR = `${ISOLATED_CONFIG}/plugins/store`
+// With no directory marketplace covering this folder, the copy is
+// `--plugin-dir`: `bet-on-your-agent@inline`. The filename is that id with
+// `@` turned into `_`, then a dash and the first 12 hex digits of sha256(id).
+const INLINE_NAME = 'bet-on-your-agent_inline-b4b76a335767.json'
+const WAITROOM_NAME = 'bet-on-your-agent_waitroom-34ea4b598520.json'
+const BARE_NAME = 'bet-on-your-agent.json'
+const INLINE_STORE = `${STORE_DIR}/${INLINE_NAME}`
+const WAITROOM_STORE = `${STORE_DIR}/${WAITROOM_NAME}`
+const BARE_STORE = `${STORE_DIR}/${BARE_NAME}`
+const USER_SETTINGS = `${ISOLATED_CONFIG}/settings.json`
+// The folder the hooks module was loaded from, and the repo that holds it.
+const PLUGIN_FOLDER = runningPluginFolder() ?? ''
+const PLUGIN_PARENT = PLUGIN_FOLDER.slice(0, PLUGIN_FOLDER.lastIndexOf('/'))
+
+const directorySettings = (path: string, enabled = true) =>
+  JSON.stringify({
+    extraKnownMarketplaces: {
+      waitroom: { source: { source: 'directory', path } },
+    },
+    enabledPlugins: { 'bet-on-your-agent@waitroom': enabled },
+  })
+
+const ran = (exitCode: number, stderr = '') => ({
+  value: { exitCode, stdout: '', stderr, isStdoutTruncated: false, isStderrTruncated: false },
+})
+
+/**
+ * The store file as the engine keeps it: empty and unreadable JSON throw,
+ * and a write lands back in the same bytes. The bytes live in `files`, not
+ * on disk. The engine locks by creating the directory `<path>.lock` and
+ * will not read or write while it exists. `lockSticks` leaves that
+ * directory in place after `rmdir`, which is what a real session did.
+ */
+const diskStore = (on: On, path: string, bytes: string, extras: Record<string, string> = {}, env: Record<string, string | undefined> = {}, project?: string, lockSticks = false) => {
+  mock.clock(on)
+  const files = new Map<string, string>([
+    [path, bytes],
+    ...Object.entries(extras),
+  ])
+  const logged: string[] = []
+  const mkdirs: string[] = []
+  const read = (): Record<string, unknown> => {
+    const text = files.get(path)
+    if (text === undefined || text.length === 0) throw new Error('empty store')
+    const parsed = JSON.parse(text) as unknown
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('corrupt store')
+
+    return parsed as Record<string, unknown>
+  }
+  on('env.get', ($, e) => {
+    if (Object.prototype.hasOwnProperty.call(env, e.name)) return { value: env[e.name] }
+    if (e.name === 'CLAUDE_CONFIG_DIR') return { value: ISOLATED_CONFIG }
+    if (e.name === 'HOME') return { value: '/tmp/bet-store-home' }
+
+    return { value: undefined }
+  })
+  on('process.run', ($, e) => {
+    const argv = e.argv
+    if (argv[0] === 'mkdir') {
+      const lock = argv[1] ?? ''
+      mkdirs.push(lock)
+      if (files.has(lock)) return ran(1, 'EEXIST')
+      files.set(lock, '')
+
+      return ran(0)
+    }
+    if (argv[0] === 'rmdir') {
+      if (!lockSticks) files.delete(argv[1] ?? '')
+
+      return ran(0)
+    }
+
+    return ran(0)
+  })
+  on('session.root', () => (project === undefined ? { deny: 'no project root in this test' } : { value: project }))
+  on('session.cwd', () => (project === undefined ? { deny: 'no working directory in this test' } : { value: project }))
+  on('fs.exists', ($, e) => ({ value: files.has(e.path) }))
+  on('fs.read', ($, e) => {
+    const text = files.get(e.path)
+    if (text === undefined) throw new Error('ENOENT')
+
+    return { value: text }
+  })
+  on('fs.write', ($, e) => {
+    files.set(e.path, e.text)
+
+    return { value: undefined }
+  })
+  const engineHoldsLock = () => files.has(`${path}.lock`)
+  on('store.get', ($, e) => {
+    if (engineHoldsLock()) throw new Error('EEXIST: store lock held')
+
+    return { value: read()[e.key] }
+  })
+  on('store.set', ($, e) => {
+    if (engineHoldsLock()) throw new Error('EEXIST: store lock held')
+    const data = read()
+    data[e.key] = e.value
+    files.set(path, `${JSON.stringify(data)}\n`)
+
+    return { value: undefined }
+  })
+  on('ui.status', () => ({ value: undefined }))
+  on('ui.log', ($, e) => {
+    logged.push(e.text)
+
+    return { value: undefined }
+  })
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box />
+  })
+
+  return { files, logged, mkdirs }
+}
+
+const finishTurn = async ($: Engine, turnId: string) => {
+  await $.turn.start({ text: 'a turn', turnId })
+  await $.turn.complete({
+    turnId,
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+}
+
+test('a store of zero bytes is initialized and the turn is saved', async ($, on) => {
+  const store = diskStore(on, INLINE_STORE, '', { [BARE_STORE]: '', [WAITROOM_STORE]: 'not json{' })
+  await finishTurn($, 'empty-file')
+
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['empty-file'])
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.get(BARE_STORE)).toBe('')
+  expect(store.files.get(WAITROOM_STORE)).toBe('not json{')
+  expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
+})
+
+test('a corrupt store is backed up, rebuilt, and /bet says so', async ($, on) => {
+  const original = 'not json{'
+  const store = diskStore(on, INLINE_STORE, original, { [BARE_STORE]: original, [WAITROOM_STORE]: original })
+  const reply = await $.command.run({ command: 'bet' } as never)
+  const text = reply.text ?? ''
+
+  expect(text).toBe(REBUILT_NOTICE)
+  expect(text).toBe(text.toLowerCase())
+  expect(text.includes('\n')).toBe(false)
+  expect(text.length).toBeLessThanOrEqual(48)
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(original)
+  expect(store.logged).toContain(REBUILT_NOTICE)
+  const rebuilt = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: unknown }
+  expect(rebuilt.turns).toBeUndefined()
+  expect(store.files.get(BARE_STORE)).toBe(original)
+  expect(store.files.get(WAITROOM_STORE)).toBe(original)
+  expect(store.files.has(`${BARE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+
+  await finishTurn($, 'after-rebuild')
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['after-rebuild'])
+})
+
+test('json that is not an object is backed up and rebuilt', async ($, on) => {
+  const original = '[]'
+  const store = diskStore(on, INLINE_STORE, original, { [BARE_STORE]: original, [WAITROOM_STORE]: original })
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(reply.text).toBe(REBUILT_NOTICE)
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(original)
+  expect(JSON.parse(store.files.get(INLINE_STORE) ?? '')).toEqual({})
+  expect(store.files.get(BARE_STORE)).toBe(original)
+  expect(store.files.get(WAITROOM_STORE)).toBe(original)
+})
+
+test('a second corruption keeps the first backup', async ($, on) => {
+  const first = 'not json{'
+  const second = 'also not json['
+  const store = diskStore(on, INLINE_STORE, first)
+  await $.command.run({ command: 'bet' } as never)
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(first)
+
+  store.files.set(INLINE_STORE, second)
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(first)
+  const later = [...store.files.keys()].filter(name => name.startsWith(`${INLINE_STORE}.bak-`))
+  expect(later).toHaveLength(1)
+  expect(store.files.get(later[0] ?? '')).toBe(second)
+  expect(JSON.parse(store.files.get(INLINE_STORE) ?? '')).toEqual({})
+})
+
+test('a store whose turns are not a list is backed up and rebuilt', async ($, on) => {
+  const listed = JSON.stringify({ turns: { not: 'a list' }, extrasFrom: '1900-01-01' })
+  const store = diskStore(on, INLINE_STORE, listed)
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(reply.text).toBe(REBUILT_NOTICE)
+  expect((reply.text ?? '').length).toBeLessThanOrEqual(48)
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(listed)
+  const rebuilt = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: unknown; extrasFrom?: string }
+  expect(rebuilt.turns).toBeUndefined()
+  expect(rebuilt.extrasFrom).toBe('1900-01-01')
+})
+
+test('repair leaves the bare name and the other install byte-identical', async ($, on) => {
+  const bare = ''
+  const other = 'not json{'
+  const room = '{"turns":[]}\n'
+  const store = diskStore(on, INLINE_STORE, '', { [BARE_STORE]: bare, [WAITROOM_STORE]: other, [`${STORE_DIR}/room-check.json`]: room })
+  await finishTurn($, 'this-source')
+
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['this-source'])
+  expect(store.files.get(BARE_STORE)).toBe(bare)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${BARE_STORE}.bak`)).toBe(false)
+  expect(store.files.get(`${STORE_DIR}/room-check.json`)).toBe(room)
+})
+
+test('cowork plugins are the store root when that env is set', async ($, on) => {
+  const cowork = `${ISOLATED_CONFIG}/cowork_plugins/store/${INLINE_NAME}`
+  const original = 'not json{'
+  const store = diskStore(on, cowork, original, { [INLINE_STORE]: original }, { CLAUDE_CODE_USE_COWORK_PLUGINS: '1' })
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(reply.text).toBe(REBUILT_NOTICE)
+  expect(store.files.get(`${cowork}.bak`)).toBe(original)
+  expect(JSON.parse(store.files.get(cowork) ?? '')).toEqual({})
+  expect(store.files.get(INLINE_STORE)).toBe(original)
+})
+
+test('CLAUDE_CODE_PLUGIN_CACHE_DIR is the store root', async ($, on) => {
+  const cache = '/tmp/bet-plugin-cache'
+  const cached = `${cache}/store/${INLINE_NAME}`
+  const decoy = 'not json{'
+  const store = diskStore(on, cached, decoy, { [INLINE_STORE]: decoy, [BARE_STORE]: decoy }, { CLAUDE_CODE_PLUGIN_CACHE_DIR: cache })
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(reply.text).toBe(REBUILT_NOTICE)
+  expect(store.files.get(`${cached}.bak`)).toBe(decoy)
+  expect(JSON.parse(store.files.get(cached) ?? '')).toEqual({})
+  expect(store.files.get(INLINE_STORE)).toBe(decoy)
+  expect(store.files.get(BARE_STORE)).toBe(decoy)
+})
+
+test('two turns on a healthy store both save, and no lock directory is left', async ($, on) => {
+  const healthy = '{"turns":[]}\n'
+  const store = diskStore(on, INLINE_STORE, healthy, {}, {}, undefined, true)
+  await finishTurn($, 'first')
+  await finishTurn($, 'second')
+
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['first', 'second'])
+  expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
+  expect(store.logged).not.toContain("couldn't save that turn")
+})
+
+test('a healthy store is read without creating the lock', async ($, on) => {
+  const store = diskStore(on, INLINE_STORE, '{}\n', {}, {}, undefined, true)
+  await finishTurn($, 'healthy-read')
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.mkdirs).toEqual([])
+  expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
+})
+
+test('three healthy turns in a row all save', async ($, on) => {
+  const store = diskStore(on, INLINE_STORE, '{}\n', {}, {}, undefined, true)
+  for (const turnId of ['one', 'two', 'three']) await finishTurn($, turnId)
+
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['one', 'two', 'three'])
+  expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
+  expect(store.logged).toEqual([])
+})
+
+test('after a repair, the next turns save and no lock is left', async ($, on) => {
+  const store = diskStore(on, INLINE_STORE, 'not json{', {}, {}, undefined, true)
+  for (const turnId of ['after-repair', 'next']) await finishTurn($, turnId)
+
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['after-repair', 'next'])
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe('not json{')
+  expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
+  expect(store.mkdirs).toEqual([])
+})
+
+test('a held lock skips the repair', async ($, on) => {
+  const original = 'not json{'
+  const store = diskStore(on, INLINE_STORE, original)
+  store.files.set(`${INLINE_STORE}.lock`, 'held')
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(original)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.get(`${INLINE_STORE}.lock`)).toBe('held')
+})
+
+test('with neither config dir nor home set, nothing is written', async ($, on) => {
+  const original = 'not json{'
+  const store = diskStore(on, INLINE_STORE, original, {}, { CLAUDE_CONFIG_DIR: '', HOME: '' })
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(original)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+})
+
+test('a directory marketplace covering this folder repairs nothing', async ($, on) => {
+  const inline = 'not json{'
+  const other = '[]'
+  const store = diskStore(on, INLINE_STORE, inline, {
+    [WAITROOM_STORE]: other,
+    [USER_SETTINGS]: directorySettings(PLUGIN_PARENT),
+  })
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+  expect(reply.text).not.toBe(REBUILT_NOTICE)
+})
+
+test('an ancestor that holds the marketplace manifest repairs nothing', async ($, on) => {
+  const inline = 'not json{'
+  const other = '[]'
+  const slash = PLUGIN_PARENT.lastIndexOf('/')
+  const ancestor = slash <= 0 ? PLUGIN_PARENT : PLUGIN_PARENT.slice(0, slash)
+  const store = diskStore(on, INLINE_STORE, inline, {
+    [WAITROOM_STORE]: other,
+    [USER_SETTINGS]: directorySettings(ancestor),
+    [`${ancestor}/.claude-plugin/marketplace.json`]: '{}\n',
+  })
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+})
+
+test('a project directory marketplace repairs nothing', async ($, on) => {
+  const project = '/tmp/bet-directory-project'
+  const inline = 'not json{'
+  const other = '[]'
+  const store = diskStore(
+    on,
+    INLINE_STORE,
+    inline,
+    {
+      [WAITROOM_STORE]: other,
+      [`${project}/.claude/settings.local.json`]: directorySettings(PLUGIN_PARENT),
+    },
+    {},
+    project,
+  )
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+})
+
+test('settings that cannot be read repair nothing', async ($, on) => {
+  const inline = 'not json{'
+  const other = '[]'
+  const store = diskStore(on, INLINE_STORE, inline, { [WAITROOM_STORE]: other, [USER_SETTINGS]: 'not json{' })
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+})
+
+test('a directory marketplace that does not enable this plugin still repairs the inline file', async ($, on) => {
+  const inline = 'not json{'
+  const other = '[]'
+  const store = diskStore(on, INLINE_STORE, inline, {
+    [WAITROOM_STORE]: other,
+    [USER_SETTINGS]: directorySettings(PLUGIN_PARENT, false),
+  })
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(reply.text).toBe(REBUILT_NOTICE)
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(inline)
+  expect(JSON.parse(store.files.get(INLINE_STORE) ?? '')).toEqual({})
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+})
+
+test('a directory marketplace declared for the user and enabled for the project repairs nothing', async ($, on) => {
+  const project = '/tmp/bet-directory-split'
+  const inline = 'not json{'
+  const other = 'not json{'
+  const store = diskStore(
+    on,
+    INLINE_STORE,
+    inline,
+    {
+      [WAITROOM_STORE]: other,
+      [USER_SETTINGS]: JSON.stringify({ extraKnownMarketplaces: { waitroom: { source: { source: 'directory', path: PLUGIN_PARENT } } } }),
+      [`${project}/.claude/settings.json`]: JSON.stringify({ enabledPlugins: { 'bet-on-your-agent@waitroom': true } }),
+    },
+    {},
+    project,
+  )
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(reply.text).not.toBe(REBUILT_NOTICE)
+})
+
+test('a directory marketplace kept only in known_marketplaces.json repairs nothing', async ($, on) => {
+  const inline = 'not json{'
+  const store = diskStore(on, INLINE_STORE, inline, {
+    [`${ISOLATED_CONFIG}/plugins/known_marketplaces.json`]: JSON.stringify({ waitroom: { source: { source: 'directory', path: PLUGIN_PARENT } } }),
+    [USER_SETTINGS]: JSON.stringify({ enabledPlugins: { 'bet-on-your-agent@waitroom': true } }),
+  })
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+})
+
+test('a known_marketplaces.json that cannot be read repairs nothing', async ($, on) => {
+  const inline = 'not json{'
+  const store = diskStore(on, INLINE_STORE, inline, { [`${ISOLATED_CONFIG}/plugins/known_marketplaces.json`]: 'not json{' })
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+})
+
+test('an unreadable history with nothing loaded says turns are not being saved', async ($, on) => {
+  const store = flakyStore(on, {})
+  store.fail()
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: HISTORY_UNREAD })).toBeDefined()
+  expect(await pane.find({ text: /No turns yet/ })).toBeUndefined()
+  expect(await pane.find({ text: /Five calls in/ })).toBeUndefined()
+  await pane.unmount()
+
+  const reply = await $.command.run({ command: 'bet' } as never)
+  expect(reply.text).toBe(HISTORY_UNREAD)
+  // A thrown read, with no file to repair, is not a fresh start.
+  expect(store.data.turns).toBeUndefined()
+})
+
+test('a history that is not a list says turns are not being saved', async ($, on) => {
+  const store = flakyStore(on, { turns: { not: 'a list' } })
+
+  const reply = await $.command.run({ command: 'bet' } as never)
+  expect(reply.text).toBe(HISTORY_UNREAD)
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: HISTORY_UNREAD })).toBeDefined()
+  expect(await pane.find({ text: /No turns yet/ })).toBeUndefined()
+  await pane.unmount()
+
+  expect(store.data.turns).toEqual({ not: 'a list' })
+})
+
+test('a failed read keeps the last history on the pane, the recap and the band', async ($, on) => {
+  const history = [
+    ...Array.from({ length: 8 }, (_, at) => storedTurn(`old-${at}`, at, { landed: true, ask: 'an old turn' })),
+    storedTurn('owed-1', 8, { ask: 'keep the record' }),
+  ]
+  const store = flakyStore(on, { turns: history })
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  store.fail()
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /No turns yet/ })).toBeUndefined()
+  expect(await pane.find({ text: /Brier 0\.040/ })).toBeDefined()
+  await pane.unmount()
+
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(false),
+  })
+  expect(await band.find({ text: /Did it land/ })).toBeDefined()
+  expect(await band.find({ text: /keep the record/ })).toBeDefined()
+  await band.unmount()
+
+  const reply = await $.command.run({ command: 'bet-recap' } as never)
+  expect(reply.text).toMatch(/Rank\s+Oracle/)
+  expect(reply.text).toMatch(/Session Brier\s+0\.040/)
+  expect(reply.text).not.toMatch(/Rank\s+Unranked/)
+})
+
+test('a failed read of the daily challenges leaves the streak in place', async ($, on) => {
+  const streak = [
+    { date: '2026-11-13', dim: 'duration' as const, guess: 'yes' as const, actual: 'yes' as const, correct: true },
+    { date: '2026-11-14', dim: 'files' as const, guess: 'no' as const, actual: 'no' as const, correct: true },
+  ]
+  const store = flakyStore(on, { dailyChallenges: streak, turns: [] })
+  await $.turn.start({ text: 'add a cache', turnId: 'daily-unlucky' })
+  store.fail(key => key === 'dailyChallenges')
+  await $.turn.complete({
+    turnId: 'daily-unlucky',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+
+  expect(store.data.dailyChallenges).toEqual(streak)
 })
 
 /**
@@ -1166,7 +1893,7 @@ test("a subagent's tool calls stay off the open turn's tool-call count", async (
   await band.press({ key: 'p80' })
   await band.press({ key: 'f0' })
   expect(await band.find({ text: /how many tool calls will it make\?/ })).toBeDefined()
-  // 3-6 is what this turn's own calls land on. Five subagent calls would push it to 7+.
+  // 3–6 is what this turn's own calls land on. Five subagent calls would push it to 7+.
   await band.press({ key: 'b3-6' })
   expect(await band.find({ text: /0 written so far/ })).toBeDefined()
 

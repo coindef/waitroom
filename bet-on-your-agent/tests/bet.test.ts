@@ -1,5 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
+import { sourceIdFor, storeFileName } from '../hooks/store-file'
+
 import type { DailyChallengeRecord, TurnRecord } from '../types'
 import {
   addDays,
@@ -564,7 +566,9 @@ test('a bonus bucket is a word where a bare digit would read as a key, else itse
   expect(bonusLabel('files', '1')).toBe('one')
   expect(bonusLabel('files', '2-3')).toBe('2–3')
   expect(bonusLabel('duration', '<30s')).toBe('<30s')
-  expect(bonusLabel('toolCalls', '0-2')).toBe('0-2')
+  expect(bonusLabel('duration', '30-90s')).toBe('30–90s')
+  expect(bonusLabel('toolCalls', '0-2')).toBe('0–2')
+  expect(bonusLabel('toolCalls', '3-6')).toBe('3–6')
 })
 
 test('the bonus question is scored on whichever dimension it actually asked', async () => {
@@ -1149,6 +1153,32 @@ test('while a turn runs the forecast keeps the band ahead of a ship offer; a bre
   expect(rowsKept([ship, bet], false)[0]).toBe(ship)
   expect(rowsKept([ship, bet, breathe], true)[0]).toBe(breathe)
   expect(rowsKept(outsiders, true)).toBe(outsiders)
+})
+
+test('a store file is named the way the engine names it', () => {
+  expect(storeFileName('bet-on-your-agent@waitroom')).toBe('bet-on-your-agent_waitroom-34ea4b598520.json')
+  expect(storeFileName('bet-on-your-agent@inline')).toBe('bet-on-your-agent_inline-b4b76a335767.json')
+  expect(storeFileName('bet-on-your-agent')).toBe('bet-on-your-agent.json')
+  // 65 characters is past the 64-character cut, so the stem is the first 64 and the hash is of the whole id.
+  expect(storeFileName('a'.repeat(65))).toBe(`${'a'.repeat(64)}-635361c48bb9.json`)
+  expect(storeFileName('con')).toBe('con-1143da2bc54c.json')
+  expect(storeFileName('CON')).toBe('CON-a3dbc4b644a9.json')
+  // Non-ASCII hashes as UTF-8, the way the engine does.
+  expect(storeFileName('bet-on-your-agent@café')).toBe('bet-on-your-agent_caf_-b1aba5858a68.json')
+  expect(storeFileName('bet-on-your-agent@市场')).toBe('bet-on-your-agent___-d59459d1affa.json')
+})
+
+test('a cache install is that marketplace, and a loose directory proves no id', () => {
+  const installed = 'file:///home/u/.claude/plugins/cache/waitroom/bet-on-your-agent/0.6.6/hooks/store-file.ts'
+  const installedId = sourceIdFor(installed)
+  expect(installedId).toBe('bet-on-your-agent@waitroom')
+  expect(storeFileName(installedId ?? '')).toBe('bet-on-your-agent_waitroom-34ea4b598520.json')
+  const cowork = 'file:///home/u/.claude/cowork_plugins/cache/waitroom/bet-on-your-agent/0.6.6/hooks/store-file.ts'
+  expect(sourceIdFor(cowork)).toBe('bet-on-your-agent@waitroom')
+  // `--plugin-dir` and a directory-source marketplace share this shape.
+  const loose = 'file:///agent/repos/waitroom/bet-on-your-agent/hooks/store-file.ts'
+  expect(sourceIdFor(loose)).toBeUndefined()
+  expect(sourceIdFor('file:///tmp/other/hooks/store-file.ts')).toBeUndefined()
 })
 
 test('while a turn runs only a breathe nudge holds the forecast back; between turns a ship offer does too', () => {

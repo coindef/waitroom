@@ -110,7 +110,7 @@ time. Same `skip`, costing nothing:
 
 ```
  bet  Bonus: how long will this turn take?
-1: <30s  2: 30-90s  3: >90s  0: Skip
+1: <30s  2: 30–90s  3: >90s  0: Skip
 ```
 
 The forecast is quoted against **what you asked for**, which is the point: a
@@ -244,7 +244,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 144 tests
+claude plugin test .         # 178 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested

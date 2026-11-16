@@ -219,6 +219,14 @@ declare module 'claude-code' {
        */
       revision: number
       /**
+       * The last turn history a read or a write actually produced.
+       *
+       * A drawing whose read fails shows this instead of an empty record,
+       * which would look like the rank and the score had been wiped. Null
+       * until a read has succeeded.
+       */
+      lastGoodTurns: TurnRecord[] | null
+      /**
        * How many turns have offered a bonus question, counted forever rather
        * than off the history array's own length: that array is capped at 500,
        * so past the cap its length stops growing and the rotation would stall

@@ -92,10 +92,11 @@ export const bonusBucketOf = (dim: BonusDim, value: number): BonusBucket => {
  *
  * The files dimension reuses `FILE_LABELS` so "1 file" never sits on the same
  * key as the digit 1 — the bug the main files bet already had to fix. The
- * other two dimensions' labels are not bare digits, so they are fine as is.
+ * other two dimensions' labels are not bare digits. A range reads with an en
+ * dash, the same as `2–3`.
  */
 export const bonusLabel = (dim: BonusDim, bucket: BonusBucket): string =>
-  dim === 'files' ? FILE_LABELS[bucket as FileBucket] : bucket
+  dim === 'files' ? FILE_LABELS[bucket as FileBucket] : bucket.replace('-', '–')
 
 /**
  * The daily challenge's own dimension pool: the same three stats the bonus
