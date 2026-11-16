@@ -10,6 +10,11 @@
 - **Showing a card keeps a mark from another session.** That wait updates when the card was shown. The box and the due wait stay as the later read has them.
 - **`/card` says when the deck was cut.** A deck keeps 1000 cards from the first 256 KiB. Past that, the reply says `1000 of 1001 cards · deck capped at 1000` or `deck cut at 256 KiB`.
 
+### wait-notify 0.1.1
+
+- **The reminder waits for your answer.** A quick Read or a subagent's tool finishing alongside the one you're answering no longer cancels it.
+- **A session you ended stays ended.** A prompt sent right as you exit or `/clear` no longer makes other sessions think it's still open.
+
 ### wait-anchor 0.1.1
 
 - **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
