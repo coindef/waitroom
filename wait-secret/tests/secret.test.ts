@@ -4,6 +4,7 @@ import {
   baselineOf,
   BAND_PRECEDENCE,
   cardFor,
+  DIFF_TOO_BIG,
   DISABLE_LABEL,
   DISMISS_LABEL,
   drawnBy,
@@ -22,8 +23,11 @@ import {
   RULES,
   scanLine,
   statusLine,
+  STATUS_COLUMNS,
   SUBTITLE,
   TITLE,
+  TURN_OFF_HINT,
+  withTurnOff,
   turnAdds,
   yieldsBand,
 } from '../hooks/secret'
@@ -45,6 +49,16 @@ test('the copy is the spec copy, and the status line never names a kind', () => 
   expect(rowLine({ path: 'src/a.ts', line: 12, masked: 'sk-…3f9a', kind: 'OpenAI key?' })).toBe(
     'src/a.ts:12  sk-…3f9a  (OpenAI key?)',
   )
+})
+
+test('the turn-off hint is appended only when the status line still fits', () => {
+  const fitted = 'x'.repeat(STATUS_COLUMNS - TURN_OFF_HINT.length)
+  const over = `${fitted}y`
+  expect(withTurnOff(fitted)).toBe(`${fitted}${TURN_OFF_HINT}`)
+  expect(withTurnOff(fitted).length).toBe(STATUS_COLUMNS)
+  expect(withTurnOff(over)).toBe(over)
+  expect(withTurnOff(DIFF_TOO_BIG)).toBe('diff too big · /wait-secret turns it off')
+  expect(withTurnOff(DIFF_TOO_BIG).length).toBeLessThanOrEqual(STATUS_COLUMNS)
 })
 
 test('ten rules at most', () => {

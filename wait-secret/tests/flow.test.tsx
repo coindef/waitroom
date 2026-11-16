@@ -61,6 +61,12 @@ const engineBottom = (on: On, repo: Repo, settings: Settings = { set: [] }, stor
       throw new Error(`not a read-only git read: ${argv}`)
     }
     if (argv.includes('--show-toplevel')) return repo.root === undefined ? ran('', 128) : ran(`${repo.root}\n`)
+    // A stable HEAD, so the scan diffs the worktree and not the empty tree.
+    // Nothing is committed during these turns, so a start..HEAD diff is empty.
+    if (e.argv.includes('rev-parse')) return ran(`${'a'.repeat(40)}\n`)
+    if (e.argv.includes('symbolic-ref')) return ran('', 1)
+    if (e.argv.includes('hash-object')) return ran('4b825dc642cb6eb9a060e54bf8d69288fbee4904\n')
+    if (e.argv.some(part => part.includes('..'))) return ran('')
     if (argv.includes('ls-files')) {
       // Only -z output is NUL-separated and unquoted; anything else is a bug.
       if (!e.argv.includes('-z')) throw new Error(`ls-files without -z: ${argv}`)
@@ -116,7 +122,7 @@ const shown = (said: readonly (string | undefined)[]) => said.filter(text => tex
 const BAND = { component: 'AbovePrompt', requestId: 'above-prompt', viewport: { columns: 140, rows: 40 } } as const
 
 const bandProps = (isWorking: boolean, hasSurvey = false) =>
-  ({ hasSurvey, isWorking, maxRows: 6, bodyColumns: 135, scroll: { offset: 0, bodyRows: 6 }, view: {} }) as const
+  ({ hasSurvey, isCollapsed: false, isWorking, maxRows: 6, bodyColumns: 135, scroll: { offset: 0, bodyRows: 6 }, view: {} }) as const
 
 const mountBand = ($: Engine, isWorking: boolean, hasSurvey = false) =>
   $.ui.mount({ plugin: 'wait-secret', surface: 'terminal', ...BAND, props: bandProps(isWorking, hasSurvey) })

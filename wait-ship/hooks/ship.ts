@@ -601,6 +601,59 @@ export const fingerprintOf = (text: string): string => {
   return `${text.length}:${hash.toString(16)}`
 }
 
+/** The whole diff, and each file's own chunk, as the last scan read them. */
+export type TreeSeen = {
+  tree: string
+  files: Record<string, string>
+}
+
+/**
+ * A stored baseline. This build keeps the whole diff and each file. An older
+ * build stored one fingerprint string for the whole diff and nothing per file.
+ */
+export const seenFrom = (stored: TreeSeen | string | null): TreeSeen | null => {
+  if (typeof stored === 'string') return { tree: stored, files: {} }
+  if (stored === null) return null
+
+  return stored
+}
+
+/**
+ * One fingerprint for the diff text and one per file. Chunks are slices of
+ * the original text, so a file that did not change keeps its fingerprint
+ * when another file is appended after it. A later scan can then name the
+ * files whose own chunk moved, not every file still dirty.
+ */
+export const treeSeenOf = (text: string): TreeSeen => {
+  const files: Record<string, string> = {}
+  const starts: number[] = []
+  for (const match of text.matchAll(/^diff --git |^diff --no-index /gm)) starts.push(match.index)
+  for (let at = 0; at < starts.length; at++) {
+    const from = starts[at]
+    if (from === undefined) continue
+    const to = starts[at + 1] ?? text.length
+    // The newline that only separates this chunk from the next one is not part
+    // of the file. Counting it would mark the file changed once another file
+    // is appended after it.
+    const body = text.slice(from, to).replace(/\n+$/, '')
+    const path = parseDiffFiles(body)[0]?.path
+    if (path !== undefined && path !== '') files[path] = fingerprintOf(body)
+  }
+
+  return { tree: fingerprintOf(text), files }
+}
+
+/**
+ * Files whose diff changed since `before`. No earlier read counts every file
+ * as changed. A tree that moved without any file's own chunk moving — a file
+ * put back to HEAD, or a newline that only separated chunks — names nothing.
+ */
+export const filesSince = (before: TreeSeen | null, seen: TreeSeen, files: readonly FileChange[]): FileChange[] => {
+  if (before === null) return [...files]
+
+  return files.filter(file => before.files[file.path] !== seen.files[file.path])
+}
+
 // ---------------------------------------------------------------------------
 // The row above the prompt
 // ---------------------------------------------------------------------------

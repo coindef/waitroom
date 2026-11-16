@@ -2,6 +2,9 @@ import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 import { expect, test } from 'claude-code/testing'
 
+/** The hang stand-in. Timers are not in this mod's `es2023` lib. */
+declare function setTimeout(callback: () => void, delayMs: number): number
+
 /**
  * The whole loop through the engine: git answered by the test (`$.process.run`
  * is an event like any other), the band drawn after a turn with changes, and
@@ -23,6 +26,16 @@ const NEW_FILE_DIFF = [
   '',
 ].join('\n')
 
+/** A file the person edits by hand, not one a turn writes. */
+const NOTES_DIFF = [
+  'diff --git notes.md notes.md',
+  '--- /dev/null',
+  '+++ notes.md',
+  '@@ -0,0 +1,1 @@',
+  '+a note written between turns',
+  '',
+].join('\n')
+
 type Repo = {
   /** undefined: not a repository at all. */
   root?: string
@@ -38,6 +51,11 @@ type Repo = {
   /** This untracked file's own `--no-index` diff, by path. */
   untrackedDiffs?: Record<string, string>
   subjects?: string[]
+  /** The next N `git diff HEAD` calls reject, then git answers again. */
+  failDiffs?: number
+  /** The next N `git diff HEAD` calls reject after `hangMs`, then git answers again. */
+  hangDiffs?: number
+  hangMs?: number
 }
 
 /** Every argv the plugin handed `$.process.run`, and every transcript line it logged. */
@@ -73,7 +91,22 @@ const engineBottom = (on: On, repo: Repo, fs: Record<string, string> = {}, seen:
       return ran('', 128)
     }
     if (argv.includes('--show-toplevel')) return repo.root === undefined ? ran('', 128) : ran(`${repo.root}\n`)
-    if (argv.includes('diff HEAD')) return ran(repo.diffHead ?? '')
+    if (argv.includes('diff HEAD')) {
+      if ((repo.failDiffs ?? 0) > 0) {
+        repo.failDiffs = (repo.failDiffs ?? 0) - 1
+        throw new Error('git diff failed')
+      }
+      if ((repo.hangDiffs ?? 0) > 0) {
+        repo.hangDiffs = (repo.hangDiffs ?? 0) - 1
+        const wait = repo.hangMs ?? 400
+
+        return new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('git diff slow')), wait)
+        })
+      }
+
+      return ran(repo.diffHead ?? '')
+    }
     if (argv.includes('ls-files')) return ran((repo.untracked ?? []).join('\n'))
     if (argv.includes('log -20')) return ran((repo.subjects ?? []).join('\n'))
     for (const [path, text] of Object.entries(repo.untrackedDiffs ?? {})) {
@@ -101,9 +134,20 @@ const bandProps = (hasSurvey = false) =>
 const mountBand = ($: Engine, hasSurvey = false) =>
   $.ui.mount({ plugin: 'wait-ship', surface: 'terminal', ...BAND, props: bandProps(hasSurvey) })
 
-const landTurn = async ($: Engine, turnId: string) => {
+/**
+ * Lands a turn. `during` runs after the turn has started and before it ends:
+ * that is when the turn's own writes land, and a baseline taken at
+ * `turn.start` must still see the tree as the turn found it.
+ */
+const landTurn = async ($: Engine, turnId: string, during?: () => void) => {
   await $.turn.start({ text: 'add a feature', turnId })
+  during?.()
   await $.turn.complete({ turnId, answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer' })
+}
+
+/** `diff` is what the turn itself writes, after the turn-start baseline. */
+const wrote = (repo: Repo, diff: string) => () => {
+  repo.diffHead = diff
 }
 
 test('no changes at all: the band stays completely silent', async ($, on) => {
@@ -128,13 +172,14 @@ test('outside a repository: the band stays completely silent, even with files on
 
 test('a turn with changes offers a kit, and accepting all writes every drafted artifact', async ($, on) => {
   const seen: Seen = { runs: [], logged: [] }
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [], subjects: ['feat: a', 'fix: b', 'chore: c'] }
   const fs = engineBottom(
     on,
-    { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [], subjects: ['feat: a', 'fix: b', 'chore: c'] },
+    repo,
     { [`${ROOT}/CHANGELOG.md`]: '## Unreleased\n\n### Added\n- An old entry.\n' },
     seen,
   )
-  await landTurn($, 'turn-3')
+  await landTurn($, 'turn-3', wrote(repo, NEW_FILE_DIFF))
 
   const offering = await mountBand($)
   expect(await offering.find({ text: /Drafts ready/ })).toBeDefined()
@@ -160,12 +205,9 @@ test('a turn with changes offers a kit, and accepting all writes every drafted a
 })
 
 test('the offer shows accept-all and skip, and More puts each draft on its own key with one press', async ($, on) => {
-  engineBottom(
-    on,
-    { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] },
-    { [`${ROOT}/CHANGELOG.md`]: '## Unreleased\n' },
-  )
-  await landTurn($, 'turn-more')
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  engineBottom(on, repo, { [`${ROOT}/CHANGELOG.md`]: '## Unreleased\n' })
+  await landTurn($, 'turn-more', wrote(repo, NEW_FILE_DIFF))
 
   const offering = await mountBand($)
   const keysNow = async () => (await offering.findAll({ type: 'Button' })).map(one => one.props.hotkey)
@@ -184,8 +226,9 @@ test('the offer shows accept-all and skip, and More puts each draft on its own k
 })
 
 test('pressing the commit-only key writes only the commit message', async ($, on) => {
-  const fs = engineBottom(on, { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] })
-  await landTurn($, 'turn-4')
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  const fs = engineBottom(on, repo)
+  await landTurn($, 'turn-4', wrote(repo, NEW_FILE_DIFF))
 
   const offering = await mountBand($)
   await offering.press({ key: 'more' })
@@ -199,7 +242,7 @@ test('pressing the commit-only key writes only the commit message', async ($, on
 
 test('every key only writes drafts: no git commit and no gh is ever run, only reads of the repository', async ($, on) => {
   const seen: Seen = { runs: [], logged: [] }
-  const repo: Repo = { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [], subjects: ['feat: a'] }
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [], subjects: ['feat: a'] }
   engineBottom(on, repo, { [`${ROOT}/CHANGELOG.md`]: '## Unreleased\n' }, seen)
   for (const [turnId, keys] of [
     ['turn-r1', ['all']],
@@ -209,8 +252,7 @@ test('every key only writes drafts: no git commit and no gh is ever run, only re
     ['turn-r5', ['more', 'edit']],
   ] as const) {
     // Each turn changes something of its own; one that changed nothing gets no kit.
-    repo.diffHead = `${NEW_FILE_DIFF}+// ${turnId}\n`
-    await landTurn($, turnId)
+    await landTurn($, turnId, wrote(repo, `${NEW_FILE_DIFF}+// ${turnId}\n`))
     const offering = await mountBand($)
     for (const key of keys) await offering.press({ key })
     await offering.unmount()
@@ -225,8 +267,9 @@ test('every key only writes drafts: no git commit and no gh is ever run, only re
 
 test('skip writes nothing and leaves the band quiet', async ($, on) => {
   const seen: Seen = { runs: [], logged: [] }
-  const fs = engineBottom(on, { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }, {}, seen)
-  await landTurn($, 'turn-5')
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  const fs = engineBottom(on, repo, {}, seen)
+  await landTurn($, 'turn-5', wrote(repo, NEW_FILE_DIFF))
 
   const offering = await mountBand($)
   await offering.press({ key: 'skip' })
@@ -244,8 +287,9 @@ test(
   'a configured ship directory is honored',
   { options: { shipDir: 'ship-drafts' } },
   async ($, on) => {
-    const fs = engineBottom(on, { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] })
-    await landTurn($, 'turn-6')
+    const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+    const fs = engineBottom(on, repo)
+    await landTurn($, 'turn-6', wrote(repo, NEW_FILE_DIFF))
 
     const offering = await mountBand($)
     await offering.press({ key: 'all' })
@@ -257,9 +301,9 @@ test(
 
 test('a session in a subfolder prints the commit command from that folder', async ($, on) => {
   const seen: Seen = { runs: [], logged: [] }
-  const repo: Repo = { root: ROOT, cwd: `${ROOT}/packages/app`, diffHead: NEW_FILE_DIFF, untracked: [] }
+  const repo: Repo = { root: ROOT, cwd: `${ROOT}/packages/app`, diffHead: '', untracked: [] }
   const fs = engineBottom(on, repo, {}, seen)
-  await landTurn($, 'turn-sub')
+  await landTurn($, 'turn-sub', wrote(repo, NEW_FILE_DIFF))
 
   const offering = await mountBand($)
   await offering.press({ key: 'all' })
@@ -279,9 +323,9 @@ test(
   { options: { shipDir: 'my drafts' } },
   async ($, on) => {
     const seen: Seen = { runs: [], logged: [] }
-    const repo: Repo = { root: ROOT, cwd: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }
+    const repo: Repo = { root: ROOT, cwd: ROOT, diffHead: '', untracked: [] }
     const fs = engineBottom(on, repo, {}, seen)
-    await landTurn($, 'turn-space')
+    await landTurn($, 'turn-space', wrote(repo, NEW_FILE_DIFF))
 
     const offering = await mountBand($)
     await offering.press({ key: 'all' })
@@ -297,9 +341,9 @@ test(
 
 test('a worktree switch after the turn prints the path from the new folder', async ($, on) => {
   const seen: Seen = { runs: [], logged: [] }
-  const repo: Repo = { root: ROOT, cwd: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }
+  const repo: Repo = { root: ROOT, cwd: ROOT, diffHead: '', untracked: [] }
   const fs = engineBottom(on, repo, {}, seen)
-  await landTurn($, 'turn-wt')
+  await landTurn($, 'turn-wt', wrote(repo, NEW_FILE_DIFF))
   // The offer was drafted in /repo. Accept happens after /cd into the worktree.
   repo.root = '/wt/feature'
   repo.cwd = '/wt/feature'
@@ -316,17 +360,47 @@ test('a worktree switch after the turn prints the path from the new folder', asy
   expect(fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]).toBeUndefined()
 })
 
+test('session.start, then /cd into a worktree, names only the turn from that folder', async ($, on) => {
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  const seen: Seen = { runs: [], logged: [] }
+  const repo: Repo = { root: ROOT, cwd: `${ROOT}/packages/app`, diffHead: '', untracked: [] }
+  const fs = engineBottom(on, repo, {}, seen)
+  await $.session.start({ cwd: `${ROOT}/packages/app`, surface: 'terminal', isInteractive: true })
+
+  // /cd into a worktree subfolder. The notes were already there; the turn writes the feature.
+  repo.root = '/wt/feature'
+  repo.cwd = '/wt/feature/packages/app'
+  repo.diffHead = NOTES_DIFF
+  await landTurn($, 'turn-cd', () => {
+    repo.diffHead = `${NOTES_DIFF}${NEW_FILE_DIFF}`
+  })
+
+  const offering = await mountBand($)
+  expect(await offering.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
+  expect(await offering.find({ text: /notes\.md|2 files/ })).toBeUndefined()
+  await offering.press({ key: 'all' })
+  await offering.unmount()
+
+  expect(seen.logged[0]).toBe(
+    "Draft written: ../../.waitroom/ship/COMMIT_EDITMSG.txt — git commit -F '../../.waitroom/ship/COMMIT_EDITMSG.txt'",
+  )
+  const commit = fs['/wt/feature/.waitroom/ship/COMMIT_EDITMSG.txt']
+  expect(commit).toContain('src/feature.ts')
+  expect(commit).not.toContain('notes.md')
+  expect(fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]).toBeUndefined()
+})
+
 test('a session entered through a symlink prints a path git can open', async ($, on) => {
   const seen: Seen = { runs: [], logged: [] }
   const repo: Repo = {
     root: '/private/repo',
     cwd: '/tmp/repo/sub',
     prefixFor: { '/tmp/repo/sub': 'sub/' },
-    diffHead: NEW_FILE_DIFF,
+    diffHead: '',
     untracked: [],
   }
   const fs = engineBottom(on, repo, {}, seen)
-  await landTurn($, 'turn-link')
+  await landTurn($, 'turn-link', wrote(repo, NEW_FILE_DIFF))
 
   const offering = await mountBand($)
   await offering.press({ key: 'all' })
@@ -343,8 +417,9 @@ test(
   { options: { shipDir: '/tmp/drafts' } },
   async ($, on) => {
     const seen: Seen = { runs: [], logged: [] }
-    const fs = engineBottom(on, { root: ROOT, cwd: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }, {}, seen)
-    await landTurn($, 'turn-abs')
+    const repo: Repo = { root: ROOT, cwd: ROOT, diffHead: '', untracked: [] }
+    const fs = engineBottom(on, repo, {}, seen)
+    await landTurn($, 'turn-abs', wrote(repo, NEW_FILE_DIFF))
 
     const offering = await mountBand($)
     await offering.press({ key: 'all' })
@@ -362,12 +437,9 @@ test(
   'includeChangelog off leaves out the changelog option even with CHANGELOG.md present',
   { options: { includeChangelog: false } },
   async ($, on) => {
-    const fs = engineBottom(
-      on,
-      { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] },
-      { [`${ROOT}/CHANGELOG.md`]: '## Unreleased\n' },
-    )
-    await landTurn($, 'turn-7')
+    const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+    const fs = engineBottom(on, repo, { [`${ROOT}/CHANGELOG.md`]: '## Unreleased\n' })
+    await landTurn($, 'turn-7', wrote(repo, NEW_FILE_DIFF))
 
     const offering = await mountBand($)
     await offering.press({ key: 'more' })
@@ -389,8 +461,9 @@ test('disabled: zero output, even with changes sitting right there', { options: 
 })
 
 test('the band yields to a survey already up, same as the other mods', async ($, on) => {
-  engineBottom(on, { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] })
-  await landTurn($, 'turn-9')
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  engineBottom(on, repo)
+  await landTurn($, 'turn-9', wrote(repo, NEW_FILE_DIFF))
 
   const band = await mountBand($, true)
   expect(await band.findAll({ type: 'Button' })).toHaveLength(0)
@@ -398,13 +471,12 @@ test('the band yields to a survey already up, same as the other mods', async ($,
 })
 
 test('untracked new files are picked up too, not only tracked changes', async ($, on) => {
-  const fs = engineBottom(on, {
-    root: ROOT,
-    diffHead: '',
-    untracked: ['src/feature.ts'],
-    untrackedDiffs: { 'src/feature.ts': NEW_FILE_DIFF },
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  const fs = engineBottom(on, repo)
+  await landTurn($, 'turn-10', () => {
+    repo.untracked = ['src/feature.ts']
+    repo.untrackedDiffs = { 'src/feature.ts': NEW_FILE_DIFF }
   })
-  await landTurn($, 'turn-10')
 
   const offering = await mountBand($)
   expect(await offering.find({ text: /Drafts ready/ })).toBeDefined()
@@ -430,8 +502,7 @@ test('a turn that changed nothing gets no kit, however much was already changed 
   expect(await quiet.findAll({ type: 'Button' })).toHaveLength(0)
   await quiet.unmount()
 
-  repo.diffHead = `${NEW_FILE_DIFF}+export const y = 2\n`
-  await landTurn($, 'turn-q2') // this one changed a file
+  await landTurn($, 'turn-q2', wrote(repo, `${NEW_FILE_DIFF}+export const y = 2\n`)) // this one changed a file
   const offering = await mountBand($)
   expect(await offering.find({ text: /Drafts ready/ })).toBeDefined()
   await offering.unmount()
@@ -442,10 +513,177 @@ test('a turn that changed nothing gets no kit, however much was already changed 
   await quietAgain.unmount()
 })
 
+test('a file edited between turns is not a kit when the turn writes nothing', async ($, on) => {
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  engineBottom(on, repo)
+  await $.session.start(SESSION)
+
+  // After the session's baseline, before the next turn: the person's own edit.
+  repo.diffHead = NOTES_DIFF
+  await landTurn($, 'turn-between')
+
+  const quiet = await mountBand($)
+  expect(await quiet.find({ text: /Drafts ready/ })).toBeUndefined()
+  expect(await quiet.findAll({ type: 'Button' })).toHaveLength(0)
+  await quiet.unmount()
+})
+
+test('a turn that writes a file names only that file, not one edited between turns', async ($, on) => {
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  const fs = engineBottom(on, repo)
+  await $.session.start(SESSION)
+
+  repo.diffHead = NOTES_DIFF
+  await landTurn($, 'turn-between')
+  await landTurn($, 'turn-writes', () => {
+    repo.diffHead = `${NOTES_DIFF}${NEW_FILE_DIFF}`
+  })
+
+  const offering = await mountBand($)
+  expect(await offering.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
+  expect(await offering.find({ text: /notes\.md|2 files/ })).toBeUndefined()
+  await offering.press({ key: 'all' })
+  await offering.unmount()
+
+  const commit = fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]
+  expect(commit).toContain('src/feature.ts')
+  expect(commit).not.toContain('notes.md')
+})
+
+test('an untracked file already in the tree does not pull a hand edit into the kit', async ($, on) => {
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  const scratch = [
+    'diff --git scratch.txt scratch.txt',
+    '--- /dev/null',
+    '+++ scratch.txt',
+    '@@ -0,0 +1,1 @@',
+    '+scratch',
+    '',
+  ].join('\n')
+  const repo: Repo = {
+    root: ROOT,
+    diffHead: '',
+    untracked: ['scratch.txt'],
+    untrackedDiffs: { 'scratch.txt': scratch },
+  }
+  const fs = engineBottom(on, repo)
+  await $.session.start(SESSION)
+
+  repo.diffHead = NOTES_DIFF
+  await landTurn($, 'turn-between')
+  await landTurn($, 'turn-writes', () => {
+    repo.diffHead = `${NOTES_DIFF}${NEW_FILE_DIFF}`
+  })
+
+  const offering = await mountBand($)
+  expect(await offering.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
+  expect(await offering.find({ text: /notes\.md|scratch\.txt|2 files|3 files/ })).toBeUndefined()
+  await offering.press({ key: 'all' })
+  await offering.unmount()
+
+  const commit = fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]
+  expect(commit).toContain('src/feature.ts')
+  expect(commit).not.toContain('notes.md')
+  expect(commit).not.toContain('scratch.txt')
+})
+
+test('an untracked path with no diff of its own does not pull a hand edit into the kit', async ($, on) => {
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: ['scratch.txt'] }
+  const fs = engineBottom(on, repo)
+  await $.session.start(SESSION)
+
+  repo.diffHead = NOTES_DIFF
+  await landTurn($, 'turn-between')
+  await landTurn($, 'turn-writes', () => {
+    repo.diffHead = `${NOTES_DIFF}${NEW_FILE_DIFF}`
+  })
+
+  const offering = await mountBand($)
+  expect(await offering.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
+  expect(await offering.find({ text: /notes\.md|2 files/ })).toBeUndefined()
+  await offering.press({ key: 'all' })
+  await offering.unmount()
+
+  const commit = fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]
+  expect(commit).toContain('src/feature.ts')
+  expect(commit).not.toContain('notes.md')
+})
+
+test(
+  'a snapshot that overruns its cap keeps the previous baseline and the turn still starts',
+  { options: { snapshotCapMs: 40 } },
+  async ($, on) => {
+    on('session.start', ($$, e) => ({ cwd: e.cwd }))
+    const repo: Repo = { root: ROOT, diffHead: '', untracked: [], hangMs: 400 }
+    engineBottom(on, repo)
+    await $.session.start(SESSION)
+
+    repo.hangDiffs = 1
+    const started = Date.now()
+    await landTurn($, 'turn-cap', wrote(repo, NEW_FILE_DIFF))
+
+    expect(Date.now() - started).toBeLessThan(250)
+    const offering = await mountBand($)
+    expect(await offering.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
+    await offering.unmount()
+  },
+)
+
+test(
+  'a capped snapshot offers no kit for a turn that writes nothing, even with the tree already dirty',
+  { options: { snapshotCapMs: 40 } },
+  async ($, on) => {
+    on('session.start', ($$, e) => ({ cwd: e.cwd }))
+    const repo: Repo = { root: ROOT, diffHead: NOTES_DIFF, untracked: [], hangMs: 400 }
+    engineBottom(on, repo)
+    await $.session.start(SESSION)
+    repo.hangDiffs = 1
+    await landTurn($, 'turn-cap-quiet')
+    const band = await mountBand($)
+    expect(await band.find({ text: /Drafts ready/ })).toBeUndefined()
+    await band.unmount()
+  },
+)
+
+test(
+  'a capped snapshot names only the file the turn wrote, not one dirty since session start',
+  { options: { snapshotCapMs: 40 } },
+  async ($, on) => {
+    on('session.start', ($$, e) => ({ cwd: e.cwd }))
+    const repo: Repo = { root: ROOT, diffHead: NOTES_DIFF, untracked: [], hangMs: 400 }
+    engineBottom(on, repo)
+    await $.session.start(SESSION)
+    repo.hangDiffs = 1
+    await landTurn($, 'turn-cap-one', wrote(repo, `${NOTES_DIFF}${NEW_FILE_DIFF}`))
+    const band = await mountBand($)
+    expect(await band.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
+    await band.unmount()
+  },
+)
+
+test('a git failure at turn start leaves the previous baseline and the turn still finishes', async ($, on) => {
+  on('session.start', ($$, e) => ({ cwd: e.cwd }))
+  const repo: Repo = { root: ROOT, diffHead: NOTES_DIFF, untracked: [] }
+  engineBottom(on, repo)
+  await $.session.start(SESSION)
+
+  // The read at turn start does not answer. The tree is otherwise untouched.
+  repo.failDiffs = 1
+  await landTurn($, 'turn-fail')
+
+  const quiet = await mountBand($)
+  expect(await quiet.find({ text: /Drafts ready/ })).toBeUndefined()
+  expect(await quiet.findAll({ type: 'Button' })).toHaveLength(0)
+  await quiet.unmount()
+})
+
 test('the drafts folder ignores itself, so a draft is never read back as a change to ship', async ($, on) => {
-  const repo: Repo = { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
   const fs = engineBottom(on, repo, { [`${ROOT}/CHANGELOG.md`]: '## Unreleased\n' })
-  await landTurn($, 'turn-g1')
+  await landTurn($, 'turn-g1', wrote(repo, NEW_FILE_DIFF))
   const offering = await mountBand($)
   await offering.press({ key: 'all' })
   await offering.unmount()
@@ -454,12 +692,13 @@ test('the drafts folder ignores itself, so a draft is never read back as a chang
 
   // Even where git still lists them (an older folder with no .gitignore of
   // its own), the drafts are this mod's output, never a file the turn changed.
-  repo.diffHead = `${NEW_FILE_DIFF}+export const z = 3\n`
-  repo.untracked = ['.waitroom/ship/PR_BODY.md', '.waitroom/ship/COMMIT_EDITMSG.txt']
-  repo.untrackedDiffs = {
-    '.waitroom/ship/PR_BODY.md': 'diff --git .waitroom/ship/PR_BODY.md .waitroom/ship/PR_BODY.md\n--- /dev/null\n+++ .waitroom/ship/PR_BODY.md\n@@ -0,0 +1,1 @@\n+## Summary\n',
-  }
-  await landTurn($, 'turn-g2')
+  await landTurn($, 'turn-g2', () => {
+    repo.diffHead = `${NEW_FILE_DIFF}+export const z = 3\n`
+    repo.untracked = ['.waitroom/ship/PR_BODY.md', '.waitroom/ship/COMMIT_EDITMSG.txt']
+    repo.untrackedDiffs = {
+      '.waitroom/ship/PR_BODY.md': 'diff --git .waitroom/ship/PR_BODY.md .waitroom/ship/PR_BODY.md\n--- /dev/null\n+++ .waitroom/ship/PR_BODY.md\n@@ -0,0 +1,1 @@\n+## Summary\n',
+    }
+  })
   const next = await mountBand($)
   await next.press({ key: 'more' })
   await next.press({ key: 'commit' })
@@ -469,10 +708,11 @@ test('the drafts folder ignores itself, so a draft is never read back as a chang
 })
 
 test('a .gitignore already in the drafts folder is the person’s own, and is left as it was', async ($, on) => {
-  const fs = engineBottom(on, { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }, {
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  const fs = engineBottom(on, repo, {
     [`${ROOT}/.waitroom/ship/.gitignore`]: 'COMMIT_EDITMSG.txt\n',
   })
-  await landTurn($, 'turn-g3')
+  await landTurn($, 'turn-g3', wrote(repo, NEW_FILE_DIFF))
   const offering = await mountBand($)
   await offering.press({ key: 'all' })
   await offering.unmount()
@@ -484,8 +724,9 @@ test(
   'drafts written to the repository root get no .gitignore: it would hide the whole repository',
   { options: { shipDir: '.' } },
   async ($, on) => {
-    const fs = engineBottom(on, { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] })
-    await landTurn($, 'turn-g4')
+    const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+    const fs = engineBottom(on, repo)
+    await landTurn($, 'turn-g4', wrote(repo, NEW_FILE_DIFF))
     const offering = await mountBand($)
     await offering.press({ key: 'all' })
     await offering.unmount()
@@ -511,8 +752,9 @@ const keyRowOf = (tree: unknown): { props: Record<string, unknown> } | undefined
 }
 
 test('the expanded keys wrap at a narrow width with no blank rows between their lines', async ($, on) => {
-  engineBottom(on, { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }, { [`${ROOT}/CHANGELOG.md`]: '## Unreleased\n' })
-  await landTurn($, 'turn-w1')
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  engineBottom(on, repo, { [`${ROOT}/CHANGELOG.md`]: '## Unreleased\n' })
+  await landTurn($, 'turn-w1', wrote(repo, NEW_FILE_DIFF))
   // A 60-column terminal: the band's body is five less.
   const offering = await $.ui.mount({
     plugin: 'wait-ship',
@@ -558,8 +800,9 @@ test(
     ],
   },
   async ($, on) => {
-    engineBottom(on, { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] })
-    await landTurn($, 'turn-b1')
+    const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+    engineBottom(on, repo)
+    await landTurn($, 'turn-b1', wrote(repo, NEW_FILE_DIFF))
 
     const band = await mountBand($)
     expect(await band.find({ text: /stand up and stretch/ })).toBeDefined()
@@ -595,8 +838,9 @@ test(
   },
   async ($, on) => {
     const seen: Seen = { runs: [], logged: [] }
-    engineBottom(on, { root: ROOT, diffHead: NEW_FILE_DIFF, untracked: [] }, {}, seen)
-    await landTurn($, 'turn-b2')
+    const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+    engineBottom(on, repo, {}, seen)
+    await landTurn($, 'turn-b2', wrote(repo, NEW_FILE_DIFF))
 
     const band = await mountBand($)
     // One mod at a time: the kit, and nothing of the bet's beside it.

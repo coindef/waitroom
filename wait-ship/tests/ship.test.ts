@@ -14,6 +14,7 @@ import {
   rowsKept,
   type FileChange,
   fileList,
+  filesSince,
   fingerprintOf,
   formatSize,
   inferStyle,
@@ -31,9 +32,11 @@ import {
   writtenRelative,
   receiptLines,
   scopeOf,
+  seenFrom,
   subjectOf,
   summaryBullets,
   testPlanLines,
+  treeSeenOf,
   truncate,
   typeOf,
   verbFor,
@@ -493,4 +496,47 @@ test('the same changes read the same fingerprint, and any change reads another',
   expect(fingerprintOf(tree)).toBe(fingerprintOf(`${tree}`))
   expect(fingerprintOf(tree)).not.toBe(fingerprintOf(added('src/feature.ts', ['+two'])))
   expect(fingerprintOf('')).not.toBe(fingerprintOf(tree))
+})
+
+test('filesSince names only the files whose own diff changed since the baseline', () => {
+  const notes = added('notes.md', ['+a note written between turns'])
+  const feature = added('src/feature.ts')
+  const both = notes + feature
+  const before = treeSeenOf(notes)
+  const seen = treeSeenOf(both)
+  const files = parseDiffFiles(both)
+
+  expect(filesSince(before, seen, files).map(one => one.path)).toEqual(['src/feature.ts'])
+  expect(filesSince(null, seen, files).map(one => one.path)).toEqual(['notes.md', 'src/feature.ts'])
+  expect(filesSince(seen, seen, files)).toEqual([])
+})
+
+test('a newline between diffs does not make the previous file look changed', () => {
+  const notes = added('notes.md', ['+a note written between turns'])
+  const scratch = added('scratch.txt', ['+scratch'])
+  const feature = added('src/feature.ts')
+  // The extra newline is what joining the tracked diff to an untracked diff inserts.
+  const before = treeSeenOf(`${notes}\n${scratch}`)
+  const seen = treeSeenOf(`${notes}${feature}\n${scratch}`)
+  const files = parseDiffFiles(`${notes}${feature}\n${scratch}`)
+
+  expect(before.files['notes.md']).toBe(seen.files['notes.md'])
+  expect(before.files['scratch.txt']).toBe(seen.files['scratch.txt'])
+  expect(filesSince(before, seen, files).map(one => one.path)).toEqual(['src/feature.ts'])
+})
+
+test('an older fingerprint string is the whole-tree baseline, with no per-file record', () => {
+  const notes = added('notes.md', ['+a note written between turns'])
+  const feature = added('src/feature.ts')
+  const both = notes + feature
+  const same = seenFrom(fingerprintOf(both))
+
+  expect(same).toEqual({ tree: fingerprintOf(both), files: {} })
+  expect(same?.tree).toBe(treeSeenOf(both).tree)
+  const older = seenFrom(fingerprintOf(notes))
+  expect(filesSince(older, treeSeenOf(both), parseDiffFiles(both)).map(one => one.path)).toEqual([
+    'notes.md',
+    'src/feature.ts',
+  ])
+  expect(seenFrom(null)).toBeNull()
 })
