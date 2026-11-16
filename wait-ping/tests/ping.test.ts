@@ -93,6 +93,32 @@ test('an unusable threshold falls back to 30 seconds', () => {
   expect(thresholdSecondsOf(45)).toBe(45)
 })
 
+test('a threshold of 0.5 seconds falls back to 30, the same as an explicit 0', () => {
+  expect(thresholdSecondsOf(0.5)).toBe(30)
+  expect(wholePositive(0.5, 30)).toBe(30)
+  expect(wholePositive(1.9, 30)).toBe(1)
+})
+
+test('a turn of 0 ms does not notify when the threshold was 0.5 seconds', () => {
+  const thresholdSeconds = thresholdSecondsOf(0.5)
+
+  expect(shouldPing({ ...gate, thresholdSeconds, durationMs: 0 })).toBe(false)
+  expect(pingPlan({ ...gate, thresholdSeconds, durationMs: 0, sound: false, platform: 'linux' })).toBeNull()
+})
+
+test('a turn of 7300 seconds names the hours and leaves the seconds off', () => {
+  expect(formatDuration(7_300_000)).toBe('2h 1m')
+  expect(stopBody(7_300_000)).toBe('You were away 2h 1m')
+  expect(formatDuration(7_200_000)).toBe('2h')
+  expect(formatDuration(3_900_000)).toBe('1h 5m')
+  expect(formatDuration(3_940_000)).toBe('1h 5m')
+})
+
+test('an hour and 40 seconds, with zero minutes, drops the minutes and the seconds', () => {
+  expect(formatDuration(3_640_000)).toBe('1h')
+  expect(stopBody(3_640_000)).toBe('You were away 1h')
+})
+
 test('darwin is silent unless sound is on, and the command is osascript alone', () => {
   const silent = pingPlan({ ...gate, sound: false, platform: 'darwin' })
 
@@ -162,10 +188,23 @@ test('the on line names the threshold and that sound is off unless it is on', ()
   expect(on).toContain('sound off')
   expect(on).toContain('/wait-ping again turns it off')
   expect(toggledOnLine(45, true)).toContain('sound on')
+  expect(on).not.toContain("isn't usable")
 
   const off = toggledOffLine()
   expect(off).toBe('off · /wait-ping turns it on')
   expect(off).not.toContain('30s')
+})
+
+test('an unusable interval is named with the bad value and the fallback actually used', () => {
+  const used = thresholdSecondsOf(0.5)
+  expect(toggledOnLine(used, false, 0.5)).toBe(
+    "on · a local notification once a turn runs 30s, or when a permission confirm is waiting · sound off · /wait-ping again turns it off (0.5 isn't usable, using 30s)",
+  )
+  expect(toggledOnLine(wholePositive('nope', 999), false, 'nope')).toBe(
+    "on · a local notification once a turn runs 999s, or when a permission confirm is waiting · sound off · /wait-ping again turns it off (nope isn't usable, using 999s)",
+  )
+  expect(toggledOnLine(wholePositive(0, 30), true, 0)).toContain("(0 isn't usable, using 30s)")
+  expect(toggledOnLine(wholePositive(1.9, 30), false, 1.9)).not.toContain("isn't usable")
 })
 
 test('a refused toggle says nothing moved, why, and where else the setting lives', () => {

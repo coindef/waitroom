@@ -93,7 +93,14 @@ the turn closes when it lands.
   In a git repository it counts every file whose content the turn changed,
   however it was written — an agent that writes through a shell heredoc makes
   no `Edit` call. Outside one, it counts the `Edit`, `Write` and
-  `NotebookEdit` calls the turn made.
+  `NotebookEdit` calls the turn made. A path git cannot hash is skipped on
+  its own, and that does not ask git about every other file one by one. A
+  path whose hash does not come back is left as it was, not counted as
+  written. When `git status` already lists more than 500 paths at the start
+  of the turn — changed or untracked, not only what this turn will touch —
+  there is no snapshot to diff, and the count is those same tool calls. When
+  a snapshot was taken and a later `git status` lists more than 500 paths,
+  the count is unknown and that question is not scored.
 
 From your second week (see [Your first week](#your-first-week)), once those
 are answered, one more optional question rotates in — how long the turn will
@@ -237,7 +244,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 130 tests
+claude plugin test .         # 143 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested

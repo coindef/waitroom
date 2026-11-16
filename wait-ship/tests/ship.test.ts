@@ -13,6 +13,7 @@ import {
   drawnBy,
   type FileChange,
   fileList,
+  filesSince,
   fingerprintOf,
   formatSize,
   inferStyle,
@@ -22,18 +23,23 @@ import {
   isTestFile,
   isUnder,
   kitOf,
+  draftAbsolute,
   parseDiffFiles,
   parseSubjects,
-  readDiff,
-  sidePath,
-  splitNul,
+  pathFromCwd,
   prBodyOf,
+  readDiff,
+  writtenRelative,
   receiptLines,
   scopeOf,
+  seenFrom,
+  sidePath,
   skippedLine,
+  splitNul,
   subjectOf,
   summaryBullets,
   testPlanLines,
+  treeSeenOf,
   truncate,
   typeOf,
   verbFor,
@@ -407,12 +413,23 @@ test('formatSize reads small text in bytes and larger text in kilobytes', () => 
   expect(formatSize(12000)).toBe('12KB')
 })
 
-test('applyCommandFor names the right command per artifact, and never one that runs it', () => {
+test('applyCommandFor names the right command per artifact, and single-quotes the path', () => {
   expect(applyCommandFor('commit', '.waitroom/ship/COMMIT_EDITMSG.txt')).toBe(
-    'git commit -F .waitroom/ship/COMMIT_EDITMSG.txt',
+    "git commit -F '.waitroom/ship/COMMIT_EDITMSG.txt'",
   )
-  expect(applyCommandFor('pr', '.waitroom/ship/PR_BODY.md')).toContain('gh pr create')
-  expect(applyCommandFor('changelog', '.waitroom/ship/CHANGELOG_ENTRY.md')).toContain('paste')
+  expect(applyCommandFor('pr', '.waitroom/ship/PR_BODY.md')).toBe(
+    "gh pr create --body-file '.waitroom/ship/PR_BODY.md'",
+  )
+  expect(applyCommandFor('changelog', '.waitroom/ship/CHANGELOG_ENTRY.md')).toBe(
+    "paste '.waitroom/ship/CHANGELOG_ENTRY.md' into CHANGELOG.md",
+  )
+  expect(applyCommandFor('commit', 'my drafts/COMMIT_EDITMSG.txt')).toBe(
+    "git commit -F 'my drafts/COMMIT_EDITMSG.txt'",
+  )
+  // A quote inside the path stays one shell word: end the quotes, add \', open them again.
+  expect(applyCommandFor('commit', "my 'drafts/COMMIT_EDITMSG.txt")).toBe(
+    "git commit -F 'my '\\''drafts/COMMIT_EDITMSG.txt'",
+  )
 })
 
 test('receiptLines names each draft written and the command that uses it, one line apiece', () => {
@@ -422,10 +439,30 @@ test('receiptLines names each draft written and the command that uses it, one li
       { kind: 'pr', path: '.waitroom/ship/PR_BODY.md' },
     ]),
   ).toEqual([
-    'Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F .waitroom/ship/COMMIT_EDITMSG.txt',
-    'Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file .waitroom/ship/PR_BODY.md',
+    "Draft written: .waitroom/ship/COMMIT_EDITMSG.txt — git commit -F '.waitroom/ship/COMMIT_EDITMSG.txt'",
+    "Draft written: .waitroom/ship/PR_BODY.md — gh pr create --body-file '.waitroom/ship/PR_BODY.md'",
   ])
   expect(receiptLines([])).toEqual([])
+})
+
+test('pathFromCwd is the draft as a command in the session folder opens it', () => {
+  const file = '.waitroom/ship/COMMIT_EDITMSG.txt'
+  expect(pathFromCwd('/repo', '/repo', file)).toBe(file)
+  expect(pathFromCwd('/repo/', '/repo/packages/app/', file)).toBe(`../../${file}`)
+  expect(pathFromCwd('/repo', '/repo/packages/app', 'my drafts/COMMIT_EDITMSG.txt')).toBe(
+    '../../my drafts/COMMIT_EDITMSG.txt',
+  )
+  // No session folder yet: leave the repository-relative path, which is what the root prints.
+  expect(pathFromCwd('/repo', undefined, file)).toBe(file)
+  expect(pathFromCwd('/repo', '', file)).toBe(file)
+  // A folder that is not inside the root cannot be reached with `../` reliably.
+  expect(pathFromCwd('/repo', '/wt/feature', file)).toBe(`/repo/${file}`)
+})
+
+test('an absolute shipDir is written under the repository, and the receipt names that file', () => {
+  expect(draftAbsolute('/repo', '/tmp/drafts/COMMIT_EDITMSG.txt')).toBe('/repo/tmp/drafts/COMMIT_EDITMSG.txt')
+  expect(writtenRelative('/repo', '/tmp/drafts/COMMIT_EDITMSG.txt')).toBe('tmp/drafts/COMMIT_EDITMSG.txt')
+  expect(writtenRelative('/repo', '.waitroom/ship/COMMIT_EDITMSG.txt')).toBe('.waitroom/ship/COMMIT_EDITMSG.txt')
 })
 
 // ---------------------------------------------------------------------------
@@ -493,4 +530,47 @@ test('the same changes read the same fingerprint, and any change reads another',
   expect(fingerprintOf(tree)).toBe(fingerprintOf(`${tree}`))
   expect(fingerprintOf(tree)).not.toBe(fingerprintOf(added('src/feature.ts', ['+two'])))
   expect(fingerprintOf('')).not.toBe(fingerprintOf(tree))
+})
+
+test('filesSince names only the files whose own diff changed since the baseline', () => {
+  const notes = added('notes.md', ['+a note written between turns'])
+  const feature = added('src/feature.ts')
+  const both = notes + feature
+  const before = treeSeenOf(notes)
+  const seen = treeSeenOf(both)
+  const files = parseDiffFiles(both)
+
+  expect(filesSince(before, seen, files).map(one => one.path)).toEqual(['src/feature.ts'])
+  expect(filesSince(null, seen, files).map(one => one.path)).toEqual(['notes.md', 'src/feature.ts'])
+  expect(filesSince(seen, seen, files)).toEqual([])
+})
+
+test('a newline between diffs does not make the previous file look changed', () => {
+  const notes = added('notes.md', ['+a note written between turns'])
+  const scratch = added('scratch.txt', ['+scratch'])
+  const feature = added('src/feature.ts')
+  // The extra newline is what joining the tracked diff to an untracked diff inserts.
+  const before = treeSeenOf(`${notes}\n${scratch}`)
+  const seen = treeSeenOf(`${notes}${feature}\n${scratch}`)
+  const files = parseDiffFiles(`${notes}${feature}\n${scratch}`)
+
+  expect(before.files['notes.md']).toBe(seen.files['notes.md'])
+  expect(before.files['scratch.txt']).toBe(seen.files['scratch.txt'])
+  expect(filesSince(before, seen, files).map(one => one.path)).toEqual(['src/feature.ts'])
+})
+
+test('an older fingerprint string is the whole-tree baseline, with no per-file record', () => {
+  const notes = added('notes.md', ['+a note written between turns'])
+  const feature = added('src/feature.ts')
+  const both = notes + feature
+  const same = seenFrom(fingerprintOf(both))
+
+  expect(same).toEqual({ tree: fingerprintOf(both), files: {} })
+  expect(same?.tree).toBe(treeSeenOf(both).tree)
+  const older = seenFrom(fingerprintOf(notes))
+  expect(filesSince(older, treeSeenOf(both), parseDiffFiles(both)).map(one => one.path)).toEqual([
+    'notes.md',
+    'src/feature.ts',
+  ])
+  expect(seenFrom(null)).toBeNull()
 })

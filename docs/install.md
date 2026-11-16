@@ -32,6 +32,8 @@ claude plugin install wait-scope@waitroom
 claude plugin install wait-secret@waitroom
 claude plugin install wait-ping@waitroom
 claude plugin install wait-anchor@waitroom
+claude plugin install wait-cards@waitroom
+claude plugin install wait-focus@waitroom
 ```
 
 wait-scope warns when a turn edits outside the globs in `.claude/wait-scope` (or *Files in scope*). Only warns. [What it shows](../wait-scope).
@@ -41,6 +43,10 @@ wait-secret flags lines a turn wrote that look like a key or token. Masked, loca
 wait-ping is the legacy notifier: local OS notification when a long turn ends or a permission confirm is waiting. Prefer wait-notify on macOS. [What it sends](../wait-ping).
 
 wait-anchor keeps a note you set: the goal, and what to check when you come back. Quiet until `/anchor`. It needs Claude Code 2.1.318 or later. [Leave a note for future you](../wait-anchor).
+
+wait-cards shows one flashcard from a deck you write in `~/.waitroom/cards.md`, and stays quiet until that file has cards. [One card per wait](../wait-cards).
+
+wait-focus watches one to three paths you name with `/wait-focus`. After a turn, the status line says whether each one was touched. It only reports. It needs a git repository to have anything to say, and Claude Code 2.1.318 or later. [Name it](../wait-focus).
 
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
@@ -100,6 +106,8 @@ disk straight away but only loaded by the next session:
 /plugin update wait-scope@waitroom
 /plugin update wait-secret@waitroom
 /plugin update wait-anchor@waitroom
+/plugin update wait-cards@waitroom
+/plugin update wait-focus@waitroom
 ```
 
 `/plugin update waitroom@waitroom` picks up a room newly added to that install.
@@ -118,17 +126,22 @@ If you installed `waitroom@waitroom` when it still depended on the `wait-review`
 Dependency "wait-review@waitroom" is not installed
 ```
 
-The `wait-review` plugin was removed on purpose. That is not the old marketplace once named `wait-review` (see [Coming from the old name](#coming-from-the-old-name)). Uninstall the leftover plugin entry and `waitroom@waitroom`, then install it again.
+The `wait-review` plugin was removed on purpose. That is not the old marketplace once named `wait-review` (see [Coming from the old name](#coming-from-the-old-name)). Update the marketplace, then the bundle. You do not uninstall `waitroom@waitroom`, and you do not install it again.
 
-After the second command, Claude Code may suggest `claude plugin prune`. Don't run it. It would remove bet-on-your-agent, wait-ship, and wait-breathe and delete their saved data; the third command reinstalls them as dependencies but not that data.
+```bash
+claude plugin marketplace update waitroom
+claude plugin update waitroom@waitroom
+```
+
+You should see `Plugin "waitroom" updated from 0.1.1 to 0.1.2 for scope user. Restart to apply changes.` Restart Claude Code once. waitroom loads again and keeps bet-on-your-agent, wait-ship, and wait-breathe.
+
+`wait-review`, `wait-changed`, and `wait-shell` stay installed locally and show as disabled (or "Removed from the waitroom marketplace"). While they are still installed, `claude plugin prune` refuses to run (`Skipped — cannot determine orphans: … failed to load. Fix or uninstall, then retry.`). Uninstall those three first:
 
 ```bash
 claude plugin uninstall wait-review@waitroom
-claude plugin uninstall waitroom@waitroom
-claude plugin install waitroom@waitroom
+claude plugin uninstall wait-changed@waitroom
+claude plugin uninstall wait-shell@waitroom
 ```
-
-Then restart Claude Code. Uninstalling only `waitroom@waitroom` and reinstalling it restores that plugin, but the failed `wait-review@waitroom` entry stays until you uninstall that too.
 
 ## Coming from the old name
 
@@ -181,6 +194,7 @@ so your calibration starts fresh under the new name.
     2.1.242, 2.1.260 and 2.1.280);
   - 2.1.281 to 2.1.290 accept the module but were not run live.
 - **wait-anchor needs Claude Code 2.1.318 or later.**
+- **wait-focus needs Claude Code 2.1.318 or later**, and a git repository. Outside one, the list can still be saved and a turn stays quiet.
 - **A git repository** for wait-ship. It reads the diff, so outside one it has
   nothing to show. bet-on-your-agent, wait-breathe, and wait-ping work anywhere.
 - Plugins that hook Claude Code's own events are **early access**. See

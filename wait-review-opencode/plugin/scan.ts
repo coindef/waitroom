@@ -74,12 +74,12 @@ export const scanRepo = async (
 }
 
 /**
- * `HEAD` as it stands right now, to anchor a session the first time it is seen.
+ * `HEAD` as it stands right now, to anchor a session.
  *
- * There is no OpenCode event named `session.start`, so `plugin/tui.tsx` takes
- * this and the pre-existing-hunk snapshot the first time a session id turns
- * up at all (on its first `session.status` event), the same way the Claude
- * Code mod takes both once on its own `session.start`.
+ * There is no OpenCode event named `session.start`. `plugin/review.ts` takes
+ * this and the pre-existing-hunk snapshot when the review is created (plugin
+ * load), before a turn writes, the same moment the Claude Code mod uses
+ * `session.start` for.
  */
 export const currentHead = async (run: GitRunner, root: string): Promise<string | null> => {
   const found = await run(['rev-parse', 'HEAD'], root)

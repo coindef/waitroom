@@ -74,19 +74,46 @@ const revision = atom({ plugin: 'bet-on-your-agent', key: 'revision' } as const,
 const badgeNote = atom({ plugin: 'bet-on-your-agent', key: 'badgeNote' } as const, null as string | null)
 /** How many turns have offered a bonus question so far; drives the rotation. */
 const bonusRotation = atom({ plugin: 'bet-on-your-agent', key: 'bonusRotation' } as const, 0)
-/** When this session began, for the recap card's "this session". */
+/** When this session began, for the recap card's "this session" when it has no id. */
 const sessionStartedAt = atom(
   { plugin: 'bet-on-your-agent', key: 'sessionStartedAt' } as const,
   null as number | null,
 )
 
+/**
+ * The id of the session now running, or undefined when the host has none.
+ *
+ * A throw is the same as none: the recap then falls back to the start time,
+ * and a turn is recorded without an id rather than not recorded.
+ */
+const sessionIdOf = async ($: EngineInterface): Promise<string | undefined> => {
+  try {
+    const id = await $.session.id()
+
+    return typeof id === 'string' && id !== '' ? id : undefined
+  } catch {
+    return undefined
+  }
+}
+
 type Config = { autoOpen: boolean }
 
-/** The stored history, or nothing when the store holds something else. */
-const loadTurns = async ($: EngineInterface): Promise<TurnRecord[]> => {
-  const raw = await $.store.get(STORE_KEY).catch(() => undefined)
+/**
+ * The stored history.
+ *
+ * `undefined` means the read failed. A missing key, and a value that is not
+ * a list, are both no data yet (`[]`). A caller that writes has to tell them
+ * apart and skip the write on `undefined`: saving the one record just built
+ * from `[]` would replace every turn the store still holds.
+ */
+const loadTurns = async ($: EngineInterface): Promise<TurnRecord[] | undefined> => {
+  const read = await $.store.get(STORE_KEY).then(
+    value => ({ value }),
+    () => undefined,
+  )
+  if (read === undefined) return undefined
 
-  return Array.isArray(raw) ? (raw as TurnRecord[]) : []
+  return Array.isArray(read.value) ? (read.value as TurnRecord[]) : []
 }
 
 /**
@@ -192,7 +219,16 @@ const showStatus = async ($: EngineInterface) => {
 
       return
     }
-    const found = report(await loadTurns($))
+    const records = await loadTurns($)
+    // Unreadable history is not an empty one. Clear the line: a turn that
+    // could not be recorded must not leave the running-turn prompt up, and
+    // must not ask about a verdict this read never saw.
+    if (records === undefined) {
+      $.ui.status(undefined)
+
+      return
+    }
+    const found = report(records)
     if (found.owed > 0) {
       $.ui.status(`did it land? ${found.owed === 1 ? '1 to answer' : `${found.owed} to answer`}`)
 
@@ -244,6 +280,7 @@ const declineBet = async ($: EngineInterface) => {
 
 const giveVerdict = async ($: EngineInterface, turnId: string, landed: boolean) => {
   const before = await loadTurns($)
+  if (before === undefined) return
   const fromRank = currentRank(before)
   const after = setVerdict(before, turnId, landed)
   await saveTurns($, after)
@@ -258,7 +295,9 @@ const giveVerdict = async ($: EngineInterface, turnId: string, landed: boolean) 
 }
 
 const waveVerdict = async ($: EngineInterface, turnId: string) => {
-  await saveTurns($, skipVerdict(await loadTurns($), turnId))
+  const records = await loadTurns($)
+  if (records === undefined) return
+  await saveTurns($, skipVerdict(records, turnId))
   await update($, lastVerdict, () => ({ turnId, result: 'skipped' }))
   await showStatus($)
 }
@@ -266,6 +305,7 @@ const waveVerdict = async ($: EngineInterface, turnId: string) => {
 /** Lets go of the verdicts too old to answer, so a session never opens on one. */
 const lapseStaleVerdicts = async ($: EngineInterface) => {
   const records = await loadTurns($)
+  if (records === undefined) return
   const kept = lapseVerdicts(records, await $.clock.now())
   if (kept !== records) await saveTurns($, kept)
 }
@@ -274,7 +314,9 @@ const lapseStaleVerdicts = async ($: EngineInterface) => {
 const undoLastVerdict = async ($: EngineInterface) => {
   const last = await read($, lastVerdict)
   if (!last) return
-  await saveTurns($, undoVerdict(await loadTurns($), last.turnId))
+  const records = await loadTurns($)
+  if (records === undefined) return
+  await saveTurns($, undoVerdict(records, last.turnId))
   await update($, lastVerdict, () => null)
   await showStatus($)
 }
@@ -282,45 +324,147 @@ const undoLastVerdict = async ($: EngineInterface) => {
 const noteFile = async ($: EngineInterface, path: string | undefined) => {
   if (path === undefined || path === '') return
   await update($, open, bet =>
-    bet.files.includes(path) ? bet : { ...bet, files: [...bet.files, path].slice(-200) },
+    bet.files.includes(path) ? bet : { ...bet, files: [...bet.files, path].slice(-WORKTREE_LIMIT) },
   )
 }
 
 /**
- * Counts every tool call the turn makes, whichever tool and whether or not it
- * was denied — the bonus question asks "how many", not "how many that ran".
+ * Counts one tool call on the open main turn, whichever tool and whether or
+ * not it was denied — the bonus question asks "how many", not "how many that
+ * ran". The caller leaves out a call that carries an agentId: that call is a
+ * subagent's, not this turn's.
  */
 const noteToolCall = async ($: EngineInterface) => {
   await update($, open, bet => ({ ...bet, toolCalls: bet.toolCalls + 1 }))
 }
 
-/** Past this many changed files, a look at the working tree is not worth its cost. */
+/**
+ * Past this many changed paths, a look at the working tree is not a count.
+ *
+ * Giving up used to look the same as a clean tree, and the turn was scored
+ * as having written nothing.
+ */
 const WORKTREE_LIMIT = 500
 
 const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string) =>
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
+/** Hashes git returned, and paths a call did not answer for. */
+type PresentHashes = { hashes: Map<string, string>; unread: Set<string> }
+
+const hashesOf = (paths: readonly string[], stdout: string) => {
+  const lines = stdout.split('\n')
+
+  return new Map(paths.map((path, at) => [path, lines[at] ?? '']))
+}
+
+/**
+ * Isolates paths git refuses without one `hash-object` per file.
+ *
+ * A call that does not answer marks its paths unread and stops. Splitting it
+ * would wait out the timeout again for each half.
+ */
+const hashSplit = async (
+  $: EngineInterface,
+  root: string,
+  paths: readonly string[],
+  hashes: Map<string, string>,
+  unread: Set<string>,
+): Promise<boolean> => {
+  if (paths.length === 0) return false
+  const ran = await runGit($, ['hash-object', '--', ...paths], root)
+  if (ran === undefined) {
+    for (const path of paths) unread.add(path)
+
+    return true
+  }
+  if (ran.exitCode === 0) {
+    for (const [path, hash] of hashesOf(paths, ran.stdout)) hashes.set(path, hash)
+
+    return true
+  }
+  if (paths.length === 1) return true
+  const mid = Math.ceil(paths.length / 2)
+  const [left, right] = await Promise.all([
+    hashSplit($, root, paths.slice(0, mid), hashes, unread),
+    hashSplit($, root, paths.slice(mid), hashes, unread),
+  ])
+
+  return left || right
+}
+
+/**
+ * Content hashes for the paths still in the tree.
+ *
+ * One `hash-object` covers the lot. When any path in that call cannot be
+ * hashed — a nested repository, a worktree — git exits non-zero for the
+ * whole call, so the list is split until the path git refuses is left out.
+ * A call that does not answer leaves those paths unread. Undefined only when
+ * the whole look gets no answer at all.
+ */
+const hashPresent = async (
+  $: EngineInterface,
+  root: string,
+  present: readonly string[],
+): Promise<PresentHashes | undefined> => {
+  if (present.length === 0) return { hashes: new Map(), unread: new Set() }
+  const all = await runGit($, ['hash-object', '--', ...present], root)
+  if (all === undefined) return undefined
+  if (all.exitCode === 0) return { hashes: hashesOf(present, all.stdout), unread: new Set() }
+  if (present.length === 1) return { hashes: new Map(), unread: new Set() }
+  const hashes = new Map<string, string>()
+  const unread = new Set<string>()
+  const mid = Math.ceil(present.length / 2)
+  const [left, right] = await Promise.all([
+    hashSplit($, root, present.slice(0, mid), hashes, unread),
+    hashSplit($, root, present.slice(mid), hashes, unread),
+  ])
+  if (!left && !right && hashes.size === 0 && unread.size === 0) return undefined
+
+  return { hashes, unread }
+}
+
 /**
  * Each file git sees changed in the repository, as path to content hash.
  *
  * Undefined outside a repository, or when git does not answer; the tool calls
- * are then the only count there is.
+ * are then the only count there is. `'untrusted'` when `git status` lists more
+ * paths than `WORKTREE_LIMIT` — changed or untracked, not only this turn's.
+ * A first look that returns that is no baseline, and the tool calls are the
+ * count. A later look, against a baseline already taken, means the count can
+ * no longer be read. `kept` is that baseline: a path whose hash did not come
+ * back keeps it, so a timeout is not counted as a write.
  */
-const lookAtWorktree = async ($: EngineInterface): Promise<Record<string, string> | undefined> => {
+const lookAtWorktree = async (
+  $: EngineInterface,
+  kept?: Readonly<Record<string, string>>,
+): Promise<Record<string, string> | 'untrusted' | undefined> => {
   const top = await runGit($, ['rev-parse', '--show-toplevel'])
   const root = top?.exitCode === 0 ? top.stdout.trim() : ''
   if (root === '') return undefined
   const status = await runGit($, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], root)
   if (status?.exitCode !== 0) return undefined
   const entries = parseStatus(status.stdout)
-  if (entries.length > WORKTREE_LIMIT) return undefined
+  if (entries.length > WORKTREE_LIMIT) return 'untrusted'
   const present = entries.filter(one => !one.isDeleted).map(one => one.path)
-  const hashed = present.length === 0 ? undefined : await runGit($, ['hash-object', '--', ...present], root)
-  if (present.length > 0 && hashed?.exitCode !== 0) return undefined
-  const hashes = hashed?.stdout.split('\n') ?? []
+  const hashed = await hashPresent($, root, present)
+  if (hashed === undefined) return undefined
   const look: Record<string, string> = {}
   for (const one of entries) {
-    look[`${root}/${one.path}`] = one.isDeleted ? 'deleted' : (hashes[present.indexOf(one.path)] ?? '')
+    const full = `${root}/${one.path}`
+    if (one.isDeleted) {
+      look[full] = 'deleted'
+      continue
+    }
+    const hash = hashed.hashes.get(one.path)
+    if (hash !== undefined) {
+      look[full] = hash
+      continue
+    }
+    // No answer for this path. Dropping it would look like the file was
+    // changed back. Keep the hash from the turn's baseline when there is one.
+    const keptHash = kept?.[full]
+    if (hashed.unread.has(one.path) && typeof keptHash === 'string') look[full] = keptHash
   }
 
   return look
@@ -329,17 +473,26 @@ const lookAtWorktree = async ($: EngineInterface): Promise<Record<string, string
 /**
  * Counts every file whose content moved since the turn started, however it
  * was written: a shell heredoc or a script makes no Edit call.
+ *
+ * A later look that gives up marks the count unknown. It does not leave the
+ * number where it stood, which is zero whenever the writes came through the
+ * shell. A turn that never got a baseline is left to the tool calls.
  */
 const noteWorktreeFiles = async ($: EngineInterface) => {
-  const { baseline } = await read($, open)
-  if (baseline === undefined) return
-  const now = await lookAtWorktree($)
+  const { baseline, filesUnknown } = await read($, open)
+  if (filesUnknown === true || baseline === undefined) return
+  const now = await lookAtWorktree($, baseline)
+  if (now === 'untrusted') {
+    await update($, open, bet => ({ ...bet, filesUnknown: true as const }))
+
+    return
+  }
   if (now === undefined) return
   const moved = changedSince(baseline, now)
   await update($, open, bet => {
     const added = moved.filter(path => !bet.files.includes(path))
 
-    return added.length === 0 ? bet : { ...bet, files: [...bet.files, ...added].slice(-200) }
+    return added.length === 0 ? bet : { ...bet, files: [...bet.files, ...added].slice(-WORKTREE_LIMIT) }
   })
 }
 
@@ -374,15 +527,23 @@ export const register: Register = (on, options) => {
     void $.ui.open({ id: PANE, title: 'Bet on your agent' }).catch(() => undefined)
     const last = await read($, lastVerdict)
 
-    return { text: asText(report(await loadTurns($)), last?.rankUp, (await extrasWait($)) === 0) }
+    return { text: asText(report((await loadTurns($)) ?? []), last?.rankUp, (await extrasWait($)) === 0) }
   })
 
   // Every extra is here from the first day, the badge wall included: in a new
   // person's first week this is where they are found rather than pushed.
   on('command.run', { command: 'bet-recap' }, async ($, e) => {
-    const all = await loadTurns($)
+    const all = (await loadTurns($)) ?? []
     const startedAt = await read($, sessionStartedAt)
-    const session = startedAt === null ? all : all.filter(one => one.at >= startedAt)
+    const sessionId = await sessionIdOf($)
+    // Another window writes the same store. A record made after this session
+    // began is not this session's; the id is what says whose it is.
+    const session =
+      sessionId === undefined
+        ? startedAt === null
+          ? all
+          : all.filter(one => one.at >= startedAt)
+        : all.filter(one => one.sessionId === sessionId)
     const dailyChallenges = await loadDailyChallenges($)
     const today = localDateKey(await $.clock.now())
     const recap = recapOf(session, all, dailyChallenges, today, await extrasWait($))
@@ -414,6 +575,7 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   // A failed command can still have written files, so only a denied one is skipped.
+  // A subagent's shell counts here too: the question is how many files the turn touches.
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     const ran = await next(e)
     if (!ran.deny) await noteWorktreeFiles($)
@@ -421,11 +583,12 @@ export const register: Register = (on, options) => {
     return ran
   }).catch(($, e, next) => next(e))
 
-  // Unfiltered: every tool the turn calls, not only the ones the hooks above
-  // already watch for files, is a tool call toward the bonus question.
+  // Unfiltered: every tool the main turn calls, not only the ones the hooks
+  // above already watch for files, is a tool call toward the bonus question.
+  // A call with an agentId is a subagent's and stays off this turn's count.
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
-    await noteToolCall($)
+    if (e.agentId === undefined) await noteToolCall($)
 
     return ran
   }).catch(($, e, next) => next(e))
@@ -462,8 +625,12 @@ export const register: Register = (on, options) => {
     await lapseStaleVerdicts($)
     await showStatus($)
     // Taken before the turn runs, so whatever it writes shows as a change.
+    // A status list already past the limit is no baseline, same as outside a
+    // repository: Edit, Write and NotebookEdit stay the count, and the file
+    // question is still scored. Marking it unknown here would ask that
+    // question on every turn and then throw the answer away.
     const baseline = await lookAtWorktree($)
-    if (baseline !== undefined) {
+    if (baseline !== undefined && baseline !== 'untrusted') {
       await update($, open, bet => (bet.turnId === e.turnId ? { ...bet, baseline } : bet))
     }
 
@@ -477,20 +644,26 @@ export const register: Register = (on, options) => {
     await noteWorktreeFiles($)
     const bet = await read($, open)
     const isThisTurn = bet.turnId === e.turnId
-    const files = isThisTurn ? bet.files.length : 0
+    const filesUnknown = isThisTurn && bet.filesUnknown === true
+    const files = isThisTurn && !filesUnknown ? bet.files.length : 0
     const ask = isThisTurn ? shortAsk(bet.ask) : ''
     const dim = isThisTurn ? bet.bonusDim : undefined
-    const actualFor = (value: number) => (dim === undefined ? undefined : bonusBucketOf(dim, value))
-    const bonusActual = isThisTurn
-      ? actualFor(dim === 'duration' ? e.durationMs : dim === 'files' ? files : bet.toolCalls)
-      : undefined
+    // A files bonus graded against a stand-in zero would be a right or wrong
+    // answer the turn never earned. The other dimensions do not use the count.
+    const bonusActual =
+      dim !== undefined && !(filesUnknown && dim === 'files')
+        ? bonusBucketOf(dim, dim === 'duration' ? e.durationMs : dim === 'files' ? files : bet.toolCalls)
+        : undefined
+    const sessionId = await sessionIdOf($)
     const record: TurnRecord = {
       turnId: e.turnId,
       at: await $.clock.now(),
       durationMs: e.durationMs,
       files,
       filesBucket: bucketOf(files),
+      ...(filesUnknown ? { filesUnknown: true as const } : {}),
       toolCalls: isThisTurn ? bet.toolCalls : 0,
+      ...(sessionId === undefined ? {} : { sessionId }),
       isAborted: e.isAborted,
       ...(ask === '' ? {} : { ask }),
       ...(isThisTurn && bet.saidConfidence !== undefined
@@ -502,46 +675,58 @@ export const register: Register = (on, options) => {
       ...(bonusActual === undefined ? {} : { bonusActual }),
     }
     const before = await loadTurns($)
-    const after = keepRecord(before, record)
-    await saveTurns($, after)
-    await noteBadges($, before, after)
+    // A failed read is not an empty history. Skip this turn's record — and
+    // the challenge scored against that history — so the store is left as it
+    // was. The status line below still moves off the running-turn prompt.
+    if (before !== undefined) {
+      const after = keepRecord(before, record)
+      await saveTurns($, after)
+      await noteBadges($, before, after)
 
-    // The daily challenge, like the bonus question, needs no human verdict:
-    // it is scored the moment the turn lands, against the threshold its own
-    // history stood at before this turn (the very history `before` already is).
-    const challengeDim = isThisTurn ? bet.dailyChallengeDim : undefined
-    if (challengeDim !== undefined && !e.isAborted) {
-      const challengeToday = localDateKey(await $.clock.now())
-      const threshold = challengeThreshold(before, challengeDim)
-      const value = challengeDim === 'duration' ? e.durationMs : challengeDim === 'files' ? files : bet.toolCalls
-      const actual = dailyOutcome(value, threshold)
-      const guess = bet.saidDailyChallenge
-      const dailyLog = await loadDailyChallenges($)
-      if (bet.isDailyChallengeDeclined === true) {
-        await saveDailyChallenges(
-          $,
-          keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isSkipped: true }),
-        )
-      } else if (guess !== undefined) {
-        await saveDailyChallenges(
-          $,
-          keepDailyChallenge(dailyLog, {
-            date: challengeToday,
-            dim: challengeDim,
-            guess,
-            actual,
-            correct: guess === actual,
-          }),
-        )
-      } else {
-        // Offered, but the turn landed before it was answered or declined.
-        // Still needs a record for today, else the identical question comes
-        // back on the next turn — just not a scored one, and not one that
-        // costs the streak.
-        await saveDailyChallenges(
-          $,
-          keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isNotTaken: true }),
-        )
+      // The daily challenge, like the bonus question, needs no human verdict:
+      // it is scored the moment the turn lands, against the threshold its own
+      // history stood at before this turn (the very history `before` already is).
+      const challengeDim = isThisTurn ? bet.dailyChallengeDim : undefined
+      if (challengeDim !== undefined && !e.isAborted) {
+        const challengeToday = localDateKey(await $.clock.now())
+        const threshold = challengeThreshold(before, challengeDim)
+        const value = challengeDim === 'duration' ? e.durationMs : challengeDim === 'files' ? files : bet.toolCalls
+        const actual = dailyOutcome(value, threshold)
+        const guess = bet.saidDailyChallenge
+        const dailyLog = await loadDailyChallenges($)
+        if (bet.isDailyChallengeDeclined === true) {
+          await saveDailyChallenges(
+            $,
+            keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isSkipped: true }),
+          )
+        } else if (guess !== undefined && challengeDim === 'files' && filesUnknown) {
+          // Answered, but the count it was judged against is not a number. The
+          // day is handled so it is not asked again; the answer is not scored.
+          await saveDailyChallenges(
+            $,
+            keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, guess, isUnmeasured: true }),
+          )
+        } else if (guess !== undefined) {
+          await saveDailyChallenges(
+            $,
+            keepDailyChallenge(dailyLog, {
+              date: challengeToday,
+              dim: challengeDim,
+              guess,
+              actual,
+              correct: guess === actual,
+            }),
+          )
+        } else {
+          // Offered, but the turn landed before it was answered or declined.
+          // Still needs a record for today, else the identical question comes
+          // back on the next turn — just not a scored one, and not one that
+          // costs the streak.
+          await saveDailyChallenges(
+            $,
+            keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isNotTaken: true }),
+          )
+        }
       }
     }
 
@@ -672,7 +857,7 @@ export const register: Register = (on, options) => {
           // The same history `challengeThreshold` scores this turn's challenge
           // against at turn.complete: no new turn lands while this is showing,
           // so reading it fresh here can never drift from what it is judged by.
-          const question = challengeQuestion(await loadTurns($), dim)
+          const question = challengeQuestion((await loadTurns($)) ?? [], dim)
 
           // Wrapped, not cut: the question is fixed text with nothing to give
           // way, and cut at the band's edge it lost what it was asking.
@@ -693,6 +878,22 @@ export const register: Register = (on, options) => {
                 </Button>
               </Box>
             </Box>
+          )
+        }
+
+        // No number, rather than 0: a snapshot that gave up is not a count, and
+        // a 0 here would read as the call having been right.
+        if (bet.filesUnknown === true) {
+          return (
+            <Text wrap="truncate-end">
+              <Text color="claude" weight="bold">
+                bet
+              </Text>
+              <Text dimColor>
+                {' '}
+                {asPercent(said)} · {filesPhrase(bet.saidFiles)} · file count unknown (500+ paths)
+              </Text>
+            </Text>
           )
         }
 
@@ -717,7 +918,7 @@ export const register: Register = (on, options) => {
         )
       }
 
-      const owed = owedVerdict(await loadTurns($))
+      const owed = owedVerdict((await loadTurns($)) ?? [])
       const badgeLine = await read($, badgeNote)
       if (!owed) {
         const last = await read($, lastVerdict)
@@ -796,7 +997,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     await read($, revision)
-    const found = report(await loadTurns($))
+    const found = report((await loadTurns($)) ?? [])
     const last = await read($, lastVerdict)
     const width = Math.max(20, e.props.bodyColumns)
     const tag = (
