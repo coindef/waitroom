@@ -1184,9 +1184,11 @@ const ran = (exitCode: number, stderr = '') => ({
 /**
  * The store file as the engine keeps it: empty and unreadable JSON throw,
  * and a write lands back in the same bytes. The bytes live in `files`, not
- * on disk. `mkdir` of `<path>.lock` is the engine's lock; a second mkdir fails.
+ * on disk. The engine locks by creating the directory `<path>.lock` and
+ * will not read or write while it exists. `lockSticks` leaves that
+ * directory in place after `rmdir`, which is what a real session did.
  */
-const diskStore = (on: On, path: string, bytes: string, extras: Record<string, string> = {}, env: Record<string, string | undefined> = {}, project?: string) => {
+const diskStore = (on: On, path: string, bytes: string, extras: Record<string, string> = {}, env: Record<string, string | undefined> = {}, project?: string, lockSticks = false) => {
   mock.clock(on)
   const files = new Map<string, string>([
     [path, bytes],
@@ -1218,7 +1220,7 @@ const diskStore = (on: On, path: string, bytes: string, extras: Record<string, s
       return ran(0)
     }
     if (argv[0] === 'rmdir') {
-      files.delete(argv[1] ?? '')
+      if (!lockSticks) files.delete(argv[1] ?? '')
 
       return ran(0)
     }
@@ -1239,8 +1241,14 @@ const diskStore = (on: On, path: string, bytes: string, extras: Record<string, s
 
     return { value: undefined }
   })
-  on('store.get', ($, e) => ({ value: read()[e.key] }))
+  const engineHoldsLock = () => files.has(`${path}.lock`)
+  on('store.get', ($, e) => {
+    if (engineHoldsLock()) throw new Error('EEXIST: store lock held')
+
+    return { value: read()[e.key] }
+  })
   on('store.set', ($, e) => {
+    if (engineHoldsLock()) throw new Error('EEXIST: store lock held')
     const data = read()
     data[e.key] = e.value
     files.set(path, `${JSON.stringify(data)}\n`)
@@ -1395,6 +1403,18 @@ test('CLAUDE_CODE_PLUGIN_CACHE_DIR is the store root', async ($, on) => {
   expect(JSON.parse(store.files.get(cached) ?? '')).toEqual({})
   expect(store.files.get(INLINE_STORE)).toBe(decoy)
   expect(store.files.get(BARE_STORE)).toBe(decoy)
+})
+
+test('two turns on a healthy store both save, and no lock directory is left', async ($, on) => {
+  const healthy = '{"turns":[]}\n'
+  const store = diskStore(on, INLINE_STORE, healthy, {}, {}, undefined, true)
+  await finishTurn($, 'first')
+  await finishTurn($, 'second')
+
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['first', 'second'])
+  expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
+  expect(store.logged).not.toContain("couldn't save that turn")
 })
 
 test('a held lock skips the repair', async ($, on) => {

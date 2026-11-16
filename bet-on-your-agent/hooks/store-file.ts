@@ -86,28 +86,29 @@ export async function storeFilePath($: EngineInterface): Promise<string | undefi
 
 /**
  * Make one unreadable store file readable again, so the next save lands.
- * Only this install's file is touched. The engine's lock (`<path>.lock`,
- * taken the way proper-lockfile does, by creating that directory) is held
- * for the repair. If it is already held, this turn is left alone.
+ * Only this install's file is touched. The engine locks its own read and
+ * write by creating the directory `<path>.lock`. This repair does not
+ * create that directory: a hook that created it and then ran `rmdir` left
+ * the directory in place, so the engine could not take its lock, the save
+ * failed, and the next repair found the lock already held. When the
+ * directory is already there, this turn is skipped. The directory is
+ * never removed.
  * A missing file is left alone. Zero bytes become `{}` with no backup.
  * Invalid JSON, JSON that is not an object, and an object whose `turns`
  * is not a list are copied aside and rebuilt. The first backup stays at
  * `<path>.bak`; a later one is `<path>.bak-<ms>`.
  */
 export async function repairPluginStore($: EngineInterface): Promise<StoreRepair> {
-  let lock: string | undefined
   try {
     const path = await storeFilePath($)
     if (path === undefined) return 'none'
     if (!(await $.fs.exists(path))) return 'none'
-    const taken = (await $.process.run(['mkdir', `${path}.lock`])) as { exitCode?: number }
-    if (taken.exitCode !== 0) return 'none'
-    lock = `${path}.lock`
+    // `<path>.lock` is a directory the engine creates for its own read and
+    // write. It belongs to that write. Skip while it is there.
+    if (await $.fs.exists(`${path}.lock`)) return 'none'
     return await repairFile($, path)
   } catch {
     return 'none'
-  } finally {
-    if (lock !== undefined) await $.process.run(['rmdir', lock]).catch(() => undefined)
   }
 }
 
