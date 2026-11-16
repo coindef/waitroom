@@ -920,8 +920,8 @@ test('a failed read of the history leaves the stored turns in place', async ($, 
   const said: (string | undefined)[] = []
   on('env.get', ($, e) => ({ value: e.name === 'CLAUDE_CONFIG_DIR' ? '/tmp/bet-store-flaky' : undefined }))
   on('fs.exists', () => ({ value: false }))
-  on('session.root', () => ({ value: undefined }))
-  on('session.cwd', () => ({ value: undefined }))
+  on('session.root', () => ({ deny: 'not reachable in this test' }))
+  on('session.cwd', () => ({ deny: 'not reachable in this test' }))
   on('store.get', ($$, e) => {
     if (failReads) throw new Error('EIO: store unreadable for a moment')
 
@@ -990,8 +990,8 @@ const flakyStore = (on: On, entries: Record<string, unknown>) => {
   // ~/.claude/plugins/store files.
   on('env.get', ($, e) => ({ value: e.name === 'CLAUDE_CONFIG_DIR' ? '/tmp/bet-store-flaky' : undefined }))
   on('fs.exists', () => ({ value: false }))
-  on('session.root', () => ({ value: undefined }))
-  on('session.cwd', () => ({ value: undefined }))
+  on('session.root', () => ({ deny: 'not reachable in this test' }))
+  on('session.cwd', () => ({ deny: 'not reachable in this test' }))
   on('store.get', ($, e) => {
     if (failReads(e.key)) throw new Error('EIO: store unreadable for a moment')
 
@@ -1225,8 +1225,8 @@ const diskStore = (on: On, path: string, bytes: string, extras: Record<string, s
 
     return ran(0)
   })
-  on('session.root', () => ({ value: project }))
-  on('session.cwd', () => ({ value: project }))
+  on('session.root', () => (project === undefined ? { deny: 'no project root in this test' } : { value: project }))
+  on('session.cwd', () => (project === undefined ? { deny: 'no working directory in this test' } : { value: project }))
   on('fs.exists', ($, e) => ({ value: files.has(e.path) }))
   on('fs.read', ($, e) => {
     const text = files.get(e.path)
