@@ -998,11 +998,14 @@ export const register: Register = (on, options) => {
   // 2.1.325 stacks every plugin's row and `next(e)` there names nobody.
   // Leaving rows out of AbovePromptList is how one mod yields. 2.1.319
   // does not raise this event; the hook above still reads `part.plugin`.
-  on('ui.render', { component: 'AbovePromptList', plugin: '*' }, ($, e, next) => {
-    const kept = rowsKept(e.props.rows, e.props.isWorking)
-    if (kept.length === e.props.rows.length) return next(e)
+  // The 2.1.319 types have no AbovePromptList. On 2.1.325 its props are the
+  // band's plus `rows`, so it is typed as the band here and `rows` added.
+  on('ui.render', { component: 'AbovePromptList', plugin: '*' } as unknown as { component: 'AbovePrompt' }, ($, e, next) => {
+    const props = e.props as typeof e.props & { readonly rows: readonly { plugin?: unknown; tree?: unknown }[] }
+    const kept = rowsKept(props.rows, props.isWorking)
+    if (kept.length === props.rows.length) return next(e)
 
-    return next({ ...e, props: { ...e.props, rows: kept } })
+    return next({ ...e, props: { ...props, rows: kept } as typeof e.props })
   }).catch(($, e, next) => next(e))
 
   // The pane is the record: what the band collects, read back. /bet opens it.
