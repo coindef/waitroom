@@ -80,7 +80,7 @@ You run long Claude Code turns. You alt-tab. Now you call the turn instead.
 | <img src="docs/brand/plugin-icons/scope.png" width="52" alt="wait-scope icon"><br>[wait-scope](./wait-scope) | Flags files a turn edited outside the scope you set, and never blocks them. The status row, on by default. |
 | <img src="docs/brand/plugin-icons/anchor.png" width="52" alt="wait-anchor icon"><br>[wait-anchor](./wait-anchor) | **Leave a note for future you.**<br>You set the goal and what to check when you come back. The status line, only while a note is set. |
 | <img src="docs/brand/plugin-icons/cards.png" width="52" alt="wait-cards icon"><br>[wait-cards](./wait-cards) | **Learn something while it cooks.**<br>A question from your own deck while Claude works, the answer when the turn ends. Mark it with `/card got` or `/card miss`. The status line, only while you have cards. |
-| [wait-focus](./wait-focus) | **Did it touch auth?**<br>Name up to three files or folders. When the turn ends, the status line says which ones Claude touched. |
+| <img src="docs/brand/plugin-icons/focus.png" width="52" alt="wait-focus icon"><br>[wait-focus](./wait-focus) | **Did it touch auth?**<br>Name up to three files or folders. When the turn ends, the status line says which ones Claude touched. |
 
 How the rooms share the screen is in [docs/design.md](docs/design.md).
 
