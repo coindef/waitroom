@@ -40,8 +40,9 @@ declare module 'claude-code' {
       offer: ShipOffer | null
       /**
        * The tree as the last scan read it — at session start, at the start
-       * of a turn, and at each turn's end — or null before the first and
-       * when a snapshot did not finish in time. `tree` is the whole diff;
+       * of a turn, and at each turn's end — or null before the first. A
+       * turn-start read that fails or overruns its cap leaves the previous
+       * one in place. `tree` is the whole diff;
        * `files` is each file's own chunk, so a kit names only the files that
        * moved during the turn. A string is the one fingerprint an older
        * build stored for the whole diff. A turn that leaves `tree` as it was

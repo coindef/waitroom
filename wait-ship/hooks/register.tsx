@@ -159,8 +159,9 @@ const readTree = async ($: EngineInterface, root: string, config: Config) => {
  * failure leaves the previous read alone — session start, or the previous
  * turn's end — and does not throw. One unanswered command stops the read,
  * so a failed git cannot walk the rest of the tree before the turn starts.
- * The whole read gives up at `capMs`: the baseline becomes unknown, which
- * counts as moved, and the turn starts either way.
+ * The whole read gives up at `capMs` the same way: the previous read stays,
+ * which is older than the turn, so nothing the turn writes is hidden, and a
+ * turn that writes nothing still gets no kit. The turn starts either way.
  */
 const takeBaseline = async ($: EngineInterface, config: Config, capMs: number) => {
   let timer: TimeoutHandle | undefined
@@ -182,12 +183,7 @@ const takeBaseline = async ($: EngineInterface, config: Config, capMs: number) =
   try {
     const result = await Promise.race([scan, cap])
     if (timer !== undefined) clearTimeout(timer)
-    if (result === 'cap') {
-      await update($, lastSeen, () => null)
-
-      return
-    }
-    if (result === 'skip') return
+    if (result === 'cap' || result === 'skip') return
     await update($, lastSeen, () => result)
   } catch {
     if (timer !== undefined) clearTimeout(timer)

@@ -613,7 +613,7 @@ test('an untracked path with no diff of its own does not pull a hand edit into t
 })
 
 test(
-  'a snapshot that overruns its cap is unknown and the turn still starts',
+  'a snapshot that overruns its cap keeps the previous baseline and the turn still starts',
   { options: { snapshotCapMs: 40 } },
   async ($, on) => {
     on('session.start', ($$, e) => ({ cwd: e.cwd }))
@@ -629,6 +629,38 @@ test(
     const offering = await mountBand($)
     expect(await offering.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
     await offering.unmount()
+  },
+)
+
+test(
+  'a capped snapshot offers no kit for a turn that writes nothing, even with the tree already dirty',
+  { options: { snapshotCapMs: 40 } },
+  async ($, on) => {
+    on('session.start', ($$, e) => ({ cwd: e.cwd }))
+    const repo: Repo = { root: ROOT, diffHead: NOTES_DIFF, untracked: [], hangMs: 400 }
+    engineBottom(on, repo)
+    await $.session.start(SESSION)
+    repo.hangDiffs = 1
+    await landTurn($, 'turn-cap-quiet')
+    const band = await mountBand($)
+    expect(await band.find({ text: /Drafts ready/ })).toBeUndefined()
+    await band.unmount()
+  },
+)
+
+test(
+  'a capped snapshot names only the file the turn wrote, not one dirty since session start',
+  { options: { snapshotCapMs: 40 } },
+  async ($, on) => {
+    on('session.start', ($$, e) => ({ cwd: e.cwd }))
+    const repo: Repo = { root: ROOT, diffHead: NOTES_DIFF, untracked: [], hangMs: 400 }
+    engineBottom(on, repo)
+    await $.session.start(SESSION)
+    repo.hangDiffs = 1
+    await landTurn($, 'turn-cap-one', wrote(repo, `${NOTES_DIFF}${NEW_FILE_DIFF}`))
+    const band = await mountBand($)
+    expect(await band.find({ text: /Add src\/feature\.ts/ })).toBeDefined()
+    await band.unmount()
   },
 )
 
