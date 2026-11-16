@@ -32,7 +32,7 @@
 - **A turn that could not be saved says so.** When the history cannot be read, one line: `couldn't save that turn`. A save that fails shows the same line. The status line still goes blank.
 - **A failed read keeps the record on screen.** The pane, the recap and the row keep the last history that loaded, instead of looking like the rank and the score were wiped.
 - **A failed read of the daily challenges leaves them in place.** Today's result is not written over the streak.
-- **A store file that can't be read is rebuilt.** A 0-byte store file is treated as empty. A file that is not JSON, JSON that is not an object, or whose saved turns are not a list, is copied to `<store>.bak` and rebuilt, and the next `/bet` says `couldn't read the saved history · rebuilt`. A later repair keeps the first backup and writes `<store>.bak-<ms>`. The repair leaves the engine's lock alone and skips the repair and tries again on the next read.
+- **A store file that can't be read is rebuilt.** A 0-byte store file is treated as empty. A file that is not JSON, JSON that is not an object, or whose saved turns are not a list, is copied to `<store>.bak` and rebuilt, and the next `/bet` says `couldn't read the saved history · rebuilt`. A later repair keeps the first backup and writes `<store>.bak-<ms>`. The repair leaves the engine's lock alone: while the lock is held, it skips and tries again on the next read.
 - **A history that is not a list is not written over.** When the store can't be repaired, the turn that just ended does not replace it, and that is noted once: `couldn't read the saved history`.
 - **A local-directory marketplace install is not repaired.** See *Known limits* in the plugin README.
 
