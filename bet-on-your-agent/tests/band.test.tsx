@@ -16,6 +16,7 @@ const BAND = {
 const bandProps = (isWorking: boolean) =>
   ({
     hasSurvey: false,
+    isCollapsed: false,
     isWorking,
     maxRows: 6,
     bodyColumns: 115,
@@ -1195,6 +1196,7 @@ const diskStore = (on: On, path: string, bytes: string, extras: Record<string, s
     ...Object.entries(extras),
   ])
   const logged: string[] = []
+  const mkdirs: string[] = []
   const read = (): Record<string, unknown> => {
     const text = files.get(path)
     if (text === undefined || text.length === 0) throw new Error('empty store')
@@ -1214,6 +1216,7 @@ const diskStore = (on: On, path: string, bytes: string, extras: Record<string, s
     const argv = e.argv
     if (argv[0] === 'mkdir') {
       const lock = argv[1] ?? ''
+      mkdirs.push(lock)
       if (files.has(lock)) return ran(1, 'EEXIST')
       files.set(lock, '')
 
@@ -1271,7 +1274,7 @@ const diskStore = (on: On, path: string, bytes: string, extras: Record<string, s
     return <Box />
   })
 
-  return { files, logged }
+  return { files, logged, mkdirs }
 }
 
 const finishTurn = async ($: Engine, turnId: string) => {
@@ -1415,6 +1418,36 @@ test('two turns on a healthy store both save, and no lock directory is left', as
   expect(saved.turns?.map(one => one.turnId)).toEqual(['first', 'second'])
   expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
   expect(store.logged).not.toContain("couldn't save that turn")
+})
+
+test('a healthy store is read without creating the lock', async ($, on) => {
+  const store = diskStore(on, INLINE_STORE, '{}\n', {}, {}, undefined, true)
+  await finishTurn($, 'healthy-read')
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.mkdirs).toEqual([])
+  expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
+})
+
+test('three healthy turns in a row all save', async ($, on) => {
+  const store = diskStore(on, INLINE_STORE, '{}\n', {}, {}, undefined, true)
+  for (const turnId of ['one', 'two', 'three']) await finishTurn($, turnId)
+
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['one', 'two', 'three'])
+  expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
+  expect(store.logged).toEqual([])
+})
+
+test('after a repair, the next turns save and no lock is left', async ($, on) => {
+  const store = diskStore(on, INLINE_STORE, 'not json{', {}, {}, undefined, true)
+  for (const turnId of ['after-repair', 'next']) await finishTurn($, turnId)
+
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['after-repair', 'next'])
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe('not json{')
+  expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
+  expect(store.mkdirs).toEqual([])
 })
 
 test('a held lock skips the repair', async ($, on) => {
