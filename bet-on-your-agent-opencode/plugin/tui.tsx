@@ -39,7 +39,6 @@
  *   plugin can rely on. So this stays on `api.command`, best-effort against
  *   a surface the types say may disappear, rather than depending on an
  *   unexported convention that is just as likely to move without notice.
- * - **Counting files an `apply_patch` call touched.** See `track.ts`.
  *
  * Grounded by tracing the shipped `opencode` binary and then confirmed by
  * actually running it (see "How this was verified" below for the method):
@@ -69,6 +68,7 @@
  *   against the real column count.
  */
 
+import type { BoxRenderable } from '@opentui/core'
 import type { TuiPlugin, TuiPluginModule } from '@opencode-ai/plugin/tui'
 
 import {
@@ -87,47 +87,61 @@ import {
   filesPhrase,
   keepRecord,
   owedVerdict,
+  changedSince,
   rankImproved,
   report,
   setVerdict,
   shortAsk,
   skipVerdict,
 } from '../../bet-on-your-agent/hooks/bet.ts'
-import type { BonusBucket, BonusDim, FileBucket, RankChange, TurnRecord } from '../../bet-on-your-agent/types/index.ts'
-import { askFrom, filePathOf, isBusy, isNewCompletion, TURNS_KV_KEY } from './track.ts'
-
-type OpenBet = {
-  turnId: string
-  ask: string
-  files: string[]
-  startedAt: number
-  toolCalls: number
-  saidConfidence?: number
-  saidFiles?: FileBucket
-  isDeclined?: true
-  bonusDim?: BonusDim
-  saidBonus?: BonusBucket
-  isBonusDeclined?: true
-}
-
-const noBet = (): OpenBet => ({ turnId: '', ask: '', files: [], startedAt: 0, toolCalls: 0 })
-
-/** A verdict just given, kept per session so the slot can name a rank climb once, the same moment the Claude Code mod's band does. */
-type LastVerdict = { result: 'landed' | 'fixed' | 'skipped'; rankUp?: RankChange }
+import type { BonusBucket, FileBucket, TurnRecord } from '../../bet-on-your-agent/types/index.ts'
+import { createBandState } from './band.ts'
+import { registerBetKeys } from './keys.ts'
+import { noBet, type OpenBet } from './open-bet.ts'
+import { askFrom, filesAfterMove, mergeTouched, notePart, pathsSince, statusStep } from './track.ts'
+import { createTurnLog } from './turns.ts'
+import { scanWorktree } from './worktree.ts'
 
 export const tui: TuiPlugin = async api => {
-  const open = new Map<string, OpenBet>()
+  const band = createBandState()
   const tracking = new Set<string>()
-  const lastVerdict = new Map<string, LastVerdict>()
   const toolCallsCounted = new Map<string, Set<string>>()
+  const log = createTurnLog(api.kv, records => band.setTurns([...records]))
   // How many sessions have offered a bonus question so far; drives the
   // rotation the same way the Claude Code mod's `bonusRotation` atom does.
   let bonusRotation = 0
 
-  const openFor = (sessionID: string): OpenBet => open.get(sessionID) ?? noBet()
+  const openFor = (sessionID: string): OpenBet => band.open[sessionID] ?? noBet()
+  const setBet = (sessionID: string, bet: OpenBet) => {
+    band.setOpen(sessionID, bet)
+  }
 
-  const loadTurns = (): TurnRecord[] => api.kv.get<TurnRecord[]>(TURNS_KV_KEY, [])
-  const saveTurns = (records: readonly TurnRecord[]) => api.kv.set(TURNS_KV_KEY, records)
+  let readyTimer: ReturnType<typeof setTimeout> | undefined
+  const waitForKv = () => {
+    if (log.flush()) return
+    readyTimer = setTimeout(waitForKv, 25)
+  }
+  api.lifecycle.onDispose(() => {
+    if (readyTimer !== undefined) clearTimeout(readyTimer)
+  })
+  waitForKv()
+
+  const diffPaths = (sessionID: string): string[] | undefined => {
+    try {
+      return api.state.session.diff(sessionID).flatMap(row => (row.file !== '' ? [row.file] : []))
+    } catch {
+      return undefined
+    }
+  }
+
+  const captureBaseline = (sessionID: string, turnId: string) => {
+    void scanWorktree(api.state.path.worktree).then(look => {
+      if (!look || !tracking.has(sessionID)) return
+      const bet = openFor(sessionID)
+      if (bet.turnId !== turnId) return
+      setBet(sessionID, { ...bet, baselineLook: look, baseline: bet.baseline ?? Object.keys(look) })
+    })
+  }
 
   const askForTurn = async (sessionID: string): Promise<string> => {
     const messages = api.state.session.messages(sessionID)
@@ -141,29 +155,42 @@ export const tui: TuiPlugin = async api => {
   api.lifecycle.onDispose(
     api.event.on('session.status', async ({ properties }) => {
       const { sessionID, status } = properties
-      if (isBusy(status)) {
-        if (tracking.has(sessionID)) return
+      const step = statusStep(status, tracking.has(sessionID))
+      if (step === 'ignore') return
+      if (step === 'start') {
         tracking.add(sessionID)
         const dim = bonusDimFor(bonusRotation)
         bonusRotation++
-        open.set(sessionID, {
+        const known = diffPaths(sessionID)
+        const turnId = crypto.randomUUID()
+        const bet: OpenBet = {
           ...noBet(),
-          turnId: crypto.randomUUID(),
+          turnId,
           ask: await askForTurn(sessionID),
           startedAt: Date.now(),
           bonusDim: dim,
-        })
+          ...(known === undefined ? {} : { baseline: known }),
+        }
+        setBet(sessionID, bet)
+        if (known === undefined) captureBaseline(sessionID, turnId)
         // A new turn's own questions take over the slot; the last verdict is
         // settled by now, or it would still be the one being asked about.
-        lastVerdict.delete(sessionID)
+        band.setLastVerdict(sessionID, undefined)
 
         return
       }
-      if (!tracking.has(sessionID)) return
-      tracking.delete(sessionID)
 
+      tracking.delete(sessionID)
       const bet = openFor(sessionID)
-      const files = bet.files.length
+      let touched = bet.files
+      const finalDiff = diffPaths(sessionID)
+      if (finalDiff !== undefined && bet.baseline !== undefined) {
+        touched = mergeTouched(touched, pathsSince(bet.baseline, finalDiff))
+      } else if (bet.baselineLook) {
+        const look = await scanWorktree(api.state.path.worktree)
+        if (look) touched = filesAfterMove(touched, changedSince(bet.baselineLook, look))
+      }
+      const files = touched.length
       const durationMs = Date.now() - bet.startedAt
       const bonusActual =
         bet.bonusDim === undefined
@@ -184,8 +211,8 @@ export const tui: TuiPlugin = async api => {
         ...(bet.saidBonus !== undefined ? { saidBonus: bet.saidBonus } : {}),
         ...(bonusActual === undefined ? {} : { bonusActual }),
       }
-      saveTurns(keepRecord(loadTurns(), record))
-      open.delete(sessionID)
+      log.update(records => keepRecord(records, record))
+      setBet(sessionID, noBet())
       toolCallsCounted.delete(sessionID)
     }),
   )
@@ -193,29 +220,32 @@ export const tui: TuiPlugin = async api => {
   api.lifecycle.onDispose(
     api.event.on('message.part.updated', ({ properties }) => {
       const part = properties.part
-      if (part.type !== 'tool') return
       const sessionID = part.sessionID
       if (!tracking.has(sessionID)) return
 
       const bet = openFor(sessionID)
       const counted = toolCallsCounted.get(sessionID) ?? new Set<string>()
-      // Every tool call toward the bonus question, not only the ones that
-      // touch a file — the OpenCode equivalent of the Claude Code mod's
-      // unfiltered `tool.call` hook.
-      const isNewToolCall = isNewCompletion(part, counted)
-      if (isNewToolCall) {
-        counted.add(part.id)
+      // bash and apply_patch name no single filePath. session.diff is the
+      // list of files touched; git status is the fallback when that read throws.
+      const wantsScan = part.type === 'tool' && (part.tool === 'bash' || part.tool === 'apply_patch')
+      const scanNow = wantsScan ? diffPaths(sessionID) : undefined
+      const noted = notePart(bet, part, counted, scanNow, bet.baseline)
+      if (!noted) return
+      if (noted.countId) {
+        counted.add(noted.countId)
         toolCallsCounted.set(sessionID, counted)
       }
-      const path = filePathOf(part)
-      const addsFile = path !== undefined && !bet.files.includes(path)
-      if (isNewToolCall || addsFile) {
-        open.set(sessionID, {
-          ...bet,
-          toolCalls: isNewToolCall ? bet.toolCalls + 1 : bet.toolCalls,
-          files: addsFile ? [...bet.files, path as string].slice(-200) : bet.files,
-        })
-      }
+      setBet(sessionID, { ...openFor(sessionID), toolCalls: noted.toolCalls, files: noted.files })
+      if (!noted.scan || !noted.countId || scanNow !== undefined || !bet.baselineLook) return
+      const turnId = bet.turnId
+      void scanWorktree(api.state.path.worktree).then(look => {
+        if (!look || !tracking.has(sessionID)) return
+        const current = openFor(sessionID)
+        if (current.turnId !== turnId || !current.baselineLook) return
+        const files = filesAfterMove(current.files, changedSince(current.baselineLook, look))
+        if (files.length === current.files.length && files.every((path, at) => path === current.files[at])) return
+        setBet(sessionID, { ...current, files })
+      })
     }),
   )
 
@@ -231,104 +261,80 @@ export const tui: TuiPlugin = async api => {
   }
 
   const placeConfidence = (sessionID: string, said: number) => {
-    open.set(sessionID, { ...openFor(sessionID), saidConfidence: said })
+    setBet(sessionID, { ...openFor(sessionID), saidConfidence: said })
   }
 
   const placeFiles = (sessionID: string, said: FileBucket) => {
-    open.set(sessionID, { ...openFor(sessionID), saidFiles: said })
+    setBet(sessionID, { ...openFor(sessionID), saidFiles: said })
   }
 
   const decline = (sessionID: string) => {
-    open.set(sessionID, { ...openFor(sessionID), isDeclined: true })
+    setBet(sessionID, { ...openFor(sessionID), isDeclined: true })
   }
 
   const placeBonus = (sessionID: string, said: BonusBucket) => {
-    open.set(sessionID, { ...openFor(sessionID), saidBonus: said })
+    setBet(sessionID, { ...openFor(sessionID), saidBonus: said })
   }
 
   const declineBonus = (sessionID: string) => {
-    open.set(sessionID, { ...openFor(sessionID), isBonusDeclined: true })
+    setBet(sessionID, { ...openFor(sessionID), isBonusDeclined: true })
   }
 
   const giveVerdict = (sessionID: string, turnId: string, landed: boolean) => {
-    const before = loadTurns()
-    const fromRank = currentRank(before)
-    const after = setVerdict(before, turnId, landed)
-    saveTurns(after)
-    const toRank = currentRank(after)
-    lastVerdict.set(sessionID, {
-      result: landed ? 'landed' : 'fixed',
-      ...(rankImproved(fromRank, toRank) ? { rankUp: { from: fromRank, to: toRank } } : {}),
-    })
+    log.update(
+      records => setVerdict(records, turnId, landed),
+      (before, after) => {
+        const fromRank = currentRank(before)
+        const toRank = currentRank(after)
+        band.setLastVerdict(sessionID, {
+          result: landed ? 'landed' : 'fixed',
+          ...(rankImproved(fromRank, toRank) ? { rankUp: { from: fromRank, to: toRank } } : {}),
+        })
+      },
+    )
   }
   const waveVerdict = (sessionID: string, turnId: string) => {
-    saveTurns(skipVerdict(loadTurns(), turnId))
-    lastVerdict.set(sessionID, { result: 'skipped' })
+    log.update(
+      records => skipVerdict(records, turnId),
+      () => band.setLastVerdict(sessionID, { result: 'skipped' }),
+    )
   }
 
-  const bandCommand = (name: string, run: (sessionID: string) => void) => ({
-    name,
-    run: () => {
-      const sessionID = activeSessionId()
-      if (!sessionID) return false
-      run(sessionID)
-    },
-  })
+  // The bet row is focusable. A digit answers only while that row has focus.
+  // The prompt keeps focus while you type, so the same key is a character there.
+  const panels = new Map<string, BoxRenderable>()
+  const panelFocused = (): boolean => {
+    const sessionID = activeSessionId()
+    const panel = sessionID ? panels.get(sessionID) : undefined
+    if (!panel) return false
+    let node = api.renderer.currentFocusedRenderable
+    while (node) {
+      if (node === panel) return true
+      node = node.parent
+    }
 
-  const dispose = api.keymap.registerLayer({
-    bindings: [
-      { key: '1', cmd: 'bet.digit-1' },
-      { key: '2', cmd: 'bet.digit-2' },
-      { key: '3', cmd: 'bet.digit-3' },
-      { key: '4', cmd: 'bet.digit-4' },
-      { key: '5', cmd: 'bet.digit-5' },
-      { key: '0', cmd: 'bet.digit-0' },
-    ],
-    // One command per digit, each branching on the open bet's current phase —
-    // the same digit means confidence, then files, then (after the turn
-    // lands) a verdict, never more than one question at a time. This mirrors
-    // the Claude Code mod's own `ui.render` branching; see its
-    // `hooks/register.tsx`.
-    commands: [1, 2, 3, 4, 5, 0].map(digit =>
-      bandCommand(`bet.digit-${digit}`, sessionID => {
-        const bet = openFor(sessionID)
-        if (bet.turnId !== '' && bet.isDeclined !== true) {
-          // `0` declines whichever phase is open; the confidence and files
-          // phases have no skip of their own, unlike the bonus phase below —
-          // mirrors the Claude Code mod's own band, where the files phase's
-          // skip button is also wired to `declineBet`, not a files-only skip.
-          if (bet.saidConfidence === undefined) {
-            if (digit === 0) return decline(sessionID)
-            const band = BANDS[digit - 1]
-            if (band !== undefined) placeConfidence(sessionID, band)
+    return false
+  }
+  const rememberPanel = (sessionID: string) => (node: BoxRenderable | undefined) => {
+    if (node) panels.set(sessionID, node)
+    else panels.delete(sessionID)
+  }
 
-            return
-          }
-          if (bet.saidFiles === undefined) {
-            if (digit === 0) return decline(sessionID)
-            const bucket = FILE_BUCKETS[digit - 1]
-            if (bucket !== undefined) placeFiles(sessionID, bucket)
-
-            return
-          }
-          if (bet.bonusDim !== undefined && bet.saidBonus === undefined && bet.isBonusDeclined !== true) {
-            if (digit === 0) return declineBonus(sessionID)
-            const bucket = BONUS_BUCKETS[bet.bonusDim][digit - 1]
-            if (bucket !== undefined) placeBonus(sessionID, bucket)
-          }
-
-          return
-        }
-
-        const owed = owedVerdict(loadTurns())
-        if (!owed) return
-        if (digit === 1) giveVerdict(sessionID, owed.turnId, true)
-        else if (digit === 2) giveVerdict(sessionID, owed.turnId, false)
-        else if (digit === 3) waveVerdict(sessionID, owed.turnId)
-      }),
-    ),
-  })
-  api.lifecycle.onDispose(dispose)
+  api.lifecycle.onDispose(
+    registerBetKeys(api.keymap, {
+      sessionID: activeSessionId,
+      bet: openFor,
+      owedTurnId: () => owedVerdict(log.load())?.turnId,
+      panelFocused,
+      placeConfidence,
+      placeFiles,
+      decline,
+      placeBonus,
+      declineBonus,
+      giveVerdict,
+      waveVerdict,
+    }),
+  )
 
   // Legacy, typed `@deprecated` surface — see this file's header comment.
   // Kept anyway because it is the only typed way this package version offers
@@ -339,7 +345,7 @@ export const tui: TuiPlugin = async api => {
       value: 'bet.report',
       slash: { name: 'bet' },
       onSelect: dialog => {
-        const text = asText(report(loadTurns()))
+        const text = asText(report(log.load()))
         dialog?.replace(() => <box flexDirection="column">{text.split('\n').map(line => <text>{line}</text>)}</box>)
       },
     },
@@ -349,7 +355,8 @@ export const tui: TuiPlugin = async api => {
     slots: {
       session_prompt_right: (_ctx, props: { session_id: string }) => {
         const sessionID = props.session_id
-        const bet = openFor(sessionID)
+        // `view` reads the Solid store. A digit that writes the store reruns this slot.
+        const { bet, owed, last } = band.view(sessionID)
         const room = askRoomFor(80)
 
         if (bet.turnId !== '' && bet.isDeclined !== true) {
@@ -358,7 +365,7 @@ export const tui: TuiPlugin = async api => {
 
           if (bet.saidConfidence === undefined) {
             return (
-              <box flexDirection="row" gap={1} maxWidth="50%">
+              <box flexDirection="row" gap={2} maxWidth="50%" focusable ref={rememberPanel(sessionID)}>
                 <text wrapMode="none">
                   Will{about} land first try?
                 </text>
@@ -367,14 +374,14 @@ export const tui: TuiPlugin = async api => {
                     {at + 1}: {asPercent(band)}
                   </text>
                 ))}
-                <text wrapMode="none">0: skip</text>
+                <text wrapMode="none">0: Skip</text>
               </box>
             )
           }
 
           if (bet.saidFiles === undefined) {
             return (
-              <box flexDirection="row" gap={1} maxWidth="50%">
+              <box flexDirection="row" gap={2} maxWidth="50%" focusable ref={rememberPanel(sessionID)}>
                 <text wrapMode="none">
                   {asPercent(bet.saidConfidence)} · how many files?
                 </text>
@@ -383,6 +390,7 @@ export const tui: TuiPlugin = async api => {
                     {at + 1}: {bucket}
                   </text>
                 ))}
+                <text wrapMode="none">0: Skip</text>
               </box>
             )
           }
@@ -396,7 +404,7 @@ export const tui: TuiPlugin = async api => {
             const buckets = BONUS_BUCKETS[dim]
 
             return (
-              <box flexDirection="row" gap={1} maxWidth="50%">
+              <box flexDirection="row" gap={2} maxWidth="50%" focusable ref={rememberPanel(sessionID)}>
                 <text wrapMode="none">
                   Bonus: {BONUS_QUESTIONS[dim]}
                 </text>
@@ -405,7 +413,7 @@ export const tui: TuiPlugin = async api => {
                     {at + 1}: {bonusLabel(dim, bucket)}
                   </text>
                 ))}
-                <text wrapMode="none">0: skip</text>
+                <text wrapMode="none">0: Skip</text>
               </box>
             )
           }
@@ -417,9 +425,7 @@ export const tui: TuiPlugin = async api => {
           )
         }
 
-        const owed = owedVerdict(loadTurns())
         if (!owed) {
-          const last = lastVerdict.get(sessionID)
           if (!last) return <box />
 
           const label = last.result === 'landed' ? 'Landed' : last.result === 'fixed' ? 'Needed fixing' : 'Skipped'
@@ -439,13 +445,14 @@ export const tui: TuiPlugin = async api => {
         const quoted = owed.ask === undefined ? '' : shortAsk(owed.ask, room)
 
         return (
-          <box flexDirection="row" gap={1} maxWidth="50%">
+          <box flexDirection="row" gap={2} maxWidth="50%" focusable ref={rememberPanel(sessionID)}>
             <text wrapMode="none">
-              {quoted === '' ? 'That turn' : `"${quoted}"`} — you said {asPercent(owed.saidConfidence ?? 0)}.
+              you said {asPercent(owed.saidConfidence ?? 0)}
+              {quoted === '' ? '' : ` · "${quoted}"`}
             </text>
             <text wrapMode="none">1: landed</text>
             <text wrapMode="none">2: needed fixing</text>
-            <text wrapMode="none">3: skip</text>
+            <text wrapMode="none">0: Skip</text>
           </box>
         )
       },
