@@ -1149,19 +1149,26 @@ test('a store that will not take the write says so', async ($, on) => {
 // A pretend config dir. Nothing under the real ~/.claude/plugins/store is opened.
 const ISOLATED_CONFIG = '/tmp/bet-store-isolated'
 const STORE_DIR = `${ISOLATED_CONFIG}/plugins/store`
-// `claude plugin test` loads this folder as `bet-on-your-agent@claude-plugin-test`.
-// The engine's filename is that id with `@` turned into `_`, then a dash and
-// the first 12 hex digits of sha256(id). A real --plugin-dir session is
-// `bet-on-your-agent_inline-b4b76a335767.json` instead, and is not this file.
-const HARNESS_STORE = `${STORE_DIR}/bet-on-your-agent_claude-plugin-test-77af2076a5d5.json`
-const INLINE_STORE = `${STORE_DIR}/bet-on-your-agent_inline-b4b76a335767.json`
+// This checkout is loaded from its own directory, so its store id is
+// `bet-on-your-agent@inline`. The filename is that id with `@` turned into
+// `_`, then a dash and the first 12 hex digits of sha256(id).
+const INLINE_NAME = 'bet-on-your-agent_inline-b4b76a335767.json'
+const WAITROOM_NAME = 'bet-on-your-agent_waitroom-34ea4b598520.json'
+const BARE_NAME = 'bet-on-your-agent.json'
+const INLINE_STORE = `${STORE_DIR}/${INLINE_NAME}`
+const WAITROOM_STORE = `${STORE_DIR}/${WAITROOM_NAME}`
+const BARE_STORE = `${STORE_DIR}/${BARE_NAME}`
+
+const ran = (exitCode: number, stderr = '') => ({
+  value: { exitCode, stdout: '', stderr, isStdoutTruncated: false, isStderrTruncated: false },
+})
 
 /**
  * The store file as the engine keeps it: empty and unreadable JSON throw,
  * and a write lands back in the same bytes. The bytes live in `files`, not
- * on disk.
+ * on disk. `mkdir` of `<path>.lock` is the engine's lock; a second mkdir fails.
  */
-const diskStore = (on: On, path: string, bytes: string, extras: Record<string, string> = {}) => {
+const diskStore = (on: On, path: string, bytes: string, extras: Record<string, string> = {}, env: Record<string, string | undefined> = {}) => {
   mock.clock(on)
   const files = new Map<string, string>([
     [path, bytes],
@@ -1176,17 +1183,29 @@ const diskStore = (on: On, path: string, bytes: string, extras: Record<string, s
 
     return parsed as Record<string, unknown>
   }
-  on('env.get', ($, e) => ({
-    value: e.name === 'CLAUDE_CONFIG_DIR' ? ISOLATED_CONFIG : e.name === 'HOME' ? '/tmp/bet-store-home' : undefined,
-  }))
-  on('fs.list', ($, e) => {
-    if (e.path !== STORE_DIR) return { value: [] }
-    const names = [...files.keys()]
-      .filter(one => one.startsWith(`${STORE_DIR}/`))
-      .map(one => one.slice(STORE_DIR.length + 1))
-      .filter(name => !name.includes('/'))
+  on('env.get', ($, e) => {
+    if (Object.prototype.hasOwnProperty.call(env, e.name)) return { value: env[e.name] }
+    if (e.name === 'CLAUDE_CONFIG_DIR') return { value: ISOLATED_CONFIG }
+    if (e.name === 'HOME') return { value: '/tmp/bet-store-home' }
 
-    return { value: names.map(name => ({ name })) }
+    return { value: undefined }
+  })
+  on('process.run', ($, e) => {
+    const argv = e.argv
+    if (argv[0] === 'mkdir') {
+      const lock = argv[1] ?? ''
+      if (files.has(lock)) return ran(1, 'EEXIST')
+      files.set(lock, '')
+
+      return ran(0)
+    }
+    if (argv[0] === 'rmdir') {
+      files.delete(argv[1] ?? '')
+
+      return ran(0)
+    }
+
+    return ran(0)
   })
   on('fs.exists', ($, e) => ({ value: files.has(e.path) }))
   on('fs.read', ($, e) => {
@@ -1239,17 +1258,20 @@ const finishTurn = async ($: Engine, turnId: string) => {
 }
 
 test('a store of zero bytes is initialized and the turn is saved', async ($, on) => {
-  const store = diskStore(on, HARNESS_STORE, '')
+  const store = diskStore(on, INLINE_STORE, '', { [BARE_STORE]: '', [WAITROOM_STORE]: 'not json{' })
   await finishTurn($, 'empty-file')
 
-  const saved = JSON.parse(store.files.get(HARNESS_STORE) ?? '') as { turns?: { turnId: string }[] }
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
   expect(saved.turns?.map(one => one.turnId)).toEqual(['empty-file'])
-  expect(store.files.has(`${HARNESS_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.get(BARE_STORE)).toBe('')
+  expect(store.files.get(WAITROOM_STORE)).toBe('not json{')
+  expect(store.files.has(`${INLINE_STORE}.lock`)).toBe(false)
 })
 
 test('a corrupt store is backed up, rebuilt, and /bet says so', async ($, on) => {
   const original = 'not json{'
-  const store = diskStore(on, HARNESS_STORE, original)
+  const store = diskStore(on, INLINE_STORE, original, { [BARE_STORE]: original, [WAITROOM_STORE]: original })
   const reply = await $.command.run({ command: 'bet' } as never)
   const text = reply.text ?? ''
 
@@ -1257,39 +1279,122 @@ test('a corrupt store is backed up, rebuilt, and /bet says so', async ($, on) =>
   expect(text).toBe(text.toLowerCase())
   expect(text.includes('\n')).toBe(false)
   expect(text.length).toBeLessThanOrEqual(48)
-  expect(store.files.get(`${HARNESS_STORE}.bak`)).toBe(original)
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(original)
   expect(store.logged).toContain(REBUILT_NOTICE)
-  const rebuilt = JSON.parse(store.files.get(HARNESS_STORE) ?? '') as { turns?: unknown }
+  const rebuilt = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: unknown }
   expect(rebuilt.turns).toBeUndefined()
+  expect(store.files.get(BARE_STORE)).toBe(original)
+  expect(store.files.get(WAITROOM_STORE)).toBe(original)
+  expect(store.files.has(`${BARE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
 
   await finishTurn($, 'after-rebuild')
-  const saved = JSON.parse(store.files.get(HARNESS_STORE) ?? '') as { turns?: { turnId: string }[] }
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
   expect(saved.turns?.map(one => one.turnId)).toEqual(['after-rebuild'])
+})
+
+test('json that is not an object is backed up and rebuilt', async ($, on) => {
+  const original = '[]'
+  const store = diskStore(on, INLINE_STORE, original, { [BARE_STORE]: original, [WAITROOM_STORE]: original })
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(reply.text).toBe(REBUILT_NOTICE)
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(original)
+  expect(JSON.parse(store.files.get(INLINE_STORE) ?? '')).toEqual({})
+  expect(store.files.get(BARE_STORE)).toBe(original)
+  expect(store.files.get(WAITROOM_STORE)).toBe(original)
+})
+
+test('a second corruption keeps the first backup', async ($, on) => {
+  const first = 'not json{'
+  const second = 'also not json['
+  const store = diskStore(on, INLINE_STORE, first)
+  await $.command.run({ command: 'bet' } as never)
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(first)
+
+  store.files.set(INLINE_STORE, second)
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(first)
+  const later = [...store.files.keys()].filter(name => name.startsWith(`${INLINE_STORE}.bak-`))
+  expect(later).toHaveLength(1)
+  expect(store.files.get(later[0] ?? '')).toBe(second)
+  expect(JSON.parse(store.files.get(INLINE_STORE) ?? '')).toEqual({})
 })
 
 test('a store whose turns are not a list is backed up and rebuilt', async ($, on) => {
   const listed = JSON.stringify({ turns: { not: 'a list' }, extrasFrom: '1900-01-01' })
-  const store = diskStore(on, HARNESS_STORE, listed)
+  const store = diskStore(on, INLINE_STORE, listed)
   const reply = await $.command.run({ command: 'bet' } as never)
 
   expect(reply.text).toBe(REBUILT_NOTICE)
   expect((reply.text ?? '').length).toBeLessThanOrEqual(48)
-  expect(store.files.get(`${HARNESS_STORE}.bak`)).toBe(listed)
-  const rebuilt = JSON.parse(store.files.get(HARNESS_STORE) ?? '') as { turns?: unknown; extrasFrom?: string }
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(listed)
+  const rebuilt = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: unknown; extrasFrom?: string }
   expect(rebuilt.turns).toBeUndefined()
   expect(rebuilt.extrasFrom).toBe('1900-01-01')
 })
 
-test('repair uses the harness store and leaves another source untouched', async ($, on) => {
+test('repair leaves the bare name and the other install byte-identical', async ($, on) => {
+  const bare = ''
   const other = 'not json{'
-  const store = diskStore(on, HARNESS_STORE, '', { [INLINE_STORE]: other, [`${STORE_DIR}/room-check.json`]: '{"turns":[]}\n' })
+  const room = '{"turns":[]}\n'
+  const store = diskStore(on, INLINE_STORE, '', { [BARE_STORE]: bare, [WAITROOM_STORE]: other, [`${STORE_DIR}/room-check.json`]: room })
   await finishTurn($, 'this-source')
 
-  const saved = JSON.parse(store.files.get(HARNESS_STORE) ?? '') as { turns?: { turnId: string }[] }
+  const saved = JSON.parse(store.files.get(INLINE_STORE) ?? '') as { turns?: { turnId: string }[] }
   expect(saved.turns?.map(one => one.turnId)).toEqual(['this-source'])
-  expect(store.files.get(INLINE_STORE)).toBe(other)
+  expect(store.files.get(BARE_STORE)).toBe(bare)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${BARE_STORE}.bak`)).toBe(false)
+  expect(store.files.get(`${STORE_DIR}/room-check.json`)).toBe(room)
+})
+
+test('cowork plugins are the store root when that env is set', async ($, on) => {
+  const cowork = `${ISOLATED_CONFIG}/cowork_plugins/store/${INLINE_NAME}`
+  const original = 'not json{'
+  const store = diskStore(on, cowork, original, { [INLINE_STORE]: original }, { CLAUDE_CODE_USE_COWORK_PLUGINS: '1' })
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(reply.text).toBe(REBUILT_NOTICE)
+  expect(store.files.get(`${cowork}.bak`)).toBe(original)
+  expect(JSON.parse(store.files.get(cowork) ?? '')).toEqual({})
+  expect(store.files.get(INLINE_STORE)).toBe(original)
+})
+
+test('CLAUDE_CODE_PLUGIN_CACHE_DIR is the store root', async ($, on) => {
+  const cache = '/tmp/bet-plugin-cache'
+  const cached = `${cache}/store/${INLINE_NAME}`
+  const decoy = 'not json{'
+  const store = diskStore(on, cached, decoy, { [INLINE_STORE]: decoy, [BARE_STORE]: decoy }, { CLAUDE_CODE_PLUGIN_CACHE_DIR: cache })
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(reply.text).toBe(REBUILT_NOTICE)
+  expect(store.files.get(`${cached}.bak`)).toBe(decoy)
+  expect(JSON.parse(store.files.get(cached) ?? '')).toEqual({})
+  expect(store.files.get(INLINE_STORE)).toBe(decoy)
+  expect(store.files.get(BARE_STORE)).toBe(decoy)
+})
+
+test('a held lock skips the repair', async ($, on) => {
+  const original = 'not json{'
+  const store = diskStore(on, INLINE_STORE, original)
+  store.files.set(`${INLINE_STORE}.lock`, 'held')
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(original)
   expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
-  expect(store.files.get(`${STORE_DIR}/room-check.json`)).toBe('{"turns":[]}\n')
+  expect(store.files.get(`${INLINE_STORE}.lock`)).toBe('held')
+})
+
+test('with neither config dir nor home set, nothing is written', async ($, on) => {
+  const original = 'not json{'
+  const store = diskStore(on, INLINE_STORE, original, {}, { CLAUDE_CONFIG_DIR: '', HOME: '' })
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(original)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
 })
 
 test('an unreadable history with nothing loaded says turns are not being saved', async ($, on) => {

@@ -1,5 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
+import { sourceIdFor, storeFileName } from '../hooks/store-file'
+
 import type { DailyChallengeRecord, TurnRecord } from '../types'
 import {
   addDays,
@@ -1151,6 +1153,27 @@ test('while a turn runs the forecast keeps the band ahead of a ship offer; a bre
   expect(rowsKept([ship, bet], false)[0]).toBe(ship)
   expect(rowsKept([ship, bet, breathe], true)[0]).toBe(breathe)
   expect(rowsKept(outsiders, true)).toBe(outsiders)
+})
+
+test('a store file is named the way the engine names it', () => {
+  expect(storeFileName('bet-on-your-agent@waitroom')).toBe('bet-on-your-agent_waitroom-34ea4b598520.json')
+  expect(storeFileName('bet-on-your-agent@inline')).toBe('bet-on-your-agent_inline-b4b76a335767.json')
+  expect(storeFileName('bet-on-your-agent')).toBe('bet-on-your-agent.json')
+  // 65 characters is past the 64-character cut, so the stem is the first 64 and the hash is of the whole id.
+  expect(storeFileName('a'.repeat(65))).toBe(`${'a'.repeat(64)}-635361c48bb9.json`)
+  expect(storeFileName('con')).toBe('con-1143da2bc54c.json')
+  expect(storeFileName('CON')).toBe('CON-a3dbc4b644a9.json')
+})
+
+test('a cache install is that marketplace, and a directory of its own is inline', () => {
+  const installed = 'file:///home/u/.claude/plugins/cache/waitroom/bet-on-your-agent/0.6.6/hooks/store-file.ts'
+  expect(sourceIdFor(installed)).toBe('bet-on-your-agent@waitroom')
+  expect(storeFileName(sourceIdFor(installed))).toBe('bet-on-your-agent_waitroom-34ea4b598520.json')
+  const cowork = 'file:///home/u/.claude/cowork_plugins/cache/waitroom/bet-on-your-agent/0.6.6/hooks/store-file.ts'
+  expect(sourceIdFor(cowork)).toBe('bet-on-your-agent@waitroom')
+  const loose = 'file:///agent/repos/waitroom/bet-on-your-agent/hooks/store-file.ts'
+  expect(sourceIdFor(loose)).toBe('bet-on-your-agent@inline')
+  expect(sourceIdFor('file:///tmp/other/hooks/store-file.ts')).toBe('bet-on-your-agent')
 })
 
 test('while a turn runs only a breathe nudge holds the forecast back; between turns a ship offer does too', () => {
