@@ -36,10 +36,6 @@
   ended was written over every record. That turn is left unrecorded, and the
   status line is cleared instead of staying on the running-turn prompt.
 
-### wait-ship 0.1.4
-
-- **A turn that changed nothing stays quiet when the tree was edited between turns.** The baseline is read again at the start of the turn, and the kit names only the files that turn changed. A newline between one file's diff and the next is not part of the file. If that read fails, the previous baseline stands and the turn still starts. If it does not finish in time, the baseline is unknown, so a missed read does not hide a kit. A baseline an older build stored as one fingerprint string is still read.
-
 ### wait-ship 0.1.3
 
 - **Every path in the transcript receipt follows the folder the session is
