@@ -23,9 +23,10 @@
 
 import { spawn } from 'node:child_process'
 
+import type { Renderable } from '@opentui/core'
 import type { TuiPlugin, TuiPluginModule } from '@opencode-ai/plugin/tui'
 
-import { createReview, reviewLayer } from './review.ts'
+import { createReview, reviewEnterLayer, reviewLayer } from './review.ts'
 import type { GitResult, GitRunner } from './scan.ts'
 
 const runGit: GitRunner = (argv, cwd) =>
@@ -80,8 +81,70 @@ export const tui: TuiPlugin = async api => {
     }),
   )
 
-  const dispose = api.keymap.registerLayer(reviewLayer(review))
-  api.lifecycle.onDispose(dispose)
+  // The prompt keeps focus while this sidebar is on screen. Review keys are
+  // bound to the pane itself (`targetMode: "focus"`), so they apply only
+  // after this pane is focused. `esc` hands focus back to whoever had it.
+  let panel: Renderable | undefined
+  let restore: Renderable | null = null
+  let disposeKeys: (() => void) | undefined
+
+  const claimPanel = (): void => {
+    if (!panel || panel.isDestroyed || !review.layerEnabled()) return
+    // The ref runs before the `focusable` prop is applied, so a focus
+    // request in that same turn would no-op. Set it here as well.
+    panel.focusable = true
+    const current = api.renderer.currentFocusedRenderable
+    if (current && current !== panel) restore = current
+    // Focusing the prompt does not always clear this flag, and `focus()`
+    // returns early while it is set, leaving the prompt with the keys.
+    if (panel.focused && current !== panel) panel.blur()
+    panel.focus()
+  }
+
+  const focusReview = (): boolean => {
+    if (!panel || panel.isDestroyed || !review.layerEnabled()) return false
+    claimPanel()
+    // The command palette calls `dialog.clear()`, which refocuses the prompt
+    // on a 1ms timer after the command returns. Claim the pane again after that.
+    setTimeout(claimPanel, 20)
+    return true
+  }
+
+  const leaveReview = (): boolean => {
+    const back = restore
+    restore = null
+    if (back && !back.isDestroyed) back.focus()
+    else panel?.blur()
+    return true
+  }
+
+  const bindPanel = (el: Renderable | undefined): void => {
+    if (!el) {
+      disposeKeys?.()
+      disposeKeys = undefined
+      panel = undefined
+      return
+    }
+    if (panel === el) return
+    panel = el
+    panel.focusable = true
+    disposeKeys?.()
+    disposeKeys = api.keymap.registerLayer(reviewLayer(review, { target: el, onLeave: leaveReview }))
+    // The last decision unmounts this box while it still holds focus, and
+    // destroy only blurs — it does not give focus back to the prompt.
+    el.on('destroyed', () => {
+      if (panel !== el) return
+      if (el.focused || api.renderer.currentFocusedRenderable === el) leaveReview()
+      disposeKeys?.()
+      disposeKeys = undefined
+      panel = undefined
+    })
+  }
+
+  api.lifecycle.onDispose(() => disposeKeys?.())
+
+  const disposeEnter = api.keymap.registerLayer(reviewEnterLayer(review, focusReview))
+  api.lifecycle.onDispose(disposeEnter)
 
   // The pane's equivalent surface: a slot the host already keys by session,
   // so no route-tracking of our own is needed to know which session a given
@@ -103,12 +166,12 @@ export const tui: TuiPlugin = async api => {
         }
 
         return (
-          <box flexDirection="column">
+          <box flexDirection="column" focusable onMouseDown={() => focusReview()} ref={bindPanel}>
             <text>
               {view.path} · file {view.atFile} of {view.ofFiles} · {view.totalLeft} left
             </text>
             <diff source={view.text} />
-            <text>alt+o: ok · alt+f: flag · alt+l: later · alt+x: skip file · alt+u: undo</text>
+            <text>o: ok · f: flag · l: later · x: skip file · u: undo</text>
             {view.flagged > 0 && <text>{view.flagged} flagged</text>}
           </box>
         )

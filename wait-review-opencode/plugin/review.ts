@@ -248,24 +248,29 @@ export const createReview = (options: ReviewOptions): Review => {
 }
 
 /**
- * The layer OpenCode registers. `enabled` is consulted on each key by
- * `@opentui/keymap`'s `registerEnabledFields` (OpenCode calls that from
- * `createDefaultOpenTuiKeymap`). A command that returns `false` is rejected
- * and does not `preventDefault`, so the chord still reaches the prompt when
- * the gate is off or when `alt+u` has nothing to undo.
- *
- * The chords are `alt+`, not the bare letters. The prompt keeps focus while
- * the sidebar shows a hunk, so bare `o`/`f`/`l`/`x`/`u` have to stay
- * available for the next prompt.
+ * Key layer for the review pane. `target` + `targetMode: "focus"` makes
+ * `@opentui/keymap` skip the layer unless that pane is the focused node, so
+ * a prompt that still has focus receives every key. `enabled` is consulted
+ * on each key by `registerEnabledFields` (OpenCode calls that from
+ * `createDefaultOpenTuiKeymap`) and is on only while a hunk is showing. A
+ * command that returns `false` is rejected and does not `preventDefault`,
+ * so `u` still reaches the focused pane when there is nothing to undo.
  */
-export const reviewLayer = (review: Review) => ({
+export const reviewLayer = <T extends object>(review: Review, options?: { target?: T; onLeave?: () => boolean }) => ({
+  ...(options?.target ? { target: options.target, targetMode: 'focus' as const } : {}),
+  // Above OpenCode's session layers (0, and 1 for a foreground task). Those
+  // register when the session route mounts, which can be after this plugin,
+  // and at equal priority the later layer wins — `esc` is session interrupt.
+  // This layer is inactive unless the pane itself is focused.
+  priority: 2,
   enabled: () => review.layerEnabled(),
   bindings: [
-    { key: 'alt+o', cmd: 'wait-review.ok' },
-    { key: 'alt+f', cmd: 'wait-review.flag' },
-    { key: 'alt+l', cmd: 'wait-review.later' },
-    { key: 'alt+x', cmd: 'wait-review.drop-file' },
-    { key: 'alt+u', cmd: 'wait-review.undo' },
+    { key: 'o', cmd: 'wait-review.ok' },
+    { key: 'f', cmd: 'wait-review.flag' },
+    { key: 'l', cmd: 'wait-review.later' },
+    { key: 'x', cmd: 'wait-review.drop-file' },
+    { key: 'u', cmd: 'wait-review.undo' },
+    { key: 'escape', cmd: 'wait-review.leave' },
   ],
   commands: [
     { name: 'wait-review.ok', run: () => review.command('ok') },
@@ -273,5 +278,25 @@ export const reviewLayer = (review: Review) => ({
     { name: 'wait-review.later', run: () => review.command('later') },
     { name: 'wait-review.drop-file', run: () => review.command('drop-file') },
     { name: 'wait-review.undo', run: () => review.command('undo') },
+    { name: 'wait-review.leave', run: () => options?.onLeave?.() ?? true },
+  ],
+})
+
+/**
+ * Palette entry that focuses the review pane. No key binding: while the
+ * prompt is focused, every key has to pass through, including `o`/`f`/`l`/`x`/`u`.
+ * `namespace: "palette"` is what OpenCode's command palette queries.
+ */
+export const reviewEnterLayer = (review: Review, enter: () => boolean) => ({
+  enabled: () => review.layerEnabled(),
+  commands: [
+    {
+      name: 'wait-review.enter',
+      title: 'Review hunks',
+      desc: 'Focus the review pane',
+      category: 'Session',
+      namespace: 'palette',
+      run: () => enter(),
+    },
   ],
 })

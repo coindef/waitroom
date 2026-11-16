@@ -5,8 +5,8 @@ An unpublished prototype of wait-review for [OpenCode](https://opencode.ai).
 ## Try it
 
 OpenCode 1.19.3: command palette → Plugins → Install plugin, then this folder's path.
-After a turn leaves a hunk in the sidebar, review it without leaving the prompt:
-`alt+o` ok, `alt+f` flag, `alt+l` later, `alt+x` skip file, `alt+u` undo.
+Typing in the prompt never reviews. Command palette → Review hunks focuses the
+pane, then `o` ok, `f` flag, `l` later, `x` skip file, `u` undo, `esc` back.
 
 ## Can an OpenCode plugin do this at all?
 
@@ -58,15 +58,17 @@ finding of this prototype: the portable core really is portable.
 
 ## What's ported
 
-- The scan, the queue, and `alt+o` / `alt+f` / `alt+l` / `alt+x` / `alt+u` as
-  real keymap hotkeys bound through `api.keymap.registerLayer` (confirmed
-  against `@opentui/keymap`'s real `Keymap.registerLayer`, not guessed from a
-  type name). The chords are `alt+` because the prompt stays focused while a
-  hunk is on screen, so the bare letters have to remain available for the
-  next prompt. The layer's `enabled` gate is on only while the pane is
-  showing a hunk, and each command returns not-handled when it changes
-  nothing (`alt+u` only when a decision can be undone). OpenCode installs
-  that gate via `registerEnabledFields` in `createDefaultOpenTuiKeymap`.
+- The scan, the queue, and `o` / `f` / `l` / `x` / `u` as real keymap
+  hotkeys bound through `api.keymap.registerLayer` (confirmed against
+  `@opentui/keymap`'s real `Keymap.registerLayer`, not guessed from a type
+  name). The layer's target is the review pane with `targetMode: "focus"`,
+  so the keys apply only while that pane is focused. The prompt keeps focus
+  otherwise, and a sentence typed there is not reviewed. The layer's
+  `enabled` gate is on only while a hunk is showing, and each command
+  returns not-handled when it changes nothing (`u` only when a decision can
+  be undone). OpenCode installs that gate via `registerEnabledFields` in
+  `createDefaultOpenTuiKeymap`. Command palette → Review hunks focuses the
+  pane; `esc` returns to the prompt.
 - A `sidebar_content` slot rendering the current hunk (path, position, a
   `<diff>` element for the hunk text, the hotkey legend, the flagged count).
   The queue lives in a Solid store, and the slot reads it, so a keypress or
@@ -94,13 +96,11 @@ finding of this prototype: the portable core really is portable.
   Plugins → Install plugin, then this folder's path. That writes
   `.opencode/tui.json`. With the sidebar open and the pane reading
   `wait-review: nothing to read`, bare `u` `o` `f` `l` `x` landed in the prompt.
-  With a hunk on screen those bare keys were captured, which is the bug this
-  change fixes: the prompt stays focused. After the chords moved to `alt+`,
-  the same TUI was restarted against this tree. With `third.ts` on screen,
-  `fix the login flow` landed in the prompt intact and the card stayed, then
-  `alt+o` replaced the card with `1 read` and did not put `o` in the prompt.
-  No provider login and no API key: the session used OpenCode's built-in
-  Big Pickle model.
+  With a hunk on screen and the prompt focused, `fix the login flow` stayed
+  intact and the card did not change. Command palette → Review hunks, then
+  `o`, advanced the card and did not insert `o`. When that queue emptied, the
+  next character reached the prompt. No provider login and no API key: the
+  session used OpenCode's built-in Big Pickle model.
 - **`plugin/scan.ts` is actually run and tested.** It has zero OpenCode
   types, by the same design as `wait-review/hooks/diff.ts`, so it runs under
   Node directly:
