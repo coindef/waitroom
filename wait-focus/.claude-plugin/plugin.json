@@ -1,6 +1,6 @@
 {
   "name": "wait-focus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Name one to three paths. After a turn, the status line says whether each one was touched. Files and folders. It only reports, and it never blocks an edit.",
   "author": {
     "name": "coindef"

@@ -1,6 +1,6 @@
 {
   "name": "wait-anchor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Leave a note for future you: the goal you are on, and what to check when you come back. Optional. Nothing is written until you set one.",
   "author": {
     "name": "coindef"

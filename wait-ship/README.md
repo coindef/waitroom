@@ -96,16 +96,14 @@ the row the moment the kit is answered.
   those; otherwise it matches the prevailing capitalization and tense
   instead. The body is short bullets, grouped by area once the diff touches
   more than one.
-- **PR description.** `## Summary` (2-4 bullets on what changed and roughly
+- **PR description.** `## Summary` (2–4 bullets on what changed and roughly
   why, read off the files — a diff carries no rationale a deterministic pass
   can honestly invent), `## Changes` (the same per-area bullets as the commit
   body), `## Test plan` (a checkbox per test file the diff touched, plus one
   manual-verification line always).
 - **Changelog entry**, only when `CHANGELOG.md` exists in the repository
-  root and `includeChangelog` is on: 1–2 bullets under `### Added`, `###
-  Changed` or `### Fixed`, picked the same way the commit type is. It is a
-  standalone snippet to paste in yourself — this plugin never edits
-  `CHANGELOG.md`.
+  root and `includeChangelog` is on. It is a standalone snippet to paste in
+  yourself — this plugin never edits `CHANGELOG.md`.
 
 ## Settings
 
