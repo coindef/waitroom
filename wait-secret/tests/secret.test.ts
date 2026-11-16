@@ -7,6 +7,7 @@ import {
   DIFF_TOO_BIG,
   DISABLE_LABEL,
   DISMISS_LABEL,
+  drawnBy,
   enabledRowKey,
   entropyOf,
   hitsIn,
@@ -18,6 +19,7 @@ import {
   overflowLine,
   parseAddedLines,
   rowLine,
+  rowsKept,
   RULES,
   scanLine,
   statusLine,
@@ -214,6 +216,14 @@ test('the settings row, and its place in the shared row: last', () => {
   expect(yieldsBand('wait-secret', 'wait-ship')).toBe(true)
   expect(yieldsBand('wait-secret', undefined)).toBe(false)
   expect(yieldsBand('wait-secret', 'someone-else')).toBe(false)
+  expect(drawnBy({ type: 'Box', part: { plugin: 'wait-ship' } })).toBe('wait-ship')
+  expect(drawnBy({ plugin: 'wait-ship', tree: { type: 'Box' } })).toBe('wait-ship')
+  expect(drawnBy({ type: 'engine', ref: 1 })).toBeUndefined()
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const secret = { plugin: 'wait-secret', tree: { type: 'Box' } }
+  const other = { plugin: 'someone-else', tree: { type: 'Box' } }
+  expect(rowsKept([secret, ship], false)[0]).toBe(ship)
+  expect(rowsKept([other], false)).toEqual([other])
 })
 
 test('splitNul keeps names with spaces, quotes and non-ASCII exactly as git wrote them', () => {

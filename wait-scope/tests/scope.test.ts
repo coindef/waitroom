@@ -7,6 +7,7 @@ import {
   DISABLE_LABEL,
   DISMISS_LABEL,
   drawnBy,
+  rowsKept,
   editedPathOf,
   editLanded,
   enabledRowKey,
@@ -503,6 +504,12 @@ test('the row goes to every other waitroom mod first, as their own lists already
   expect(yieldsBand('wait-scope', 'some-other-plugin')).toBe(false)
   expect(drawnBy({ type: 'Box', part: { plugin: 'wait-ship' } })).toBe('wait-ship')
   expect(drawnBy({ type: 'Box' })).toBeUndefined()
+  expect(drawnBy({ plugin: 'wait-ship', tree: { type: 'Box' } })).toBe('wait-ship')
+  expect(drawnBy({ type: 'engine', ref: 1 })).toBeUndefined()
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const scope = { plugin: 'wait-scope', tree: { type: 'Box' } }
+  expect(rowsKept([scope, ship], false)[0]).toBe(ship)
+  expect(rowsKept([scope], false)[0]).toBe(scope)
 })
 
 test('a root and a path that differ only by drive-letter case, path case on Windows, or /private on macOS are one tree', () => {

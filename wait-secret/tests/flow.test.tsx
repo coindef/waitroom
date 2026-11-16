@@ -274,3 +274,52 @@ test('a survey already up keeps the row', async ($, on) => {
   expect(await band.find({ text: TITLE })).toBeUndefined()
   await band.unmount()
 })
+
+test(
+  'a wait-ship card keeps the row, and this card shows once that one is closed',
+  {
+    plugins: [
+      {
+        name: 'wait-ship',
+        tier: 'append',
+        register(on) {
+          // The stand-in's own state: an inline plugin runs in an environment of its own.
+          let isUp = true
+          on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
+            if (!isUp) return next(e)
+            const { Box, Text, Button } = $.ui.resolve(e)
+            const close = () => {
+              isUp = false
+              $.ui.invalidate('ui.render')
+            }
+
+            return (
+              <Box>
+                <Text>What changed this turn</Text>
+                <Button key="close" plain onPress={close}>
+                  Close
+                </Button>
+              </Box>
+            )
+          })
+        },
+      },
+    ],
+  },
+  async ($, on) => {
+    engineBottom(on, { root: ROOT, diffs: ['', added('a.ts', [`k="${OPENAI}"`])] })
+    await $.turn.start({ text: 'one', turnId: 'turn-share' })
+    await $.turn.complete(finish('turn-share'))
+
+    const band = await mountBand($, false)
+    expect(await band.find({ text: 'What changed this turn' })).toBeDefined()
+    expect(await band.find({ text: TITLE })).toBeUndefined()
+    await $.ui.press({ plugin: 'wait-ship', key: 'close' })
+    await band.unmount()
+
+    const after = await mountBand($, false)
+    expect(await after.find({ text: TITLE })).toBeDefined()
+    expect(await after.find({ text: 'What changed this turn' })).toBeUndefined()
+    await after.unmount()
+  },
+)
