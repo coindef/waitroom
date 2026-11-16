@@ -20,11 +20,11 @@
 
 ### wait-focus 0.1.1
 
-- **wait-focus has an icon.** It is `.claude-plugin/icon.png`, so the plugin listing no longer warns that the icon is missing.
+- **wait-focus has an icon.** `plugin.json` points at `.claude-plugin/icon.png`, so `claude plugin validate` no longer warns that it is missing.
 
 ### wait-anchor 0.1.2
 
-- **wait-anchor has an icon.** It is `.claude-plugin/icon.png`, so the plugin listing no longer warns that the icon is missing.
+- **wait-anchor has an icon.** `plugin.json` points at `.claude-plugin/icon.png`, so `claude plugin validate` no longer warns that it is missing.
 
 ### bet-on-your-agent 0.6.6
 
