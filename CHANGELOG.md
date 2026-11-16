@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- **The shared row is one row again on Claude Code 2.1.323 and later.** Those
+  versions ask every mod for its own row and stack the answers, and `next()`
+  no longer says who drew. wait-ship leaves the other rows out of
+  `AbovePromptList`, in the same order as before: breathe, then this offer,
+  then the bet. On 2.1.319 and earlier it still yields from the stamp on
+  `next()`.
+
+- **The shared row is one row again on Claude Code 2.1.323 and later.** The
+  bet's forecast still comes ahead of a ship offer while a turn runs, and
+  still waits behind a breathe nudge and, between turns, a ship offer. The
+  yield is done by leaving the other rows out of `AbovePromptList`. On
+  2.1.319 and earlier the stamp on `next()` still decides.
+
+- **The shared row is one row again on Claude Code 2.1.323 and later.** A due
+  breathe nudge keeps the row ahead of a ship offer and a forecast instead
+  of stacking on them. On 2.1.319 and earlier a nudge still takes the row by
+  drawing it.
+
+- **The card yields the shared row again on Claude Code 2.1.323 and later.**
+  wait-scope was stacking on a wait-ship offer. It waits behind breathe,
+  ship, and the bet, and shows once they close. Returning the engine's own
+  drawing is not a yield: an empty row still shows this card. On 2.1.319 and
+  earlier the stamp on `next()` still decides.
+
+- **The card yields the shared row on Claude Code 2.1.323 and later.**
+  wait-secret waits behind breathe, ship, the bet, and scope, and shows once
+  they close. On 2.1.319 and earlier the stamp on `next()` still decides.
+
 ### bet-on-your-agent-opencode 0.0.1
 
 - **Digits type into the prompt.** A digit answers the bet only when the bet row has focus. While the prompt has focus, every key, including a digit, stays in the prompt. Skip is labeled `0: Skip` on the confidence, file, bonus, and verdict rows.
