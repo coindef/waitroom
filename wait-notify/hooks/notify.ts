@@ -458,7 +458,7 @@ type Wait = { since: number; reminder?: { cancel: () => void }; label?: string }
 export type Notifier = {
   /** A tool call starts. The stamp it returns goes back to `toolSettled` when the call ends. */
   toolStarted: (tool: string) => number
-  /** A tool call ended. One that was already running when the wait began means the wait is over. */
+  /** A tool call ended. The wait ends once every call that was already running when it began has ended. */
   toolSettled: (stamp: number, tool: string) => void
   /** A Notification event: notify now if you are away, and arm the one reminder. */
   notification: (host: NotifyHost, notificationType: unknown) => Promise<void>
@@ -475,6 +475,8 @@ export type Notifier = {
 export const createNotifier = (): Notifier => {
   /** One counter for tool calls and waits, so "already running when the wait began" is a comparison. */
   let order = 0
+  /** Stamps of tool calls still open. A call that started before the wait and is still here is not answered yet. */
+  const open = new Set<number>()
   /** AskUserQuestion calls in flight. */
   let asking = 0
   /** Whether `uname` said Darwin, once it has answered. A `uname` that failed is asked again next time. */
@@ -511,13 +513,17 @@ export const createNotifier = (): Notifier => {
     toolStarted: tool => {
       if (tool === QUESTION_TOOL) asking += 1
       order += 1
+      open.add(order)
 
       return order
     },
 
     toolSettled: (stamp, tool) => {
       if (tool === QUESTION_TOOL && asking > 0) asking -= 1
-      if (wait !== null && stamp < wait.since) clear()
+      open.delete(stamp)
+      if (wait === null || stamp >= wait.since) return
+      for (const started of open) if (started < wait.since) return
+      clear()
     },
 
     notification: async (host, notificationType) => {

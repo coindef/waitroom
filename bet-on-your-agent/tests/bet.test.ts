@@ -563,7 +563,9 @@ test('a bonus bucket is a word where a bare digit would read as a key, else itse
   expect(bonusLabel('files', '1')).toBe('one')
   expect(bonusLabel('files', '2-3')).toBe('2–3')
   expect(bonusLabel('duration', '<30s')).toBe('<30s')
-  expect(bonusLabel('toolCalls', '0-2')).toBe('0-2')
+  expect(bonusLabel('duration', '30-90s')).toBe('30–90s')
+  expect(bonusLabel('toolCalls', '0-2')).toBe('0–2')
+  expect(bonusLabel('toolCalls', '3-6')).toBe('3–6')
 })
 
 test('the bonus question is scored on whichever dimension it actually asked', async () => {

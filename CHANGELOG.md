@@ -2,12 +2,23 @@
 
 ## Unreleased
 
-### bet-on-your-agent 0.6.6
+### bet-on-your-agent-opencode 0.0.1
 
-- **A turn that could not be saved says so.** When the history cannot be read, one line: `couldn't save that turn`. The status line still goes blank.
-- **A failed read keeps the record on screen.** The pane, the recap and the row keep the last history that loaded, instead of looking like the rank and the score were wiped.
-- **A failed read of the daily challenges leaves them in place.** Today's result is not written over the streak.
-- **A history that is not a list is left as it is.** It is not replaced by the turn that just ended, and that is noted once: `couldn't read the saved history`.
+- **Digits type into the prompt.** A digit answers the bet only when the bet row has focus. While the prompt has focus, every key, including a digit, stays in the prompt. Skip is labeled `0: Skip` on the confidence, file, bonus, and verdict rows.
+- **A retry does not close the bet.** The turn ends when the session goes idle.
+- **History waits for the file.** A turn that ends before `api.kv` has read `kv.json` is held and then merged into that file. It does not replace other plugins' keys.
+- **The file forecast counts a turn that wrote files another way.** `session.diff`, `apply_patch` text, a `patch` message part, and, when the diff call is missing, `git status`. A tool part that errors counts once, the same as one that completes.
+- **The band repaints.** The open bet and the rank-up line live in a Solid store the slot reads while it renders.
+
+### wait-notify 0.1.1
+
+- **The reminder waits for your answer.** A quick Read or a subagent's tool finishing alongside the one you're answering no longer cancels it.
+- **A session you ended stays ended.** A prompt sent right as you exit or `/clear` no longer makes other sessions think it's still open.
+
+### wait-anchor 0.1.1
+
+- **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
+- **If your note can't be read, it's left alone.** The status line says so, and nothing is changed or cleared. `/anchor` says nothing was changed. A new note says it wasn't saved. `/anchor clear` says nothing was cleared.
 
 ### bet-on-your-agent 0.6.4
 
@@ -34,6 +45,12 @@
   or worktree, or a space in the drafts folder, no longer makes the command
   miss the file. An absolute `shipDir` is still written under the repository,
   and the receipt names that file.
+
+### waitroom 0.1.2
+
+- **If you already have waitroom installed, update it.** Version 0.1.1 still asked for `wait-review` after that plugin left the catalog, so the bundle failed to load with `Dependency "wait-review@waitroom" is not installed`. This release is 0.1.2, so the update actually runs. Run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`. You should see `Plugin "waitroom" updated from 0.1.1 to 0.1.2 for scope user. Restart to apply changes.` Restart once. After that, waitroom loads again and keeps bet-on-your-agent, wait-ship, and wait-breathe.
+
+- **Three old plugins are now disabled, and that is expected.** `wait-review`, `wait-changed`, and `wait-shell` are no longer in the catalog. After the update they stay installed locally and show as disabled (or "Removed from the waitroom marketplace"). While they are still installed, `claude plugin prune` refuses to run. Uninstall those three first. You don't need to install anything in their place.
 
 ### wait-cards 0.1.0
 

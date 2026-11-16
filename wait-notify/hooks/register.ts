@@ -30,13 +30,17 @@ const identityOf = async ($: EngineInterface): Promise<{ id: unknown; root: unkn
 /**
  * Writes this session's record in the plugin store, `live/<session id>`: its
  * folder name, its parent folder's name when it has one, and the time now.
- * Nothing without both an id and a root. Returns the identity it read. Never
- * rejects.
+ * Nothing without both an id and a root. Nothing either when the session id
+ * has changed since it was read: the session ended, or `/clear` moved on, and
+ * a write then would put the ended session back. Returns the identity it
+ * read. Never rejects.
  */
 const touchLive = async ($: EngineInterface): Promise<{ id: unknown; root: unknown }> => {
   const self = await identityOf($)
   const record = liveRecordOf(self, await $.clock.now().catch(() => Date.now()))
-  if (record !== undefined) await $.store.set(record.key, record.entry).catch(() => undefined)
+  if (record !== undefined && (await $.session.id().catch(() => undefined)) === self.id) {
+    await $.store.set(record.key, record.entry).catch(() => undefined)
+  }
 
   return self
 }
@@ -108,13 +112,16 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   /**
-   * Every tool call, watched and never changed. Its start tells an
-   * AskUserQuestion dialog from a permission dialog. Its start can't mark your
-   * answer, because a call starts, PreToolUse included, before its dialog
-   * opens. Its end, for a call that was already running when the notification
-   * went out, means Claude has moved on: you answered.
+   * Every tool call, watched and never changed. A subagent's call is not the
+   * main loop's: it is not stamped, and it does not change whether a question
+   * is open. A call's start tells an AskUserQuestion dialog from a permission
+   * dialog. Its start can't mark your answer, because a call starts, PreToolUse
+   * included, before its dialog opens. The wait ends when the last main-loop
+   * call that was already running has ended. One other call ending, while that
+   * one is still open, has not.
    */
   on('tool.call', async ($, e, next) => {
+    if (e.agentId !== undefined) return next(e)
     const stamp = notifier.toolStarted(e.tool)
     try {
       return await next(e)
@@ -134,7 +141,9 @@ export const register: Register = on => {
   /**
    * A prompt you sent: you are back. A task notification or another session's
    * message is not you. It also refreshes the session's record, without holding
-   * the prompt: after `/clear` the session runs on under a new id.
+   * the prompt. The write is skipped when the session id has changed since it
+   * was read: after `/clear` the session runs on under a new id, and a late
+   * write would put the ended one back.
    */
   on('prompt.submit', ($, e, next) => {
     if (isPersonPrompt(e.origin)) {
