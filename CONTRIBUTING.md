@@ -14,7 +14,7 @@ claude plugin validate ./wait-breathe
 claude plugin test     ./wait-breathe         # 34 tests
 
 claude plugin validate ./wait-ping
-claude plugin test     ./wait-ping            # 34 tests
+claude plugin test     ./wait-ping            # 36 tests
 
 claude plugin validate ./wait-scope
 claude plugin test     ./wait-scope           # 59 tests

@@ -92,7 +92,11 @@ export const register: Register = (on, options) => {
     if (done.deny !== undefined) return { text: toggleRefusedLine(config.enabled, done.deny) }
     config.enabled = want
 
-    return { text: want ? toggledOnLine(config.thresholdSeconds, config.sound) : toggledOffLine() }
+    return {
+      text: want
+        ? toggledOnLine(config.thresholdSeconds, config.sound, options.thresholdSeconds)
+        : toggledOffLine(),
+    }
   })
 
   /**
