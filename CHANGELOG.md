@@ -2,10 +2,18 @@
 
 ## Unreleased
 
-### wait-ping 0.1.2
+### bet-on-your-agent-opencode 0.0.1
 
-- **From an hour, the away line drops the seconds.** `1h 0m 40s` is `1h`. `2h 1m 40s` is `2h 1m`. Under an hour is unchanged (`45s`, `1m`, `1m 30s`, `59m 59s`).
-- **An unusable threshold is named when you turn notifications on.** `(0.5 isn't usable, using 30s)`. A value that floors to at least 1 is kept and is not named.
+- **Digits type into the prompt.** A digit answers the bet only when the bet row has focus. While the prompt has focus, every key, including a digit, stays in the prompt. Skip is labeled `0: Skip` on the confidence, file, bonus, and verdict rows.
+- **A retry does not close the bet.** The turn ends when the session goes idle.
+- **History waits for the file.** A turn that ends before `api.kv` has read `kv.json` is held and then merged into that file. It does not replace other plugins' keys.
+- **The file forecast counts a turn that wrote files another way.** `session.diff`, `apply_patch` text, a `patch` message part, and, when the diff call is missing, `git status`. A tool part that errors counts once, the same as one that completes.
+- **The band repaints.** The open bet and the rank-up line live in a Solid store the slot reads while it renders.
+
+### wait-notify 0.1.1
+
+- **The reminder waits for your answer.** A quick Read or a subagent's tool finishing alongside the one you're answering no longer cancels it.
+- **A session you ended stays ended.** A prompt sent right as you exit or `/clear` no longer makes other sessions think it's still open.
 
 ### wait-anchor 0.1.1
 
