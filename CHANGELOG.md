@@ -2,17 +2,13 @@
 
 ## Unreleased
 
-### wait-focus 0.1.0
+### bet-on-your-agent-opencode 0.0.1
 
-First release: you name one to three paths, and after a turn the status line says whether the turn touched each one.
-
-- **`/wait-focus src/auth/ package.json`.** One, two, or three files or folders. Replaces the list. A fourth path is refused (`3 paths max · name one to three, like src/auth/ or package.json`) and the list you had stays. A path outside the project is refused and the list stays. A glob (`src/**/*.ts`, `src/auth/*`) is refused (`src/**/*.ts looks like a glob · name a file or folder, like src/auth/ or package.json`) and the list stays. A path that is not on disk yet is still watched. `/wait-focus` shows the list. `/wait-focus clear` clears it. The command is `/wait-focus`, because `/focus` is already a Claude Code command. The reply does not start a turn.
-- **Status line.** After a main-loop turn, `src/auth/ touched · package.json untouched`. A folder is touched when anything under it changed, including a rename or a delete. The line comes down while the next turn runs. Past 48 columns, folders are shortened from the left (`…/LoginForm.tsx touched · package.json untouched`). If that is still too wide, the words become `yes` and `no` (`…/auth/ yes · package.json no · README.md no`). No list, no line. It does not take the row above the prompt.
-- **Read-only git.** `diff --name-status`, `ls-files`, and `hash-object`, from the project directory. A file that was already dirty counts when its contents change. A gitignored file is not counted. Each call gives up after 3 seconds. The start of a turn waits on those calls. The answer is sent before the end reads.
-- **A commit during the turn counts.** The turn records HEAD when it starts. If HEAD moved, `git diff <start> HEAD -- <paths>` is added to the work-tree diff. An edit that is committed, a new file, several commits, an amend, a reset, or a rebase all count: the work tree matches the new HEAD, and only that range diff shows the path. If that diff cannot be read, the line stays blank. It does not say untouched.
-- **A symlink or a submodule** on the list says `is a symlink` or `is a submodule`, instead of a blank line.
-- **Fails open.** Outside a git repository, or when git fails, times out, or its output is cut off, the turn stays quiet: no line, no crash, and no guess. More than 40 changed files under the list does the same. Nothing is blocked, edited, or committed. A slow end read does not paint the previous turn's line over the next turn.
-- **Kept in `$.store`.** One value, keyed by the project root, under Claude's configuration directory. Two sessions in one project share it. A missing project root saves nothing.
+- **Digits type into the prompt.** A digit answers the bet only when the bet row has focus. While the prompt has focus, every key, including a digit, stays in the prompt. Skip is labeled `0: Skip` on the confidence, file, bonus, and verdict rows.
+- **A retry does not close the bet.** The turn ends when the session goes idle.
+- **History waits for the file.** A turn that ends before `api.kv` has read `kv.json` is held and then merged into that file. It does not replace other plugins' keys.
+- **The file forecast counts a turn that wrote files another way.** `session.diff`, `apply_patch` text, a `patch` message part, and, when the diff call is missing, `git status`. A tool part that errors counts once, the same as one that completes.
+- **The band repaints.** The open bet and the rank-up line live in a Solid store the slot reads while it renders.
 
 ### wait-notify 0.1.1
 
