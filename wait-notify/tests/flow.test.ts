@@ -93,6 +93,12 @@ const engineBottom = (
 ) => {
   const mac: Mac = { uname: 'Darwin', idleSeconds: 1, front: SAFARI, ...start }
   const session: Session = { id: given.id, root: given.root }
+  /** Set `wait` to hold the next root read. One hold, then it is spent. */
+  const rootHold: { wait: boolean; held: boolean; release: () => void } = {
+    wait: false,
+    held: false,
+    release: () => {},
+  }
   const clock = mock.clock(on, { now: NOW })
   mock.env(on, mac.noHome ? {} : { HOME })
   /** The plugin store, one object the test reads and writes as the other session would. JSON in and out, as the host keeps it. */
@@ -128,7 +134,14 @@ const engineBottom = (
 
     return { value: session.id }
   })
-  on('session.root', () => {
+  on('session.root', async () => {
+    if (rootHold.wait) {
+      rootHold.wait = false
+      rootHold.held = true
+      await new Promise<void>(resolve => {
+        rootHold.release = resolve
+      })
+    }
     if (session.root === undefined) throw new Error('no project root')
 
     return { value: session.root }
@@ -165,7 +178,7 @@ const engineBottom = (
     throw new Error(`wait-notify runs no such command: ${e.argv.join(' ')}`)
   })
 
-  return { clock, mac, ran, read, holds, session, store, storeFail }
+  return { clock, mac, ran, read, holds, session, store, storeFail, rootHold }
 }
 
 const permission = ($: Engine) =>
@@ -838,4 +851,51 @@ test("with a same-name session in another parent folder, the parent folder's nam
   for (const word of ['Users', 'ada', 'clients']) {
     expect(JSON.stringify(store).includes(word)).toBe(false)
   }
+})
+
+test('a parallel Read, or a subagent tool, already running when the wait began does not cancel the reminder while Bash is still open', async ($, on) => {
+  const { clock, ran, holds } = engineBottom(on)
+  holds.Bash = 10 * MIN
+  holds.Read = 1 * MIN
+  const bash = $.tool.call({ tool: 'Bash', command: 'npm test' })
+  const read = $.tool.call({ tool: 'Read', file_path: '/repo/src/a.ts' })
+  const agent = $.tool.call({ tool: 'Read', file_path: '/repo/src/b.ts', agentId: 'agent-1' })
+  await clock.settle()
+  await permission($)
+  expect(ran).toEqual(NOTIFIED)
+
+  // Both Reads finish. Bash, the call you are answering, is still open.
+  await clock.advance(1 * MIN)
+  expect((await read).result).toEqual({ ok: true })
+  expect((await agent).result).toEqual({ ok: true })
+
+  await clock.advance(2 * MIN)
+  expect(ran.at(-1)).toEqual(notifyArgv(reminderBody(3)))
+
+  await clock.advance(7 * MIN)
+  expect((await bash).result).toEqual({ ok: true })
+  expect(posted(ran)).toHaveLength(2)
+})
+
+test('a prompt that overlaps the session ending does not leave the ended session in the store', async ($, on) => {
+  const { clock, session, store, rootHold } = engineBottom(on, {}, { id: ID_A, root: '/work/api' })
+  await $.session.start(START)
+  expect(Object.keys(store)).toEqual([`live/${ID_A}`])
+
+  // The refresh reads the id, then the root, then writes. Hold the root read
+  // so the session can end between the two, the way a late write does after /clear.
+  rootHold.wait = true
+  const submit = $.prompt.submit(typed('carry on'))
+  for (let i = 0; i < 50 && !rootHold.held; i += 1) await Promise.resolve()
+  expect(rootHold.held).toBe(true)
+
+  // /clear: this session ends, and the process runs on under a new id.
+  session.id = ID_C
+  await $.session.end({ reason: 'clear', sessionId: ID_A, resume: { id: ID_A } })
+  rootHold.release()
+  await submit
+  await clock.settle()
+
+  expect(store[`live/${ID_A}`]).toBeUndefined()
+  expect(Object.keys(store)).toEqual([])
 })

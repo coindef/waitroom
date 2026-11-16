@@ -1,7 +1,7 @@
 {
   "name": "bet-on-your-agent-opencode",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "description": "Prototype: bet-on-your-agent ported to OpenCode's TUI plugin API. See README.md.",
   "exports": {
@@ -13,6 +13,15 @@
   "peerDependencies": {
     "@opentui/core": ">=0.4.5",
     "@opentui/keymap": ">=0.4.5",
-    "@opentui/solid": ">=0.4.5"
+    "@opentui/solid": ">=0.4.5",
+    "solid-js": "^1.9.12"
+  },
+  "devDependencies": {
+    "@opentui/core": "0.9.0",
+    "@opentui/keymap": "0.9.0",
+    "@opentui/solid": "0.9.0",
+    "@types/node": "^22.20.5",
+    "solid-js": "1.9.19",
+    "typescript": "5.7.3"
   }
 }

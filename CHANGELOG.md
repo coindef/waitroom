@@ -2,14 +2,18 @@
 
 ## Unreleased
 
-### wait-scope 0.1.1
+### bet-on-your-agent-opencode 0.0.1
 
-- **A scope file that can't be read is not "no scope".** If `.claude/wait-scope` is there but the read fails, the turn keeps the last scope that file gave, or skips the check, and says so once. It does not guess, and it does not use the setting in place of that file.
-- **`*` is the top level only, and `src/*` is the files directly in that folder.** A bare folder name still covers everything inside it.
-- **A comma in `.claude/wait-scope` stays in the glob.** `src/**/*.{ts,tsx}` matches `.ts` and `.tsx`. Commas still separate globs in the *Files in scope* setting.
-- **A glob typed in the prompt is read like an edited path.** `..`, the macOS `/private` alias, and a drive letter fold the same way. A guess does not cover a file outside the project.
-- **`fix src/auth` is a folder.** `and/or`, `read/write`, and `TCP/IP` stay prose.
-- Test count in the README and CONTRIBUTING corrected to 59.
+- **Digits type into the prompt.** A digit answers the bet only when the bet row has focus. While the prompt has focus, every key, including a digit, stays in the prompt. Skip is labeled `0: Skip` on the confidence, file, bonus, and verdict rows.
+- **A retry does not close the bet.** The turn ends when the session goes idle.
+- **History waits for the file.** A turn that ends before `api.kv` has read `kv.json` is held and then merged into that file. It does not replace other plugins' keys.
+- **The file forecast counts a turn that wrote files another way.** `session.diff`, `apply_patch` text, a `patch` message part, and, when the diff call is missing, `git status`. A tool part that errors counts once, the same as one that completes.
+- **The band repaints.** The open bet and the rank-up line live in a Solid store the slot reads while it renders.
+
+### wait-notify 0.1.1
+
+- **The reminder waits for your answer.** A quick Read or a subagent's tool finishing alongside the one you're answering no longer cancels it.
+- **A session you ended stays ended.** A prompt sent right as you exit or `/clear` no longer makes other sessions think it's still open.
 
 ### wait-anchor 0.1.1
 
