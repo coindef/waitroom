@@ -22,6 +22,10 @@ type Project = {
   denied?: readonly string[]
   /** Edits to these paths fail in the tool itself. */
   failing?: readonly string[]
+  /** `exists` throws, as a transient I/O error. The file may still be there. */
+  existsFails?: boolean
+  /** The file is there, but `read` throws. */
+  readFails?: boolean
 }
 
 type Settings = { refuse?: string; set: { key: string; value: unknown }[] }
@@ -42,6 +46,8 @@ const engineBottom = (
 ) => {
   /** Every status line the plugin set, `undefined` for a clear. */
   const said: (string | undefined)[] = []
+  /** Every line the plugin logged for the person. */
+  const logged: string[] = []
   /** Every file system call the plugin made. */
   const touched: string[] = []
   const ran: string[][] = []
@@ -83,6 +89,11 @@ const engineBottom = (
 
     return { value: undefined }
   })
+  on('ui.log', ($, e) => {
+    logged.push(e.text)
+
+    return { value: undefined }
+  })
   on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
     const { Box } = $.ui.resolve(e)
 
@@ -90,11 +101,13 @@ const engineBottom = (
   })
   on('fs.exists', ($, e) => {
     touched.push(`exists ${e.path}`)
+    if (project.existsFails === true) throw new Error('EIO: exists failed')
 
     return { value: project.scopeFile !== undefined && e.path === SCOPE_PATH }
   })
   on('fs.read', ($, e) => {
     touched.push(`read ${e.path}`)
+    if (project.readFails === true && e.path === SCOPE_PATH) throw new Error('EIO: read failed')
     if (project.scopeFile === undefined || e.path !== SCOPE_PATH) throw new Error(`ENOENT: ${e.path}`)
 
     return { value: project.scopeFile }
@@ -126,7 +139,7 @@ const engineBottom = (
     return { value: e.value }
   })
 
-  return { said, touched, ran, fetched, reached }
+  return { said, logged, touched, ran, fetched, reached }
 }
 
 /** Only the status lines that showed something. */
@@ -640,6 +653,134 @@ test(
     await after.unmount()
   },
 )
+
+test(
+  'a scope of src/* lists a nested file and not a file directly in that folder',
+  async ($, on) => {
+    const { said } = engineBottom(on, { root: ROOT, scopeFile: 'src/*\n' })
+    await $.turn.start({ text: 'go', turnId: 'turn-star' })
+    await edit($, `${ROOT}/src/a.ts`)
+    await edit($, `${ROOT}/src/auth/login.ts`)
+    expect(said.at(-1)).toBe('1 outside scope')
+    await $.turn.complete(finish('turn-star'))
+
+    const band = await mountBand($, false)
+    expect(await band.find({ text: 'src/auth/login.ts' })).toBeDefined()
+    expect(await band.find({ text: 'src/a.ts' })).toBeUndefined()
+    await band.unmount()
+  },
+)
+
+test('a brace glob in the scope file matches either extension', async ($, on) => {
+  const { said } = engineBottom(on, { root: ROOT, scopeFile: 'src/**/*.{ts,tsx}\n' })
+  await $.turn.start({ text: 'go', turnId: 'turn-brace' })
+  await edit($, `${ROOT}/src/a.ts`)
+  await edit($, `${ROOT}/src/a.tsx`)
+  await edit($, `${ROOT}/src/a.js`)
+  expect(said.at(-1)).toBe('1 outside scope')
+  await $.turn.complete(finish('turn-brace'))
+
+  const band = await mountBand($, false)
+  expect(await band.find({ text: 'src/a.js' })).toBeDefined()
+  expect(await band.find({ text: 'src/a.ts' })).toBeUndefined()
+  expect(await band.find({ text: 'src/a.tsx' })).toBeUndefined()
+  await band.unmount()
+})
+
+test(
+  'a scope file that is there but cannot be read is not treated as no file',
+  { options: { globs: 'docs/**' } },
+  async ($, on) => {
+    const { said, logged } = engineBottom(on, { root: ROOT, scopeFile: 'src/**\n', readFails: true })
+    await $.prompt.submit(typed('tidy things up'))
+    await $.turn.start({ text: 'tidy things up', turnId: 'turn-unread' })
+    await edit($, `${ROOT}/README.md`)
+    await $.turn.complete(finish('turn-unread'))
+
+    expect(logged).toEqual(["can't read .claude/wait-scope · this turn was not checked"])
+    expect(shown(said)).toEqual([])
+    const band = await mountBand($, false)
+    expect(await band.find({ text: TITLE })).toBeUndefined()
+    expect(await band.find({ text: 'README.md' })).toBeUndefined()
+    await band.unmount()
+
+    await $.turn.start({ text: 'again', turnId: 'turn-unread-2' })
+    await edit($, `${ROOT}/README.md`)
+    expect(logged).toEqual(["can't read .claude/wait-scope · this turn was not checked"])
+    expect(shown(said)).toEqual([])
+  },
+)
+
+test(
+  'a failed check for the scope file is not treated as no file',
+  { options: { globs: 'docs/**' } },
+  async ($, on) => {
+    const { said, logged } = engineBottom(on, { root: ROOT, scopeFile: 'src/**\n', existsFails: true })
+    await $.prompt.submit(typed('fix src/a.ts'))
+    await $.turn.start({ text: 'fix src/a.ts', turnId: 'turn-exists' })
+    await edit($, `${ROOT}/README.md`)
+    await $.turn.complete(finish('turn-exists'))
+
+    expect(logged).toEqual(["can't read .claude/wait-scope · this turn was not checked"])
+    expect(shown(said)).toEqual([])
+    const band = await mountBand($, false)
+    expect(await band.find({ text: TITLE })).toBeUndefined()
+    expect(await band.find({ text: '(guess)' })).toBeUndefined()
+    await band.unmount()
+  },
+)
+
+test(
+  'an unreadable scope file keeps the last scope that file gave',
+  { options: { globs: 'docs/**' } },
+  async ($, on) => {
+    const project: Project = { root: ROOT, scopeFile: 'src/**\n', readFails: false }
+    const { said, logged } = engineBottom(on, project)
+    await $.turn.start({ text: 'one', turnId: 'turn-1' })
+    await edit($, `${ROOT}/README.md`)
+    expect(said.at(-1)).toBe('1 outside scope')
+    await $.turn.complete(finish('turn-1'))
+
+    project.readFails = true
+    await $.prompt.submit(typed('tidy things up'))
+    await $.turn.start({ text: 'tidy things up', turnId: 'turn-2' })
+    expect(logged).toEqual(["can't read .claude/wait-scope · still using the last scope"])
+    await edit($, `${ROOT}/src/a.ts`)
+    await edit($, `${ROOT}/README.md`)
+    expect(said.at(-1)).toBe('1 outside scope')
+    await $.turn.complete(finish('turn-2'))
+
+    const band = await mountBand($, false)
+    expect(await band.find({ text: 'Scope: .claude/wait-scope — a warning, nothing blocked or undone' })).toBeDefined()
+    expect(await band.find({ text: 'README.md' })).toBeDefined()
+    expect(await band.find({ text: 'src/a.ts' })).toBeUndefined()
+    expect(await band.find({ text: '(guess)' })).toBeUndefined()
+    await band.unmount()
+
+    await $.turn.start({ text: 'three', turnId: 'turn-3' })
+    expect(logged).toEqual(["can't read .claude/wait-scope · still using the last scope"])
+
+    project.readFails = false
+    project.scopeFile = 'docs/**\n'
+    await $.turn.start({ text: 'four', turnId: 'turn-4' })
+    await edit($, `${ROOT}/docs/a.md`)
+    await edit($, `${ROOT}/src/a.ts`)
+    expect(said.at(-1)).toBe('1 outside scope')
+    await $.turn.complete(finish('turn-4'))
+    const later = await mountBand($, false)
+    expect(await later.find({ text: 'src/a.ts' })).toBeDefined()
+    expect(await later.find({ text: 'docs/a.md' })).toBeUndefined()
+    await later.unmount()
+  },
+)
+
+test('/wait-scope does not call an unreadable scope file no scope', async ($, on) => {
+  engineBottom(on, { root: ROOT, scopeFile: 'src/**', readFails: true }, { set: [] }, { disabled: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
+  const reply = await $.command.run({ command: 'wait-scope' } as never)
+
+  expect(reply.text).toBe("on · can't read .claude/wait-scope · /wait-scope turns it off")
+})
 
 test('a store write that throws after an edit never runs the tool twice, and its answer comes back untouched', async ($, on) => {
   let armed = false

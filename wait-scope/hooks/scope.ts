@@ -120,20 +120,35 @@ const cleanGlob = (glob: string): string =>
     .replace(/^(?:\.\/|\/)+/, '')
     .replace(/\/+$/, '')
 
-/** A scope's text: one glob per line, commas separating too, blank lines and `#` comment lines left out. */
-export const parseGlobs = (text: string): string[] =>
+const linesOf = (text: string): string[] =>
   text
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(line => !line.startsWith('#'))
+
+/**
+ * A scope file: one glob per line. A comma stays in the glob, so a brace
+ * like `{ts,tsx}` is one pattern. Blank lines and `#` comment lines are
+ * left out.
+ */
+export const parseGlobs = (text: string): string[] =>
+  linesOf(text)
+    .map(cleanGlob)
+    .filter(glob => glob !== '')
+
+/** The *Files in scope* setting: the same rules, and a comma separates globs. */
+const parseSettingGlobs = (text: string): string[] =>
+  linesOf(text)
     .flatMap(line => line.split(','))
     .map(cleanGlob)
     .filter(glob => glob !== '')
 
+const escapeRegExp = (text: string): string => text.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+
 /**
- * A glob as a whole-path pattern, the way wait-review reads its `ignore`
- * list: `*` within one folder name, `?` one character, `**` across folders,
- * and a double-star-slash that may also match no folder at all.
+ * A glob as a whole-path pattern: `*` inside one folder name, `?` one
+ * character, `**` across folders, a double-star-slash that may also match no
+ * folder, and `{ts,tsx}` as either name.
  */
 export const globToRegExp = (pattern: string): RegExp => {
   let out = ''
@@ -157,19 +172,31 @@ export const globToRegExp = (pattern: string): RegExp => {
       out += '[^/]'
       continue
     }
-    out += (char ?? '').replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    if (char === '{') {
+      const end = pattern.indexOf('}', at + 1)
+      const body = end === -1 ? '' : pattern.slice(at + 1, end)
+      const alts = body.split(',')
+      if (end !== -1 && !body.includes('{') && alts.length > 1 && alts.every(alt => alt.length > 0)) {
+        out += `(?:${alts.map(escapeRegExp).join('|')})`
+        at = end
+        continue
+      }
+    }
+    out += escapeRegExp(char ?? '')
   }
 
   return new RegExp(`^${out}$`)
 }
 
 /**
- * Whether a glob covers a path: the path itself, or a folder it sits in, so a
- * glob that names a folder covers everything inside it, as `.gitignore` reads one.
+ * Whether a glob covers a path. `*` stays inside one folder, so `*` is the
+ * top level only and `src/*` is the files directly in `src`. A bare folder
+ * name covers everything inside it.
  */
 export const globCovers = (glob: string, path: string): boolean => {
   const pattern = globToRegExp(glob)
   if (pattern.test(path)) return true
+  if (/[*?]/.test(glob)) return false
   for (let cut = path.lastIndexOf('/'); cut > 0; cut = path.lastIndexOf('/', cut - 1)) {
     if (pattern.test(path.slice(0, cut))) return true
   }
@@ -189,10 +216,51 @@ export const inScope = (path: string, globs: readonly string[]): boolean =>
 export const resolveScope = (fileText: string | undefined, setting: unknown): Scope => {
   const fromFile = fileText === undefined ? [] : parseGlobs(fileText)
   if (fromFile.length > 0) return { source: 'file', globs: fromFile }
-  const fromSetting = typeof setting === 'string' ? parseGlobs(setting) : []
+  const fromSetting = typeof setting === 'string' ? parseSettingGlobs(setting) : []
   if (fromSetting.length > 0) return { source: 'setting', globs: fromSetting }
 
   return { source: 'none' }
+}
+
+/**
+ * What a turn got from `.claude/wait-scope`.
+ *
+ * `unreadable` means the file is there, or the check itself failed, and the
+ * text could not be read. `missing` means there is no file. Callers must not
+ * treat `unreadable` as `missing`.
+ */
+export type ScopeFileRead = { kind: 'text'; text: string } | { kind: 'missing' } | { kind: 'unreadable' }
+
+/** Said once when the scope file cannot be read and a previous read still stands. */
+export const UNREADABLE_KEPT = "can't read .claude/wait-scope · still using the last scope"
+
+/** Said once when the scope file cannot be read and there is no previous scope to keep. */
+export const UNREADABLE_SKIPPED = "can't read .claude/wait-scope · this turn was not checked"
+
+export type ScopeChoice = {
+  /** The scope to judge this turn with, or undefined to skip the turn. */
+  scope: Scope | undefined
+  /** Set when the file could not be read. Logged once per streak of failures. */
+  notice: typeof UNREADABLE_KEPT | typeof UNREADABLE_SKIPPED | undefined
+  /** The scope to keep for the next failed read, or undefined to forget it. */
+  remembered: Scope | undefined
+}
+
+/**
+ * The scope a turn starts from.
+ *
+ * A file that could not be read is not a missing file: keep the last scope
+ * that file gave, or skip the turn. Never the setting, and never a guess.
+ */
+export const chooseScope = (read: ScopeFileRead, setting: unknown, lastFile: Scope | undefined): ScopeChoice => {
+  if (read.kind === 'unreadable') {
+    if (lastFile?.source === 'file') return { scope: lastFile, notice: UNREADABLE_KEPT, remembered: lastFile }
+
+    return { scope: undefined, notice: UNREADABLE_SKIPPED, remembered: undefined }
+  }
+  const scope = resolveScope(read.kind === 'text' ? read.text : undefined, setting)
+
+  return { scope, notice: undefined, remembered: scope.source === 'file' ? scope : undefined }
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +338,17 @@ const INITIALS = /^(?:\p{L}\.)+\p{L}$/u
 /** `Next.js`, `Node.js`: a project's name, not a file. Slashed or backticked, a path still counts. */
 const PROJECT_NAME = /^\p{Lu}\p{Ll}+\.js$/u
 
+/**
+ * Words that make `word/word` prose (`and/or`, `read/write`), not a folder.
+ * A folder such as `src/auth` has none of these.
+ */
+const CLOSED_WORD = new Set(
+  (
+    'a an the and or nor but if else not on off of to for in out up down with from into over under per via vs ' +
+    'yes no true false read write input output'
+  ).split(' '),
+)
+
 /** `.gitignore`, `.env`, `.github`: a dot, then a lowercase letter or a digit. `.NET` is not one. */
 const DOTFILE = /^\.[\p{Ll}\p{N}][\p{L}\p{N}._-]*$/u
 
@@ -303,8 +382,27 @@ const trimToken = (raw: string, isQuoted: boolean): string => {
     .replace(/[.,:;!?…]+$/u, '')
 }
 
-/** Whether a trimmed candidate reads as a path the person named: see `mentionsIn`. */
-const isMention = (token: string, isQuoted: boolean): boolean => {
+/**
+ * `src/auth`, `lib/utils`: two segments that read as a folder. A word pair
+ * (`and/or`), an abbreviation pair (`TCP/IP`) and a fraction (`1/2`) do not.
+ */
+const isFolderHint = (segments: readonly string[]): boolean => {
+  if (segments.length !== 2) return false
+  const [first, second] = segments
+  if (first === undefined || second === undefined) return false
+  const segment = /^[\p{L}\p{N}][\p{L}\p{N}._-]*$/u
+  if (!segment.test(first) || !segment.test(second)) return false
+  if (/^\p{N}+$/u.test(first) || /^\p{N}+$/u.test(second)) return false
+  if (/^\p{Lu}+$/u.test(first) && /^\p{Lu}+$/u.test(second)) return false
+
+  return !CLOSED_WORD.has(first.toLowerCase()) && !CLOSED_WORD.has(second.toLowerCase())
+}
+
+/**
+ * Whether a trimmed candidate reads as a path the person named: see `mentionsIn`.
+ * `fromAt` is an `@types/node` mention: the `@` is not a folder.
+ */
+const isMention = (token: string, isQuoted: boolean, fromAt = false): boolean => {
   const body = token.replace(/^[A-Za-z]:(?=\/)/, '')
   if (body === '' || /^[./]+$/.test(body) || body.startsWith('-') || body.includes('//')) return false
   if (!PATH_CHARACTERS.test(body)) return false
@@ -323,18 +421,19 @@ const isMention = (token: string, isQuoted: boolean): boolean => {
     segments.length >= 3 ||
     (body.startsWith('/') && segments.length >= 2) ||
     body.startsWith('./') ||
-    body.startsWith('../')
+    body.startsWith('../') ||
+    (isFolderHint(segments) && !fromAt)
   )
 }
 
 /**
  * The paths a prompt names, trimmed, in the order written: a path with a
- * folder in it (`src/client/retry.ts`, `src/api/`, `packages/app/src`), a
- * file name with a known extension (`README.md`), a dotfile, or a glob
- * (`*.snap`, `src/**`). A backticked `lib/util` counts too. Prose with a
- * slash or a dot (`and/or`, `e.g.`, `v2.1`, `Next.js`), links, flags, slash
- * commands and calls (`res.json()`) do not: a stray one would turn every
- * edit of the turn into a guess.
+ * folder in it (`src/client/retry.ts`, `src/api/`, `src/auth`,
+ * `packages/app/src`), a file name with a known extension (`README.md`), a
+ * dotfile, or a glob (`*.snap`, `src/**`). A backticked `lib/util` counts
+ * too. Prose with a slash or a dot (`and/or`, `read/write`, `e.g.`, `v2.1`,
+ * `Next.js`), links, flags, slash commands and calls (`res.json()`) do not:
+ * a stray one would turn every edit of the turn into a guess.
  */
 export const mentionsIn = (text: string): string[] => {
   const head = text.slice(0, MAX_PROMPT_CHARS)
@@ -344,24 +443,22 @@ export const mentionsIn = (text: string): string[] => {
     const isQuoted = quoted !== undefined
     // A backticked command is not a path, and neither is a call: `res.json()`.
     if (isQuoted ? /\s/.test(quoted.trim()) : head[(match.index ?? 0) + whole.length] === '(') continue
-    const token = trimToken(quoted ?? plain, isQuoted)
-    if (isMention(token, isQuoted)) found.push(token)
+    const raw = quoted ?? plain
+    const token = trimToken(raw, isQuoted)
+    if (isMention(token, isQuoted, !isQuoted && raw.trim().startsWith('@'))) found.push(token)
   }
 
   return found
 }
 
-/** A slashed glob a prompt names, read from the project root. */
-const promptGlob = (token: string, root: string): string => {
-  const base = rootOf(root)
-  const clean = token.replace(/^(?:\.\/)+/, '')
-
-  return clean.startsWith(`${base}/`) ? clean.slice(base.length + 1) : clean
-}
-
 /** One mention as a hint: a glob, a bare name, or a path read against the project root. */
 const hintOf = (token: string, root: string): Hint => {
-  if (/[*?]/.test(token)) return { kind: 'glob', value: token.includes('/') ? promptGlob(token, root) : `**/${token}` }
+  if (/[*?]/.test(token)) {
+    // A slashed glob goes through the same collapse as an edited path.
+    const value = token.includes('/') ? projectPath(root, token.replace(/\/+$/, '')) : `**/${token}`
+
+    return { kind: 'glob', value }
+  }
   if (!token.includes('/')) return { kind: 'name', value: token }
 
   return { kind: 'path', value: projectPath(root, token.replace(/\/+$/, '')) }
@@ -387,6 +484,8 @@ export const hintsFrom = (text: string, root: string): Hint[] =>
  * name anywhere in the path, or its glob.
  */
 const hintCovers = (hint: Hint, path: string): boolean => {
+  // An edit outside the project is outside, in guess mode the same as with a scope.
+  if (!isInsideRoot(path)) return false
   if (hint.kind === 'path') return path === hint.value || path.startsWith(`${hint.value}/`)
   if (hint.kind === 'name') return path.split('/').includes(hint.value)
 
@@ -526,6 +625,10 @@ export const turnedOffLine = (): string =>
  */
 export const turnedOffLocallyLine = (reason: string): string =>
   `off · the setting did not change (${reason}) · kept off on this machine · /wait-scope turns it back on`
+
+/** What `/wait-scope` answers when the scope file is there but could not be read. */
+export const turnedOnUnreadLine = (): string =>
+  "on · can't read .claude/wait-scope · /wait-scope turns it off"
 
 /** What `/wait-scope` answers when a turn-on was refused: nothing moved. */
 export const toggleRefusedLine = (reason: string): string =>
