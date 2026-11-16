@@ -1,6 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement } from 'claude-code'
 
+import { REBUILT_NOTICE, repairPluginStore } from './store-file'
+
 import type { BonusBucket, DailyChallengeRecord, DailyGuess, FileBucket, LastVerdict, OpenBet, TurnRecord } from '../types'
 import {
   asDuration,
@@ -166,11 +168,18 @@ const rememberTurns = async ($: EngineInterface, records: readonly TurnRecord[])
  * skip the write on `undefined`: saving the one record just built from `[]`,
  * or over a value that is not a list, would replace what the store still holds.
  *
- * A thrown read is not a fresh start. An empty file, a file that is not
- * JSON, and a read that fails for a moment all reject the same way, and
- * writing `[]` is what used to replace a history the store still held.
+ * A thrown read of a file that is still there is not a fresh start. Zero
+ * bytes holds nothing, so that file is initialized. A file that is not JSON,
+ * or whose turns are not a list, is copied to `.bak` and rebuilt first. A
+ * read that fails for a moment is left alone: writing `[]` is what used to
+ * replace a history the store still held.
  */
+let rebuiltNotice = false
+
 const loadTurns = async ($: EngineInterface): Promise<TurnRecord[] | undefined> => {
+  // Kept until `/bet` shows it. A later read of the rebuilt file must not
+  // clear the notice before that command runs.
+  if ((await repairPluginStore($)) === 'rebuilt') rebuiltNotice = true
   const stored = await $.store.get(STORE_KEY).then(
     value => ({ value }),
     () => undefined,
@@ -207,7 +216,14 @@ const turnsToShow = async ($: EngineInterface): Promise<TurnRecord[]> => {
 }
 
 /** Shown by `/bet` and the pane when nothing good has loaded and the read failed. */
-const HISTORY_UNREAD = "couldn't read the saved history · turns aren't being saved"
+const HISTORY_UNREAD = "couldn't read the saved history"
+
+const takeRebuiltNotice = (): boolean => {
+  const pending = rebuiltNotice
+  rebuiltNotice = false
+
+  return pending
+}
 
 /**
  * The read failed and this process has never loaded a history.
@@ -647,6 +663,12 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'bet' }, async $ => {
     void $.ui.open({ id: PANE, title: 'Bet on your agent' }).catch(() => undefined)
+    await loadTurns($)
+    if (takeRebuiltNotice()) {
+      $.ui.log(REBUILT_NOTICE)
+
+      return { text: REBUILT_NOTICE }
+    }
     if (await historyUnread($)) return { text: HISTORY_UNREAD }
     const last = await read($, lastVerdict)
 

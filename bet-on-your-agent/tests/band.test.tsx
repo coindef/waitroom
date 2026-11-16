@@ -208,7 +208,7 @@ test('files are counted from Edit, Write and NotebookEdit calls, the same path o
   await idle.unmount()
 
   const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
-  // Called 2-3 and landed on exactly 3 distinct files: a right call.
+  // Called 2–3 and landed on exactly 3 distinct files: a right call.
   expect(await pane.find({ text: /File count called right 1\/1\./ })).toBeDefined()
   await pane.unmount()
 })
@@ -916,6 +916,8 @@ test('a failed read of the history leaves the stored turns in place', async ($, 
   const data: Record<string, unknown> = { extrasFrom: '1900-01-01', turns: old }
   let failReads = false
   const said: (string | undefined)[] = []
+  on('env.get', ($, e) => ({ value: e.name === 'CLAUDE_CONFIG_DIR' ? '/tmp/bet-store-flaky' : undefined }))
+  on('fs.exists', () => ({ value: false }))
   on('store.get', ($$, e) => {
     if (failReads) throw new Error('EIO: store unreadable for a moment')
 
@@ -980,6 +982,10 @@ const flakyStore = (on: On, entries: Record<string, unknown>) => {
   let failWrites: (key: string) => boolean = () => false
   const logged: string[] = []
   const said: (string | undefined)[] = []
+  // No store file here. A repair must not go looking at the real
+  // ~/.claude/plugins/store files.
+  on('env.get', ($, e) => ({ value: e.name === 'CLAUDE_CONFIG_DIR' ? '/tmp/bet-store-flaky' : undefined }))
+  on('fs.exists', () => ({ value: false }))
   on('store.get', ($, e) => {
     if (failReads(e.key)) throw new Error('EIO: store unreadable for a moment')
 
@@ -1024,7 +1030,8 @@ const flakyStore = (on: On, entries: Record<string, unknown>) => {
   }
 }
 
-const HISTORY_UNREAD = "couldn't read the saved history · turns aren't being saved"
+const HISTORY_UNREAD = "couldn't read the saved history"
+const REBUILT_NOTICE = "couldn't read the saved history · rebuilt"
 
 // Before the other non-array tests: the note is once per process, so a
 // later test would already have spent it.
@@ -1139,6 +1146,122 @@ test('a store that will not take the write says so', async ($, on) => {
   expect(store.said.at(-1)).not.toBe('you said 80%')
 })
 
+// A pretend config dir. Nothing under the real ~/.claude/plugins/store is opened.
+const ISOLATED_CONFIG = '/tmp/bet-store-isolated'
+const STORE_PATH = `${ISOLATED_CONFIG}/plugins/store/bet-on-your-agent.json`
+
+/**
+ * The store file as the engine keeps it: empty and unreadable JSON throw,
+ * and a write lands back in the same bytes. The bytes live in `files`, not
+ * on disk.
+ */
+const diskStore = (on: On, bytes: string) => {
+  mock.clock(on)
+  const files = new Map<string, string>([[STORE_PATH, bytes]])
+  const logged: string[] = []
+  const read = (): Record<string, unknown> => {
+    const text = files.get(STORE_PATH)
+    if (text === undefined || text.length === 0) throw new Error('empty store')
+    const parsed = JSON.parse(text) as unknown
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('corrupt store')
+
+    return parsed as Record<string, unknown>
+  }
+  on('env.get', ($, e) => ({
+    value: e.name === 'CLAUDE_CONFIG_DIR' ? ISOLATED_CONFIG : e.name === 'HOME' ? '/tmp/bet-store-home' : undefined,
+  }))
+  on('fs.exists', ($, e) => ({ value: files.has(e.path) }))
+  on('fs.read', ($, e) => {
+    const text = files.get(e.path)
+    if (text === undefined) throw new Error('ENOENT')
+
+    return { value: text }
+  })
+  on('fs.write', ($, e) => {
+    files.set(e.path, e.text)
+
+    return { value: undefined }
+  })
+  on('store.get', ($, e) => ({ value: read()[e.key] }))
+  on('store.set', ($, e) => {
+    const data = read()
+    data[e.key] = e.value
+    files.set(STORE_PATH, `${JSON.stringify(data)}\n`)
+
+    return { value: undefined }
+  })
+  on('ui.status', () => ({ value: undefined }))
+  on('ui.log', ($, e) => {
+    logged.push(e.text)
+
+    return { value: undefined }
+  })
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box />
+  })
+
+  return { files, logged }
+}
+
+const finishTurn = async ($: Engine, turnId: string) => {
+  await $.turn.start({ text: 'a turn', turnId })
+  await $.turn.complete({
+    turnId,
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+}
+
+test('a store of zero bytes is initialized and the turn is saved', async ($, on) => {
+  const store = diskStore(on, '')
+  await finishTurn($, 'empty-file')
+
+  const saved = JSON.parse(store.files.get(STORE_PATH) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['empty-file'])
+  expect(store.files.has(`${STORE_PATH}.bak`)).toBe(false)
+})
+
+test('a corrupt store is backed up, rebuilt, and /bet says so', async ($, on) => {
+  const original = 'not json{'
+  const store = diskStore(on, original)
+  const reply = await $.command.run({ command: 'bet' } as never)
+  const text = reply.text ?? ''
+
+  expect(text).toBe(REBUILT_NOTICE)
+  expect(text).toBe(text.toLowerCase())
+  expect(text.includes('\n')).toBe(false)
+  expect(text.length).toBeLessThanOrEqual(48)
+  expect(store.files.get(`${STORE_PATH}.bak`)).toBe(original)
+  expect(store.logged).toContain(REBUILT_NOTICE)
+  const rebuilt = JSON.parse(store.files.get(STORE_PATH) ?? '') as { turns?: unknown }
+  expect(rebuilt.turns).toBeUndefined()
+
+  await finishTurn($, 'after-rebuild')
+  const saved = JSON.parse(store.files.get(STORE_PATH) ?? '') as { turns?: { turnId: string }[] }
+  expect(saved.turns?.map(one => one.turnId)).toEqual(['after-rebuild'])
+})
+
+test('a store whose turns are not a list is backed up and rebuilt', async ($, on) => {
+  const listed = JSON.stringify({ turns: { not: 'a list' }, extrasFrom: '1900-01-01' })
+  const store = diskStore(on, listed)
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(reply.text).toBe(REBUILT_NOTICE)
+  expect((reply.text ?? '').length).toBeLessThanOrEqual(48)
+  expect(store.files.get(`${STORE_PATH}.bak`)).toBe(listed)
+  const rebuilt = JSON.parse(store.files.get(STORE_PATH) ?? '') as { turns?: unknown; extrasFrom?: string }
+  expect(rebuilt.turns).toBeUndefined()
+  expect(rebuilt.extrasFrom).toBe('1900-01-01')
+})
+
 test('an unreadable history with nothing loaded says turns are not being saved', async ($, on) => {
   const store = flakyStore(on, {})
   store.fail()
@@ -1151,8 +1274,7 @@ test('an unreadable history with nothing loaded says turns are not being saved',
 
   const reply = await $.command.run({ command: 'bet' } as never)
   expect(reply.text).toBe(HISTORY_UNREAD)
-  // A thrown read is not a fresh start. An empty file and a bad read reject
-  // the same way, and writing [] is what used to replace a history.
+  // A thrown read, with no file to repair, is not a fresh start.
   expect(store.data.turns).toBeUndefined()
 })
 
@@ -1433,7 +1555,7 @@ test("a subagent's tool calls stay off the open turn's tool-call count", async (
   await band.press({ key: 'p80' })
   await band.press({ key: 'f0' })
   expect(await band.find({ text: /how many tool calls will it make\?/ })).toBeDefined()
-  // 3-6 is what this turn's own calls land on. Five subagent calls would push it to 7+.
+  // 3–6 is what this turn's own calls land on. Five subagent calls would push it to 7+.
   await band.press({ key: 'b3-6' })
   expect(await band.find({ text: /0 written so far/ })).toBeDefined()
 
