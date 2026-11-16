@@ -545,10 +545,10 @@ const SUMMARY_LINE: Record<ConventionalType, (area: string) => string> = {
  * single kind the whole diff reads as: an area that only deleted files reads
  * as a removal even where another area in the same diff added a new one.
  * An area that both adds a file and edits one gets a bullet per action, so
- * the edit is not described as new functionality. A deletion in that mix is
- * a removal, not a restructure, and it is not listed again on a Removes
- * line. Those extra bullets do not take the place of a later area or the
- * test-coverage line.
+ * the edit is not described as new functionality. A deleted file is its own
+ * Removes line, never a restructure, and it is not listed twice. An edit
+ * that deletes more lines than it adds stays an update. Those extra bullets
+ * do not take the place of a later area or the test-coverage line.
  */
 export const summaryBullets = (files: readonly FileChange[]): string[] => {
   const areas = [...areasOf(files).entries()].sort(([a], [b]) => a.localeCompare(b)).slice(0, 4)
@@ -560,13 +560,16 @@ export const summaryBullets = (files: readonly FileChange[]): string[] => {
     const mixed = actions.length > 1
     for (const action of actions) {
       const kind = typeOf(action.files)
+      // A deletion is a removal even when it is the only action in the area:
+      // typeOf calls it a refactor, which would say "Restructures". An edit
+      // that deletes more lines than it adds is still an update.
       const line =
-        mixed && action.verb === 'remove'
+        action.verb === 'remove'
           ? `Removes files in ${where}`
-          : mixed && action.verb === 'update' && kind === 'fix'
+          : action.verb === 'update' && (kind === 'refactor' || (mixed && kind === 'fix'))
             ? `Updates existing files in ${where}`
             : SUMMARY_LINE[kind](where)
-      if (mixed && action.verb === 'remove') namedRemoval = true
+      if (action.verb === 'remove') namedRemoval = true
       bullets.push(`- ${line} (${fileList(action.files)})`)
     }
   }

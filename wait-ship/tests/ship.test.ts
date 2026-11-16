@@ -331,7 +331,8 @@ test('summaryBullets: each area reads its own change kind, not the whole diff\'s
   const bullets = summaryBullets([addedArea, fixedArea, removedArea])
   expect(bullets.some(line => line.startsWith('- Adds new functionality in added'))).toBe(true)
   expect(bullets.some(line => line.startsWith('- Fixes behavior in fixed'))).toBe(true)
-  expect(bullets.some(line => line.startsWith('- Restructures code in removed'))).toBe(true)
+  expect(bullets.some(line => line.startsWith('- Removes files in removed'))).toBe(true)
+  expect(bullets.some(line => line.startsWith('- Restructures code'))).toBe(false)
 })
 
 test('a deletion in a mixed directory is a removal, and it is not listed twice', () => {
@@ -350,6 +351,18 @@ test('a deletion in a mixed directory is a removal, and it is not listed twice',
   expect(mixed).toContain('- Removes files in src (src/new.ts)')
   expect(mixed.some(line => line.includes('src/new.ts') && line.startsWith('- Restructures'))).toBe(false)
   expect(mixed.filter(line => line.includes('src/new.ts')).length).toBe(1)
+})
+
+test('a modification that removes more lines than it adds is not a restructure', () => {
+  const trimmed: FileChange = { path: 'src/count.ts', added: 1, removed: 5, kind: 'modified' }
+  const created: FileChange = { path: 'src/new.ts', added: 4, removed: 0, kind: 'added' }
+  const mixed = summaryBullets([created, trimmed])
+  expect(mixed.some(line => line.startsWith('- Restructures code'))).toBe(false)
+  expect(mixed).toContain('- Updates existing files in src (src/count.ts)')
+
+  const alone = summaryBullets([trimmed])
+  expect(alone.some(line => line.startsWith('- Restructures code'))).toBe(false)
+  expect(alone).toContain('- Updates existing files in src (src/count.ts)')
 })
 
 test('per-action summary bullets still leave the third directory and the test line', () => {
