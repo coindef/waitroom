@@ -2,6 +2,8 @@ import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 
+import { runningPluginFolder } from '../hooks/store-file'
+
 /** The band is drawn on whatever surface the session has, not an assumed one. */
 const SURFACES = ['terminal', 'desktop', 'mobile'] as const
 
@@ -918,6 +920,8 @@ test('a failed read of the history leaves the stored turns in place', async ($, 
   const said: (string | undefined)[] = []
   on('env.get', ($, e) => ({ value: e.name === 'CLAUDE_CONFIG_DIR' ? '/tmp/bet-store-flaky' : undefined }))
   on('fs.exists', () => ({ value: false }))
+  on('session.root', () => ({ value: undefined }))
+  on('session.cwd', () => ({ value: undefined }))
   on('store.get', ($$, e) => {
     if (failReads) throw new Error('EIO: store unreadable for a moment')
 
@@ -986,6 +990,8 @@ const flakyStore = (on: On, entries: Record<string, unknown>) => {
   // ~/.claude/plugins/store files.
   on('env.get', ($, e) => ({ value: e.name === 'CLAUDE_CONFIG_DIR' ? '/tmp/bet-store-flaky' : undefined }))
   on('fs.exists', () => ({ value: false }))
+  on('session.root', () => ({ value: undefined }))
+  on('session.cwd', () => ({ value: undefined }))
   on('store.get', ($, e) => {
     if (failReads(e.key)) throw new Error('EIO: store unreadable for a moment')
 
@@ -1149,15 +1155,27 @@ test('a store that will not take the write says so', async ($, on) => {
 // A pretend config dir. Nothing under the real ~/.claude/plugins/store is opened.
 const ISOLATED_CONFIG = '/tmp/bet-store-isolated'
 const STORE_DIR = `${ISOLATED_CONFIG}/plugins/store`
-// This checkout is loaded from its own directory, so its store id is
-// `bet-on-your-agent@inline`. The filename is that id with `@` turned into
-// `_`, then a dash and the first 12 hex digits of sha256(id).
+// With no directory marketplace covering this folder, the copy is
+// `--plugin-dir`: `bet-on-your-agent@inline`. The filename is that id with
+// `@` turned into `_`, then a dash and the first 12 hex digits of sha256(id).
 const INLINE_NAME = 'bet-on-your-agent_inline-b4b76a335767.json'
 const WAITROOM_NAME = 'bet-on-your-agent_waitroom-34ea4b598520.json'
 const BARE_NAME = 'bet-on-your-agent.json'
 const INLINE_STORE = `${STORE_DIR}/${INLINE_NAME}`
 const WAITROOM_STORE = `${STORE_DIR}/${WAITROOM_NAME}`
 const BARE_STORE = `${STORE_DIR}/${BARE_NAME}`
+const USER_SETTINGS = `${ISOLATED_CONFIG}/settings.json`
+// The folder the hooks module was loaded from, and the repo that holds it.
+const PLUGIN_FOLDER = runningPluginFolder() ?? ''
+const PLUGIN_PARENT = PLUGIN_FOLDER.slice(0, PLUGIN_FOLDER.lastIndexOf('/'))
+
+const directorySettings = (path: string, enabled = true) =>
+  JSON.stringify({
+    extraKnownMarketplaces: {
+      waitroom: { source: { source: 'directory', path } },
+    },
+    enabledPlugins: { 'bet-on-your-agent@waitroom': enabled },
+  })
 
 const ran = (exitCode: number, stderr = '') => ({
   value: { exitCode, stdout: '', stderr, isStdoutTruncated: false, isStderrTruncated: false },
@@ -1168,7 +1186,7 @@ const ran = (exitCode: number, stderr = '') => ({
  * and a write lands back in the same bytes. The bytes live in `files`, not
  * on disk. `mkdir` of `<path>.lock` is the engine's lock; a second mkdir fails.
  */
-const diskStore = (on: On, path: string, bytes: string, extras: Record<string, string> = {}, env: Record<string, string | undefined> = {}) => {
+const diskStore = (on: On, path: string, bytes: string, extras: Record<string, string> = {}, env: Record<string, string | undefined> = {}, project?: string) => {
   mock.clock(on)
   const files = new Map<string, string>([
     [path, bytes],
@@ -1207,6 +1225,8 @@ const diskStore = (on: On, path: string, bytes: string, extras: Record<string, s
 
     return ran(0)
   })
+  on('session.root', () => ({ value: project }))
+  on('session.cwd', () => ({ value: project }))
   on('fs.exists', ($, e) => ({ value: files.has(e.path) }))
   on('fs.read', ($, e) => {
     const text = files.get(e.path)
@@ -1395,6 +1415,91 @@ test('with neither config dir nor home set, nothing is written', async ($, on) =
 
   expect(store.files.get(INLINE_STORE)).toBe(original)
   expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+})
+
+test('a directory marketplace covering this folder repairs nothing', async ($, on) => {
+  const inline = 'not json{'
+  const other = '[]'
+  const store = diskStore(on, INLINE_STORE, inline, {
+    [WAITROOM_STORE]: other,
+    [USER_SETTINGS]: directorySettings(PLUGIN_PARENT),
+  })
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+  expect(reply.text).not.toBe(REBUILT_NOTICE)
+})
+
+test('an ancestor that holds the marketplace manifest repairs nothing', async ($, on) => {
+  const inline = 'not json{'
+  const other = '[]'
+  const slash = PLUGIN_PARENT.lastIndexOf('/')
+  const ancestor = slash <= 0 ? PLUGIN_PARENT : PLUGIN_PARENT.slice(0, slash)
+  const store = diskStore(on, INLINE_STORE, inline, {
+    [WAITROOM_STORE]: other,
+    [USER_SETTINGS]: directorySettings(ancestor),
+    [`${ancestor}/.claude-plugin/marketplace.json`]: '{}\n',
+  })
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+})
+
+test('a project directory marketplace repairs nothing', async ($, on) => {
+  const project = '/tmp/bet-directory-project'
+  const inline = 'not json{'
+  const other = '[]'
+  const store = diskStore(
+    on,
+    INLINE_STORE,
+    inline,
+    {
+      [WAITROOM_STORE]: other,
+      [`${project}/.claude/settings.local.json`]: directorySettings(PLUGIN_PARENT),
+    },
+    {},
+    project,
+  )
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+})
+
+test('settings that cannot be read repair nothing', async ($, on) => {
+  const inline = 'not json{'
+  const other = '[]'
+  const store = diskStore(on, INLINE_STORE, inline, { [WAITROOM_STORE]: other, [USER_SETTINGS]: 'not json{' })
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
+})
+
+test('a directory marketplace that does not enable this plugin still repairs the inline file', async ($, on) => {
+  const inline = 'not json{'
+  const other = '[]'
+  const store = diskStore(on, INLINE_STORE, inline, {
+    [WAITROOM_STORE]: other,
+    [USER_SETTINGS]: directorySettings(PLUGIN_PARENT, false),
+  })
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(reply.text).toBe(REBUILT_NOTICE)
+  expect(store.files.get(`${INLINE_STORE}.bak`)).toBe(inline)
+  expect(JSON.parse(store.files.get(INLINE_STORE) ?? '')).toEqual({})
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
 })
 
 test('an unreadable history with nothing loaded says turns are not being saved', async ($, on) => {

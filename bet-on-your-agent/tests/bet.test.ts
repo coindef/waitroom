@@ -1165,15 +1165,17 @@ test('a store file is named the way the engine names it', () => {
   expect(storeFileName('CON')).toBe('CON-a3dbc4b644a9.json')
 })
 
-test('a cache install is that marketplace, and a directory of its own is inline', () => {
+test('a cache install is that marketplace, and a loose directory proves no id', () => {
   const installed = 'file:///home/u/.claude/plugins/cache/waitroom/bet-on-your-agent/0.6.6/hooks/store-file.ts'
-  expect(sourceIdFor(installed)).toBe('bet-on-your-agent@waitroom')
-  expect(storeFileName(sourceIdFor(installed))).toBe('bet-on-your-agent_waitroom-34ea4b598520.json')
+  const installedId = sourceIdFor(installed)
+  expect(installedId).toBe('bet-on-your-agent@waitroom')
+  expect(storeFileName(installedId ?? '')).toBe('bet-on-your-agent_waitroom-34ea4b598520.json')
   const cowork = 'file:///home/u/.claude/cowork_plugins/cache/waitroom/bet-on-your-agent/0.6.6/hooks/store-file.ts'
   expect(sourceIdFor(cowork)).toBe('bet-on-your-agent@waitroom')
+  // `--plugin-dir` and a directory-source marketplace share this shape.
   const loose = 'file:///agent/repos/waitroom/bet-on-your-agent/hooks/store-file.ts'
-  expect(sourceIdFor(loose)).toBe('bet-on-your-agent@inline')
-  expect(sourceIdFor('file:///tmp/other/hooks/store-file.ts')).toBe('bet-on-your-agent')
+  expect(sourceIdFor(loose)).toBeUndefined()
+  expect(sourceIdFor('file:///tmp/other/hooks/store-file.ts')).toBeUndefined()
 })
 
 test('while a turn runs only a breathe nudge holds the forecast back; between turns a ship offer does too', () => {

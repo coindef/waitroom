@@ -5,13 +5,14 @@ import type { EngineInterface } from 'claude-code'
  * cannot ask for the path or the storage id: those stay inside the host.
  * The file is `<root>/store/<fileName(source)>`.
  *
- * `source` is this copy's own id. A marketplace install lives at
- * `<root>/cache/<marketplace>/<plugin>/<version>/`, so the id is
- * `<plugin>@<marketplace>`. Anything else loaded from its own directory
- * (`--plugin-dir`, and this repository) is `<plugin>@inline`. A path that
- * does not name a plugin falls back to the bare plugin name. Another
- * install's file is never opened, and a directory listing is never used
- * to pick one.
+ * `source` is this copy's own id. A copy under
+ * `<root>/cache/<marketplace>/<plugin>/<version>/` is
+ * `<plugin>@<marketplace>`. A copy outside that cache is ambiguous: it
+ * may be `--plugin-dir` (`<plugin>@inline`) or a directory-source
+ * marketplace (`<plugin>@<name>`), and those are different files. Unless
+ * the settings prove no enabled directory marketplace covers this folder,
+ * the repair does nothing. Another install's file is never opened, and a
+ * directory listing is never used to pick one.
  *
  * `root` is `$CLAUDE_CODE_PLUGIN_CACHE_DIR` when that is set, otherwise
  * `<CLAUDE_CONFIG_DIR or ~/.claude>/plugins` — or `cowork_plugins` when
@@ -39,16 +40,21 @@ export const storeFileName = (id: string): string => {
 }
 
 /**
- * This copy's store id, from the file URL the engine loaded. A cache
- * install names its marketplace. A directory that is not a cache install
- * is `@inline` (`--plugin-dir`). A URL that does not name the plugin is
- * the bare name, which is the id the engine uses when it has no source.
+ * The store id a module URL proves by itself. A cache install names its
+ * marketplace. A URL outside the cache does not: `--plugin-dir` and a
+ * directory-source marketplace look the same from the path alone.
  */
-export function sourceIdFor(moduleUrl: string): string {
+export function sourceIdFor(moduleUrl: string): string | undefined {
   const market = marketplaceFrom(moduleUrl)
   if (market !== undefined) return `${PLUGIN}@${market}`
-  if (pluginNameFrom(moduleUrl) === undefined) return PLUGIN
-  return `${PLUGIN}@inline`
+  return undefined
+}
+
+/** The folder this copy was loaded from, when the URL names the plugin. */
+export function runningPluginFolder(): string | undefined {
+  const moduleUrl = moduleUrlOf()
+  if (moduleUrl === undefined) return undefined
+  return pluginFolderFrom(moduleUrl)
 }
 
 /**
@@ -73,7 +79,9 @@ export async function storeRoot($: EngineInterface): Promise<string | undefined>
 export async function storeFilePath($: EngineInterface): Promise<string | undefined> {
   const root = await storeRoot($)
   if (root === undefined) return undefined
-  return `${root}/store/${storeFileName(sourceIdFor(import.meta.url))}`
+  const id = await runningSourceId($)
+  if (id === undefined) return undefined
+  return `${root}/store/${storeFileName(id)}`
 }
 
 /**
@@ -120,11 +128,201 @@ const marketplaceFrom = (moduleUrl: string): string | undefined => {
   return decodeURIComponent(market)
 }
 
-const pluginNameFrom = (moduleUrl: string): string | undefined => {
-  const parts = moduleUrl.replace(/\\/g, '/').split(/[/]+/)
-  const hooksAt = parts.lastIndexOf('hooks')
-  if (hooksAt > 0 && parts[hooksAt - 1] === PLUGIN) return PLUGIN
+/**
+ * `import.meta.url` when this TypeScript knows it. The engine's
+ * `ImportMeta` does not declare `url`, so the read is narrowed here.
+ */
+function moduleUrlOf(): string | undefined {
+  const url = (import.meta as { url?: string }).url
+  return typeof url === 'string' && url !== '' ? url : undefined
+}
+
+async function runningSourceId($: EngineInterface): Promise<string | undefined> {
+  const moduleUrl = moduleUrlOf()
+  if (moduleUrl === undefined) return undefined
+  const known = sourceIdFor(moduleUrl)
+  if (known !== undefined) return known
+  const folder = pluginFolderFrom(moduleUrl)
+  if (folder === undefined) return undefined
+  if (!(await provenInline($, folder))) return undefined
+  return `${PLUGIN}@inline`
+}
+
+/**
+ * True only when every settings file we can reach was read, and none of
+ * them enable this plugin from a directory marketplace that covers its
+ * folder. A missing file is not a marketplace. A read or parse failure,
+ * or a directory path we cannot place, means we cannot prove it.
+ */
+async function provenInline($: EngineInterface, pluginFolder: string): Promise<boolean> {
+  const home = await configHome($)
+  if (home === undefined) return false
+  const roots = await projectRoots($)
+  const files = [`${home}/settings.json`]
+  for (const root of roots) {
+    files.push(`${root}/.claude/settings.json`)
+    files.push(`${root}/.claude/settings.local.json`)
+  }
+  for (const file of files) {
+    const read = await readSettings($, file)
+    if (read === 'missing') continue
+    if (read === 'error') return false
+    const covered = await directoryInstallCovers($, read, pluginFolder, roots)
+    if (covered !== false) return false
+  }
+  return true
+}
+
+async function configHome($: EngineInterface): Promise<string | undefined> {
+  const configured = text(await $.env.get('CLAUDE_CONFIG_DIR').catch(() => undefined))
+  if (configured !== undefined) return trimSlash(configured)
+  const home = text(await $.env.get('HOME').catch(() => undefined))
+  if (home !== undefined) return `${trimSlash(home)}/.claude`
   return undefined
+}
+
+/** The project settings live beside `.claude/` at the session root, or the cwd when that is all that is reachable. */
+async function projectRoots($: EngineInterface): Promise<string[]> {
+  const found: string[] = []
+  const add = (value: unknown) => {
+    const path = text(value)
+    if (path !== undefined) found.push(trimSlash(normalizePath(path)))
+  }
+  try {
+    add(await $.session.root())
+  } catch {
+    // The project settings are not reachable from here.
+  }
+  try {
+    add(await $.session.cwd())
+  } catch {
+    // The working directory is not reachable from here.
+  }
+  return [...new Set(found)]
+}
+
+type SettingsBody = Record<string, unknown>
+
+async function readSettings($: EngineInterface, path: string): Promise<SettingsBody | 'missing' | 'error'> {
+  let there = false
+  try {
+    there = await $.fs.exists(path)
+  } catch {
+    return 'error'
+  }
+  if (!there) return 'missing'
+  try {
+    const parsed = JSON.parse(await $.fs.read(path)) as unknown
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return 'error'
+    return parsed as SettingsBody
+  } catch {
+    return 'error'
+  }
+}
+
+/**
+ * An enabled `source: directory` marketplace whose path is this plugin's
+ * parent, or an ancestor of the plugin folder that holds the marketplace
+ * manifest. The name is the `extraKnownMarketplaces` key.
+ */
+async function directoryInstallCovers(
+  $: EngineInterface,
+  settings: SettingsBody,
+  pluginFolder: string,
+  roots: readonly string[],
+): Promise<boolean | 'error'> {
+  const markets = marketEntries(settings)
+  if (markets === 'absent') return false
+  if (markets === 'error') return 'error'
+  const enabledRaw = settings.enabledPlugins
+  const enabled = recordOf(enabledRaw)
+  if (enabledRaw !== undefined && enabled === undefined) return 'error'
+  for (const [name, entry] of Object.entries(markets)) {
+    const body = recordOf(entry)
+    const source = recordOf(body?.source)
+    if (source?.source !== 'directory' || typeof source.path !== 'string') continue
+    if (enabled?.[`${PLUGIN}@${name}`] !== true) continue
+    const paths = placedPaths(source.path, roots)
+    if (paths === undefined) return 'error'
+    for (const one of paths) {
+      const covers = await directoryPathCovers($, one, pluginFolder)
+      if (covers !== false) return covers
+    }
+  }
+  return false
+}
+
+/** `extraKnownMarketplaces`, or its alias when that key is the only one present. */
+function marketEntries(settings: SettingsBody): Record<string, unknown> | 'absent' | 'error' {
+  const raw = settings.extraKnownMarketplaces !== undefined ? settings.extraKnownMarketplaces : settings.additionalMarketplaces
+  if (raw === undefined) return 'absent'
+  return recordOf(raw) ?? 'error'
+}
+
+async function directoryPathCovers($: EngineInterface, sourcePath: string, pluginFolder: string): Promise<boolean | 'error'> {
+  const source = normalizePath(sourcePath)
+  const plugin = normalizePath(pluginFolder)
+  if (source === '' || plugin === '') return false
+  const slash = plugin.lastIndexOf('/')
+  const parent = slash <= 0 ? '/' : plugin.slice(0, slash)
+  if (source === parent) return true
+  if (!plugin.startsWith(`${source}/`)) return false
+  try {
+    return await $.fs.exists(`${source}/.claude-plugin/marketplace.json`)
+  } catch {
+    return 'error'
+  }
+}
+
+/** Absolute paths to try. A relative path with nowhere to resolve it cannot be ruled out. */
+function placedPaths(sourcePath: string, roots: readonly string[]): string[] | undefined {
+  const trimmed = sourcePath.trim()
+  if (trimmed === '') return undefined
+  const slashed = trimmed.replace(/\\/g, '/')
+  if (slashed.startsWith('/') || /^[A-Za-z]:/.test(slashed)) return [slashed]
+  if (roots.length === 0) return undefined
+  return roots.map(root => `${root}/${slashed}`)
+}
+
+function recordOf(value: unknown): Record<string, unknown> | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  return value as Record<string, unknown>
+}
+
+const pluginFolderFrom = (moduleUrl: string): string | undefined => {
+  const parts = normalizePath(filePathFromUrl(moduleUrl)).split('/')
+  const hooksAt = parts.lastIndexOf('hooks')
+  if (hooksAt > 1 && parts[hooksAt - 1] === PLUGIN) return parts.slice(0, hooksAt).join('/')
+  return undefined
+}
+
+const filePathFromUrl = (url: string): string => {
+  if (!url.startsWith('file:')) return url
+  let path = url.slice('file:'.length)
+  if (path.startsWith('//')) {
+    const slash = path.indexOf('/', 2)
+    path = slash === -1 ? '' : path.slice(slash)
+  }
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
+}
+
+const normalizePath = (value: string): string => {
+  const slashed = value.trim().replace(/\\/g, '/')
+  const absolute = slashed.startsWith('/')
+  const stack: string[] = []
+  for (const part of slashed.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..') {
+      stack.pop()
+      continue
+    }
+    stack.push(part)
+  }
+  return `${absolute ? '/' : ''}${stack.join('/')}`
 }
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined)
@@ -201,9 +399,12 @@ const sha256 = (message: string): string => {
   for (let block = 0; block < padded.length; block += 64) {
     for (let i = 0; i < 16; i++) w[i] = view.getUint32(block + i * 4)
     for (let i = 16; i < 64; i++) {
-      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3)
-      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10)
-      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0
+      // w has 64 words. i is 16..63, so i-16..i-1 are all inside it.
+      const older = take(w[i - 15])
+      const recent = take(w[i - 2])
+      const s0 = rotr(older, 7) ^ rotr(older, 18) ^ (older >>> 3)
+      const s1 = rotr(recent, 17) ^ rotr(recent, 19) ^ (recent >>> 10)
+      w[i] = (take(w[i - 16]) + s0 + take(w[i - 7]) + s1) >>> 0
     }
     let a = h0
     let b = h1
@@ -216,7 +417,8 @@ const sha256 = (message: string): string => {
     for (let i = 0; i < 64; i++) {
       const s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)
       const ch = (e & f) ^ (~e & g)
-      const temp1 = (h + s1 + ch + k[i] + w[i]) >>> 0
+      // k and w both have 64 entries, and i is 0..63.
+      const temp1 = (h + s1 + ch + take(k[i]) + take(w[i])) >>> 0
       const s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)
       const maj = (a & b) ^ (a & c) ^ (b & c)
       const temp2 = (s0 + maj) >>> 0
@@ -242,3 +444,9 @@ const sha256 = (message: string): string => {
 }
 
 const rotr = (value: number, bits: number): number => ((value >>> bits) | (value << (32 - bits))) >>> 0
+
+/** A schedule or constant-table read. The caller only asks for an index the table holds. */
+const take = (value: number | undefined): number => {
+  if (value === undefined) throw new Error('sha')
+  return value
+}
