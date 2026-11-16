@@ -11,25 +11,28 @@ claude plugin validate ./wait-ship
 claude plugin test     ./wait-ship            # 78 tests
 
 claude plugin validate ./wait-breathe
-claude plugin test     ./wait-breathe         # 28 tests
+claude plugin test     ./wait-breathe         # 34 tests
 
 claude plugin validate ./wait-ping
-claude plugin test     ./wait-ping            # 34 tests
+claude plugin test     ./wait-ping            # 36 tests
 
 claude plugin validate ./wait-scope
-claude plugin test     ./wait-scope           # 47 tests
+claude plugin test     ./wait-scope           # 59 tests
 
 claude plugin validate ./wait-secret
 claude plugin test     ./wait-secret          # 27 tests
 
 claude plugin validate ./wait-notify
-claude plugin test     ./wait-notify          # 93 tests
+claude plugin test     ./wait-notify          # 95 tests
 
 claude plugin validate ./wait-anchor
 claude plugin test     ./wait-anchor          # 37 tests
 
 claude plugin validate ./wait-cards
-claude plugin test     ./wait-cards           # 47 tests
+claude plugin test     ./wait-cards           # 55 tests
+
+claude plugin validate ./wait-focus
+claude plugin test     ./wait-focus           # 48 tests
 
 claude plugin validate ./waitroom
 claude plugin test     ./waitroom             # 6 tests
@@ -63,7 +66,7 @@ claude plugin marketplace add .     # then /plugin install <mod>@waitroom
 Each mod keeps the logic that needs no engine in one plain module
 (`hooks/bet.ts`, `hooks/ship.ts`, `hooks/breathe.ts`,
 `hooks/ping.ts`, `hooks/secret.ts`, `hooks/notify.ts`,
-`hooks/anchor.ts`, `hooks/cards.ts`, `hooks/tip.ts`) so it
+`hooks/anchor.ts`, `hooks/cards.ts`, `hooks/focus.ts`, `hooks/tip.ts`) so it
 can be tested directly, with the hooks module beside it and a
 `types/index.d.ts` state contract that `claude plugin validate` holds it to.
 Each mod's own `tests/flow.test.*` or `tests/band.test.tsx` drives the real
@@ -108,8 +111,8 @@ fixed) were found. **wait-review-opencode** is still verified by type-checking
 against the real OpenCode/OpenTUI packages rather than a live session, since
 exercising it needs a configured model provider this environment doesn't
 have. Either way: adapter-only, not installable through this marketplace,
-not versioned, not part of a release — see each README's own "How this was
-verified" section for the full detail.
+not part of a release. bet-on-your-agent-opencode is package version `0.0.1`.
+See each README's own "How this was verified" section for the full detail.
 
 ## Repository layout
 
@@ -128,6 +131,7 @@ wait-secret/                  secret-line warning · separate install
 wait-notify/                  macOS notification when blocked · separate install
 wait-anchor/                  a note for when you come back · separate install
 wait-cards/                   one flashcard per wait · separate install
+wait-focus/                   touched or not, for up to three paths · separate install
 wait-review-opencode/         unpublished OpenCode prototype
 bet-on-your-agent-opencode/   unpublished OpenCode prototype
 ```

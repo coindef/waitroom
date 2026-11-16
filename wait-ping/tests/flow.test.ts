@@ -16,7 +16,7 @@ const finish = (turnId: string, durationMs: number, extra: { isAborted?: boolean
     answer: 'done',
     durationMs,
     isAborted: extra.isAborted === true,
-    reason: extra.isAborted ? 'abort' : 'answer',
+    reason: extra.isAborted ? 'aborted' : 'answer',
     ...(extra.agentId !== undefined ? { agentId: extra.agentId } : {}),
   }) as const
 
@@ -30,7 +30,7 @@ const engineBottom = (on: On, settings: Settings = { set: [] }, opts: { fail?: b
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('turn.complete', ($, e) => ({ text: e.answer }))
-  on('classic.Notification', ($, e) => e)
+  on('classic.Notification', ($, e) => e as never)
   on('process.run', ($, e) => {
     ran.push([...e.argv])
     if (e.argv[0] === 'uname') {
@@ -118,7 +118,7 @@ test(
   async ($, on) => {
     const { ran } = engineBottom(on)
     await $.turn.complete(finish('turn-off', 120_000))
-    await $.classic.Notification({ notification_type: 'permission_prompt' })
+    await $.classic.Notification({ notification_type: 'permission_prompt', message: 'needs you' })
 
     expect(ran).toEqual([])
   },
@@ -129,8 +129,8 @@ test('a permission confirm notifies even though the turn was short, and idle doe
   await $.turn.complete(finish('turn-short', 2_000))
   expect(ran).toEqual([])
 
-  await $.classic.Notification({ notification_type: 'idle_prompt' })
-  await $.classic.Notification({ notification_type: 'auth_success' })
+  await $.classic.Notification({ notification_type: 'idle_prompt', message: 'idle' })
+  await $.classic.Notification({ notification_type: 'auth_success', message: 'signed in' })
   expect(ran).toEqual([])
 
   const event = await $.classic.Notification({ notification_type: 'permission_prompt', message: 'needs you' })

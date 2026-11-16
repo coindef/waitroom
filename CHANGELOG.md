@@ -2,12 +2,18 @@
 
 ## Unreleased
 
-### wait-secret 0.1.1
+### bet-on-your-agent-opencode 0.0.1
 
-- **A diff git could not read is not treated as an empty tree.** If that read fails, secrets that were already staged are not reported as this turn's, and the failed read is not saved as the baseline. A repository with no commit yet is diffed against the empty tree, so a staged secret is still seen.
-- **Every new file is scanned.** A secret in a new file is no longer skipped once there are more than 100 untracked files. A scan that stops early says so (`scanned 100 of 101 new files`) instead of looking finished.
-- **A diff that was cut off is not a clean result.** When the diff is too big to read in full, the status line says `diff too big to scan fully`. The partial text is not listed and is not saved as the baseline.
-- **Committing the secret no longer hides it.** The scan also reads what was committed during the turn. If that range cannot be read, the turn is not reported as clean.
+- **Digits type into the prompt.** A digit answers the bet only when the bet row has focus. While the prompt has focus, every key, including a digit, stays in the prompt. Skip is labeled `0: Skip` on the confidence, file, bonus, and verdict rows.
+- **A retry does not close the bet.** The turn ends when the session goes idle.
+- **History waits for the file.** A turn that ends before `api.kv` has read `kv.json` is held and then merged into that file. It does not replace other plugins' keys.
+- **The file forecast counts a turn that wrote files another way.** `session.diff`, `apply_patch` text, a `patch` message part, and, when the diff call is missing, `git status`. A tool part that errors counts once, the same as one that completes.
+- **The band repaints.** The open bet and the rank-up line live in a Solid store the slot reads while it renders.
+
+### wait-notify 0.1.1
+
+- **The reminder waits for your answer.** A quick Read or a subagent's tool finishing alongside the one you're answering no longer cancels it.
+- **A session you ended stays ended.** A prompt sent right as you exit or `/clear` no longer makes other sessions think it's still open.
 
 ### wait-anchor 0.1.1
 

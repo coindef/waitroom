@@ -23,6 +23,11 @@ status line is one question from your deck, and past 48 columns it ends in an
 ellipsis. When the turn ends, the line clears and the answer is one log line.
 With no cards, it sets no line.
 
+wait-focus does not take that row either. You name one to three paths. After
+a main-loop turn, its status line says whether the turn touched each one.
+With no paths named, it sets no line. It does not open a pane, and it does
+not cover the bet's question or its keys.
+
 ## The idea
 
 The cost of waiting on a coding agent is not boredom, it is context collapse. A
