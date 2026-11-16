@@ -98,8 +98,10 @@ finding of this prototype: the portable core really is portable.
   `wait-review: nothing to read`, bare `u` `o` `f` `l` `x` landed in the prompt.
   With a hunk on screen and the prompt focused, `fix the login flow` stayed
   intact and the card did not change. Command palette → Review hunks, then
-  `o`, advanced the card and did not insert `o`. When that queue emptied, the
-  next character reached the prompt. No provider login and no API key: the
+  `o`, advanced the card and did not insert `o`. `esc` returned to the prompt,
+  and the next character landed there without changing the card. When that
+  queue emptied, the next character reached the prompt. No provider login and
+  no API key: the
   session used OpenCode's built-in Big Pickle model.
 - **`plugin/scan.ts` is actually run and tested.** It has zero OpenCode
   types, by the same design as `wait-review/hooks/diff.ts`, so it runs under
