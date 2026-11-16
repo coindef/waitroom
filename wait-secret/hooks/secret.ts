@@ -34,6 +34,31 @@ export const IGNORE_MARK = /(?:#|\/\/)\s*wait-secret:\s*ignore\b/
 export const statusLine = (count: number): string | undefined =>
   count === 0 ? undefined : `${count} possible secret${count === 1 ? '' : 's'}`
 
+/** The diff was longer than the host returns, so the part we hold is not the whole tree. */
+export const DIFF_TOO_BIG = 'diff too big'
+
+/** The status line's own text. The host draws its prefix outside these columns. */
+export const STATUS_COLUMNS = 48
+
+/** A way off, appended to a gap line only when the whole line still fits. */
+export const TURN_OFF_HINT = ' · /wait-secret turns it off'
+
+/** `line`, plus the way to turn the warning off when that still fits in `STATUS_COLUMNS`. */
+export const withTurnOff = (line: string): string => {
+  const full = `${line}${TURN_OFF_HINT}`
+
+  return full.length <= STATUS_COLUMNS ? full : line
+}
+
+/** Git did not finish a read. A quiet status line here would be a guess that the tree is clean. */
+export const SCAN_UNREAD = "couldn't finish scanning this turn's changes"
+
+/** The commits made during the turn could not be read, so a clean worktree is not a clean turn. */
+export const RANGE_UNREAD = "couldn't scan what this turn committed"
+
+/** `scanned 100 of 101 new files`. The scan stopped before every new file, and that is not a finished read. */
+export const partialFilesLine = (scanned: number, total: number): string => `scanned ${scanned} of ${total} new files`
+
 /** `N more…`, with the spec's ellipsis. */
 export const overflowLine = (count: number): string => `${count} more…`
 
