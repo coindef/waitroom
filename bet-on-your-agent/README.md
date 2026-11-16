@@ -52,6 +52,11 @@ pane to place, no focus to manage, nothing to click. (`0: Skip` is the one key
 that wants the row's focus first, `ctrl+x tab` or a click: on 2.1.311 a bare
 `0` stays in the composer.)
 
+The row appears about 0.1–0.3 seconds after you press Enter (measured on
+2.1.319 and 2.1.325). A digit typed before then goes into the composer
+(`❯ 3`) and does not answer. Wait for the row, and delete a digit that went in
+too soon.
+
 <img src="../docs/bet-forecast.svg" width="600" alt="The row above the prompt while a turn runs: a bet tag, Will &quot;In src/retry.ts, rewrite retry to take an options…&quot; land first try?, and 1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip">
 
 The orange `bet` tag names the row, so a question that appears above the
@@ -239,6 +244,15 @@ right days once it reaches two (`4-day streak`), else today's own result.
 
 History is kept in the plugin's own store, so it survives across sessions.
 It holds the last 500 turns.
+
+## Known limits
+
+When you install from a local-directory marketplace (`claude plugin
+marketplace add <folder>`), the hooks run from that folder, and the plugin
+can't tell which store file is its own. It leaves a store file that is 0 bytes
+or can't be read as it is, and every turn shows `couldn't save that turn` until
+you fix or delete that file by hand. Installed from GitHub
+(`coindef/waitroom`), the plugin repairs that file itself.
 
 ## Developing
 

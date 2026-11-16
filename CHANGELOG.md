@@ -2,6 +2,103 @@
 
 ## Unreleased
 
+### wait-ship 0.1.7
+
+- **The shared row is one row again on Claude Code 2.1.323 and later.** Those versions ask every mod for its own row and stack the answers, and `next()` no longer says who drew. wait-ship leaves the other rows out of `AbovePromptList`, in the same order as before: breathe, then this offer, then the bet. While a turn runs, the bet's forecast comes before this offer, and a breathe nudge still comes first. On 2.1.319 and earlier it still yields from the stamp on `next()`.
+
+### wait-secret 0.1.2
+
+- **The card yields the shared row on Claude Code 2.1.323 and later.** wait-secret waits behind breathe, ship, the bet, and scope, and shows once they close. On 2.1.319 and earlier the stamp on `next()` still decides.
+
+### wait-scope 0.1.2
+
+- **The card yields the shared row again on Claude Code 2.1.323 and later.** wait-scope was stacking on a wait-ship offer. It waits behind breathe, ship, and the bet, and shows once they close. On 2.1.319 and earlier the stamp on `next()` still decides.
+
+### wait-breathe 0.2.2
+
+- **The shared row is one row again on Claude Code 2.1.323 and later.** A due breathe nudge keeps the row ahead of a ship offer and a forecast instead of stacking on them. On 2.1.319 and earlier a nudge still takes the row by drawing it.
+
+### wait-focus 0.1.1
+
+- **wait-focus has an icon.** `plugin.json` points at `.claude-plugin/icon.png`, so `claude plugin validate` no longer warns that it is missing.
+
+### wait-anchor 0.1.2
+
+- **wait-anchor has an icon.** `plugin.json` points at `.claude-plugin/icon.png`, so `claude plugin validate` no longer warns that it is missing.
+
+### bet-on-your-agent 0.6.6
+
+- **The shared row is one row again on Claude Code 2.1.323 and later.** The bet's forecast still comes ahead of a ship offer while a turn runs, and still waits behind a breathe nudge and, between turns, a ship offer. The yield is done by leaving the other rows out of `AbovePromptList`. On 2.1.319 and earlier the stamp on `next()` still decides.
+- **A turn that could not be saved says so.** When the history cannot be read, one line: `couldn't save that turn`. A save that fails shows the same line. The status line still goes blank.
+- **A failed read keeps the record on screen.** The pane, the recap and the row keep the last history that loaded, instead of looking like the rank and the score were wiped.
+- **A failed read of the daily challenges leaves them in place.** Today's result is not written over the streak.
+- **A store file that can't be read is rebuilt.** A 0-byte store file is treated as empty. A file that is not JSON, JSON that is not an object, or whose saved turns are not a list, is copied to `<store>.bak` and rebuilt, and the next `/bet` says `couldn't read the saved history · rebuilt`. A later repair keeps the first backup and writes `<store>.bak-<ms>`. The repair leaves the engine's lock alone and waits for a later turn while the lock is held.
+- **A history that is not a list is not written over.** When the store can't be repaired, the turn that just ended does not replace it, and that is noted once: `couldn't read the saved history`.
+- **A local-directory marketplace install is not repaired.** See *Known limits* in the plugin README.
+
+### wait-ship 0.1.6
+
+- **A new file no longer calls an edit in the same directory an add.** The new file is added and the edit is updated, and only the new file is listed under Added. A deleted file is its own Removes line, not a restructure, and it is not listed twice. An edit that deletes more lines than it adds stays an update. The commit subject names each path when there are at most three files and the line fits in 72 characters. Otherwise it counts, as in `add 2 files, update 1 file`.
+
+### wait-ship 0.1.5
+
+- **A file whose name git quotes stays in the kit.** An untracked `café.txt` or `a "quoted" name.txt` was dropped, and a tracked non-ASCII name was written with octal escapes. The scan reads the name as it is on disk. A control character or a bidi mark in that name is written as a visible escape (`\x1b`, `\n`, `\u202e`), not as the raw character.
+- **A file git could not read is counted.** The row says `1 file skipped: git couldn't read it` (or `2 files skipped: git couldn't read them`). The kit still lists only the files it read.
+
+### wait-secret 0.1.1
+
+- **A diff git could not read is not treated as an empty tree.** If that read fails, secrets that were already staged are not reported as this turn's, and the failed read is not saved as the baseline. A repository with no commit yet is diffed against the empty tree, so a staged secret is still seen.
+- **A long list of new files does not stall the turn.** The scan reads at most 100 new files. If there are more, it stops and says so (`scanned 100 of 101 new files`) instead of looking finished, and it does not open the rest.
+- **A diff that was cut off is not a clean result.** When the diff is too big to read in full, the status line says `diff too big · /wait-secret turns it off`. The partial text is not listed and is not saved as the baseline.
+- **Committing the secret no longer hides it.** The scan also reads what was committed during the turn. If that range cannot be read, the turn is not reported as clean.
+
+### wait-ship 0.1.4
+
+- **An edit you make between turns is not drafted as the next turn's work.** wait-ship reads the tree again when a turn starts, so the kit names only the files that turn changed, and a turn that changed nothing stays quiet. If that read fails, the turn still starts and the kit compares against the last read that worked. If the read takes too long, wait-ship can't tell what was there before, so it still offers a kit instead of hiding one. What an older version saved still works after you update.
+
+### bet-on-your-agent 0.6.5
+
+- **A file git is slow to read is not counted as written.** If a hash does not come back, that path stays as it was. It does not show up as a file this turn wrote.
+- **One path git cannot hash no longer pauses on every other file.** The rest of the turn's files are still counted.
+- **Five hundred changed paths still count as five hundred.** The running total was cut off at 200. More than 500 paths in `git status` is still not a count.
+
+### wait-ping 0.1.2
+
+- **From an hour, the away line drops the seconds.** `1h 0m 40s` is `1h`. `2h 1m 40s` is `2h 1m`. Under an hour is unchanged (`45s`, `1m`, `1m 30s`, `59m 59s`).
+- **An unusable threshold is named when you turn notifications on.** `(0.5 isn't usable, using 30s)`. A value that floors to at least 1 is kept and is not named.
+
+### wait-scope 0.1.1
+
+- **A scope file that can't be read is not "no scope".** If `.claude/wait-scope` is there but the read fails, the turn keeps the last scope that file gave, or skips the check, and says so once. It does not guess, and it does not use the setting in place of that file.
+- **`*` is the top level only, and `src/*` is the files directly in that folder.** A bare folder name still covers everything inside it.
+- **A comma in `.claude/wait-scope` stays in the glob.** `src/**/*.{ts,tsx}` matches `.ts` and `.tsx`. Commas still separate globs in the *Files in scope* setting.
+- **A glob typed in the prompt is read like an edited path.** `..`, the macOS `/private` alias, and a drive letter fold the same way. A guess does not cover a file outside the project.
+- **`fix src/auth` is a folder.** `and/or`, `read/write`, and `TCP/IP` stay prose.
+
+### wait-breathe 0.2.1
+
+- **If the cooldown cannot be read, no nudge is shown, and what is already saved is left alone.** Once the read works again, nudges come back on their usual ten-minute schedule. If the saved record itself cannot be read, the next due nudge starts a fresh one, so one bad value cannot turn the nudges off for good.
+
+### wait-cards 0.1.1
+
+- **A comment in the deck only hides cards when it is its own block.** A `<!--` written on a question or an answer stays. An unclosed comment hides the cards under it, and `/card` counts them as skipped.
+- **A card waits out its box.** When nothing is due, the line stays clear. `/card got` on a card that was not due does not move it up, so the waits in the reply are the waits until it comes back: 2, 4, 8, then 16.
+- **A failed read leaves the boxes alone.** If the saved progress can't be read, that wait writes nothing, and `/card` says `couldn't read your progress · nothing was changed · try /card again`. A saved count of waits that isn't a real number continues from the cards, so the line does not stay clear for the old count. A saved card that isn't a real record is replaced once. A card with no saved record still starts at box 1.
+- **Showing a card keeps a mark from another session.** That wait updates when the card was shown. The box and the due wait stay as the later read has them.
+- **`/card` says when the deck was cut.** A deck keeps 1000 cards from the first 256 KiB. Past that, the reply says `1000 of 1001 cards · deck capped at 1000` or `deck cut at 256 KiB`.
+
+### wait-focus 0.1.0
+
+First release: you name one to three paths, and after a turn the status line says whether the turn touched each one.
+
+- **`/wait-focus src/auth/ package.json`.** One, two, or three files or folders. Replaces the list. A fourth path is refused (`3 paths max · name one to three, like src/auth/ or package.json`) and the list you had stays. A path outside the project is refused and the list stays. A glob (`src/**/*.ts`, `src/auth/*`) is refused (`src/**/*.ts looks like a glob · name a file or folder, like src/auth/ or package.json`) and the list stays. A path that is not on disk yet is still watched. `/wait-focus` shows the list. `/wait-focus clear` clears it. The command is `/wait-focus`, because `/focus` is already a Claude Code command. The reply does not start a turn.
+- **Status line.** After a main-loop turn, `src/auth/ touched · package.json untouched`. A folder is touched when anything under it changed, including a rename or a delete. The line comes down while the next turn runs. Past 48 columns, folders are shortened from the left (`…/LoginForm.tsx touched · package.json untouched`). If that is still too wide, the words become `yes` and `no` (`…/auth/ yes · package.json no · README.md no`). No list, no line. It does not take the row above the prompt.
+- **Read-only git.** `diff --name-status`, `ls-files`, and `hash-object`, from the project directory. A file that was already dirty counts when its contents change. A gitignored file is not counted. Each call gives up after 3 seconds. The start of a turn waits on those calls. The answer is sent before the end reads.
+- **A commit during the turn counts.** The turn records HEAD when it starts. If HEAD moved, `git diff <start> HEAD -- <paths>` is added to the work-tree diff. An edit that is committed, a new file, several commits, an amend, a reset, or a rebase all count: the work tree matches the new HEAD, and only that range diff shows the path. If that diff cannot be read, the line stays blank. It does not say untouched.
+- **A symlink or a submodule** on the list says `is a symlink` or `is a submodule`, instead of a blank line.
+- **Fails open.** Outside a git repository, or when git fails, times out, or its output is cut off, the turn stays quiet: no line, no crash, and no guess. More than 40 changed files under the list does the same. Nothing is blocked, edited, or committed. A slow end read does not paint the previous turn's line over the next turn.
+- **Kept in `$.store`.** One value, keyed by the project root, under Claude's configuration directory. Two sessions in one project share it. A missing project root saves nothing.
+
 ### bet-on-your-agent-opencode 0.0.1
 
 - **Digits type into the prompt.** A digit answers the bet only when the bet row has focus. While the prompt has focus, every key, including a digit, stays in the prompt. Skip is labeled `0: Skip` on the confidence, file, bonus, and verdict rows.

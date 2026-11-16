@@ -18,6 +18,7 @@ const BAND = {
 const bandProps = (isWorking: boolean) =>
   ({
     hasSurvey: false,
+    isCollapsed: false,
     isWorking,
     maxRows: 6,
     bodyColumns: 115,

@@ -71,20 +71,22 @@ const shown = (said: readonly (string | undefined)[]) => said.filter((text): tex
 
 const BAND = { component: 'AbovePrompt', requestId: 'above-prompt', viewport: { columns: 140, rows: 40 } } as const
 
+const BAND_PROPS = {
+  hasSurvey: false,
+  isCollapsed: false,
+  isWorking: false,
+  maxRows: 6,
+  bodyColumns: 135,
+  scroll: { offset: 0, bodyRows: 6 },
+  view: {},
+} as const
+
 const mountBand = ($: Engine) =>
   $.ui.mount({
     plugin: 'wait-secret',
     surface: 'terminal',
     ...BAND,
-    props: {
-      hasSurvey: false,
-      isCollapsed: false,
-      isWorking: false,
-      maxRows: 6,
-      bodyColumns: 135,
-      scroll: { offset: 0, bodyRows: 6 },
-      view: {},
-    },
+    props: BAND_PROPS,
   })
 
 const finish = (turnId: string) => ({ turnId, answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer' }) as const

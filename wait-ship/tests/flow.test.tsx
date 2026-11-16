@@ -169,7 +169,7 @@ const engineBottom = (on: On, repo: Repo, fs: Record<string, string> = {}, seen:
 const BAND = { component: 'AbovePrompt', requestId: 'above-prompt', viewport: { columns: 140, rows: 30 } } as const
 
 const bandProps = (hasSurvey = false) =>
-  ({ hasSurvey, isWorking: false, maxRows: 6, bodyColumns: 135, scroll: { offset: 0, bodyRows: 6 }, view: {} }) as const
+  ({ hasSurvey, isCollapsed: false, isWorking: false, maxRows: 6, bodyColumns: 135, scroll: { offset: 0, bodyRows: 6 }, view: {} }) as const
 
 const mountBand = ($: Engine, hasSurvey = false) =>
   $.ui.mount({ plugin: 'wait-ship', surface: 'terminal', ...BAND, props: bandProps(hasSurvey) })
