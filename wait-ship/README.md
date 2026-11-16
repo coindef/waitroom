@@ -96,11 +96,14 @@ the row the moment the kit is answered.
   those; otherwise it matches the prevailing capitalization and tense
   instead. The body is short bullets, grouped by area once the diff touches
   more than one.
-- **PR description.** `## Summary` (2–4 bullets on what changed and roughly
-  why, read off the files — a diff carries no rationale a deterministic pass
-  can honestly invent), `## Changes` (the same per-area bullets as the commit
-  body), `## Test plan` (a checkbox per test file the diff touched, plus one
-  manual-verification line always).
+- **PR description.** `## Summary` covers the first four top-level folders
+  in alphabetical order, counting the repository root as a folder. Each gets
+  one bullet per action: add, update or remove. A one-file change gets one
+  bullet. Four folders with mixed actions can get up to twelve. A
+  test-coverage line follows when tests change with other files in fewer
+  than four folders. `## Changes` has the same per-area bullets as the commit
+  body. `## Test plan` has a checkbox per test file the diff touched, plus a
+  manual-verification line.
 - **Changelog entry**, only when `CHANGELOG.md` exists in the repository
   root and `includeChangelog` is on. It is a standalone snippet to paste in
   yourself — this plugin never edits `CHANGELOG.md`.

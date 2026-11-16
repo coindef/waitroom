@@ -4,7 +4,7 @@
 
 ### wait-ship 0.1.7
 
-- **The shared row is one row again on Claude Code 2.1.323 and later.** Those versions ask every mod for its own row and stack the answers, and `next()` no longer says who drew. wait-ship leaves the other rows out of `AbovePromptList`, in the same order as before: breathe, then this offer, then the bet. On 2.1.319 and earlier it still yields from the stamp on `next()`.
+- **The shared row is one row again on Claude Code 2.1.323 and later.** Those versions ask every mod for its own row and stack the answers, and `next()` no longer says who drew. wait-ship leaves the other rows out of `AbovePromptList`, in the same order as before: breathe, then this offer, then the bet. While a turn runs, the bet's forecast comes before this offer, and a breathe nudge still comes first. On 2.1.319 and earlier it still yields from the stamp on `next()`.
 
 ### wait-secret 0.1.2
 
@@ -12,7 +12,7 @@
 
 ### wait-scope 0.1.2
 
-- **The card yields the shared row again on Claude Code 2.1.323 and later.** wait-scope was stacking on a wait-ship offer. It waits behind breathe, ship, and the bet, and shows once they close. Returning the engine's own drawing is not a yield: an empty row still shows this card. On 2.1.319 and earlier the stamp on `next()` still decides.
+- **The card yields the shared row again on Claude Code 2.1.323 and later.** wait-scope was stacking on a wait-ship offer. It waits behind breathe, ship, and the bet, and shows once they close. On 2.1.319 and earlier the stamp on `next()` still decides.
 
 ### wait-breathe 0.2.2
 
@@ -29,10 +29,10 @@
 ### bet-on-your-agent 0.6.6
 
 - **The shared row is one row again on Claude Code 2.1.323 and later.** The bet's forecast still comes ahead of a ship offer while a turn runs, and still waits behind a breathe nudge and, between turns, a ship offer. The yield is done by leaving the other rows out of `AbovePromptList`. On 2.1.319 and earlier the stamp on `next()` still decides.
-- **A turn that could not be saved says so.** When the history cannot be read, one line: `couldn't save that turn`. The status line still goes blank.
+- **A turn that could not be saved says so.** When the history cannot be read, one line: `couldn't save that turn`. A save that fails shows the same line. The status line still goes blank.
 - **A failed read keeps the record on screen.** The pane, the recap and the row keep the last history that loaded, instead of looking like the rank and the score were wiped.
 - **A failed read of the daily challenges leaves them in place.** Today's result is not written over the streak.
-- **A store file that can't be read is rebuilt.** A 0-byte store file is treated as empty. A file that is not JSON, or whose saved turns are not a list, is copied to `<store>.bak` and rebuilt, and the next `/bet` says `couldn't read the saved history · rebuilt`. A later repair keeps the first backup and writes `<store>.bak-<ms>`. The repair leaves the engine's lock alone and waits for a later turn while the lock is held.
+- A file that is not JSON, JSON that is not an object, or whose saved turns are not a list, is copied to `<store>.bak` and rebuilt.
 - **A history that is not a list is not written over.** When the store can't be repaired, the turn that just ended does not replace it, and that is noted once: `couldn't read the saved history`.
 - **A local-directory marketplace install is not repaired.** See *Known limits* in the plugin README.
 
