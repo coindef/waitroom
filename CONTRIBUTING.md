@@ -31,6 +31,9 @@ claude plugin test     ./wait-anchor          # 37 tests
 claude plugin validate ./wait-cards
 claude plugin test     ./wait-cards           # 47 tests
 
+claude plugin validate ./wait-focus
+claude plugin test     ./wait-focus           # 48 tests
+
 claude plugin validate ./waitroom
 claude plugin test     ./waitroom             # 6 tests
 ```
@@ -63,7 +66,7 @@ claude plugin marketplace add .     # then /plugin install <mod>@waitroom
 Each mod keeps the logic that needs no engine in one plain module
 (`hooks/bet.ts`, `hooks/ship.ts`, `hooks/breathe.ts`,
 `hooks/ping.ts`, `hooks/secret.ts`, `hooks/notify.ts`,
-`hooks/anchor.ts`, `hooks/cards.ts`, `hooks/tip.ts`) so it
+`hooks/anchor.ts`, `hooks/cards.ts`, `hooks/focus.ts`, `hooks/tip.ts`) so it
 can be tested directly, with the hooks module beside it and a
 `types/index.d.ts` state contract that `claude plugin validate` holds it to.
 Each mod's own `tests/flow.test.*` or `tests/band.test.tsx` drives the real
@@ -128,6 +131,7 @@ wait-secret/                  secret-line warning · separate install
 wait-notify/                  macOS notification when blocked · separate install
 wait-anchor/                  a note for when you come back · separate install
 wait-cards/                   one flashcard per wait · separate install
+wait-focus/                   touched or not, for up to three paths · separate install
 wait-review-opencode/         unpublished OpenCode prototype
 bet-on-your-agent-opencode/   unpublished OpenCode prototype
 ```
