@@ -117,8 +117,8 @@ surface that actually exists.
   those two tools: `plugin/tui.tsx` also counts `api.state.session.diff`,
   paths named in `apply_patch` text and in a `patch` message part, and, when
   the diff call is missing, a `git status` scan of the worktree.
-- **A `turnId`.** OpenCode doesn't hand out one. The latest user message's id
-  is used instead, on first sight of a busy status.
+- **A `turnId`.** OpenCode doesn't hand out one. `crypto.randomUUID()` generates
+  one on first sight of a busy status.
 
 ## What's ported
 
