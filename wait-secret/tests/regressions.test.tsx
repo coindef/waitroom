@@ -76,7 +76,7 @@ const mountBand = ($: Engine) =>
     plugin: 'wait-secret',
     surface: 'terminal',
     ...BAND,
-    props: {
+    props: ({
       hasSurvey: false,
       isCollapsed: false,
       isWorking: false,
@@ -84,7 +84,7 @@ const mountBand = ($: Engine) =>
       bodyColumns: 135,
       scroll: { offset: 0, bodyRows: 6 },
       view: {},
-    },
+    }) as const,
   })
 
 const finish = (turnId: string) => ({ turnId, answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer' }) as const
