@@ -165,6 +165,10 @@ const rememberTurns = async ($: EngineInterface, records: readonly TurnRecord[])
  * a list. A missing key is no data yet (`[]`). A caller that writes has to
  * skip the write on `undefined`: saving the one record just built from `[]`,
  * or over a value that is not a list, would replace what the store still holds.
+ *
+ * A thrown read is not a fresh start. An empty file, a file that is not
+ * JSON, and a read that fails for a moment all reject the same way, and
+ * writing `[]` is what used to replace a history the store still held.
  */
 const loadTurns = async ($: EngineInterface): Promise<TurnRecord[] | undefined> => {
   const stored = await $.store.get(STORE_KEY).then(
@@ -200,6 +204,23 @@ const turnsToShow = async ($: EngineInterface): Promise<TurnRecord[]> => {
   if (seenTurns !== undefined) return seenTurns
 
   return (await read($, lastGoodTurns)) ?? []
+}
+
+/** Shown by `/bet` and the pane when nothing good has loaded and the read failed. */
+const HISTORY_UNREAD = "couldn't read the saved history · turns aren't being saved"
+
+/**
+ * The read failed and this process has never loaded a history.
+ *
+ * Drawing that as an empty record invites calls that will not be saved.
+ * A later failure after a good read is not this: that draw keeps the record.
+ */
+const historyUnread = async ($: EngineInterface): Promise<boolean> => {
+  const loaded = await loadTurns($)
+  if (loaded !== undefined) return false
+  if (seenTurns !== undefined) return false
+
+  return (await read($, lastGoodTurns)) === null
 }
 
 /**
@@ -626,6 +647,7 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'bet' }, async $ => {
     void $.ui.open({ id: PANE, title: 'Bet on your agent' }).catch(() => undefined)
+    if (await historyUnread($)) return { text: HISTORY_UNREAD }
     const last = await read($, lastVerdict)
 
     return { text: asText(report(await turnsToShow($)), last?.rankUp, (await extrasWait($)) === 0) }
@@ -783,59 +805,75 @@ export const register: Register = (on, options) => {
     // A failed read is not an empty history. Skip this turn's record — and
     // the challenge scored against that history — so the store is left as it
     // was. One line says the turn was not saved. The status line below still
-    // moves off the running-turn prompt.
+    // moves off the running-turn prompt. A write that throws is the same line:
+    // the hook's own catch would otherwise swallow it and leave the running
+    // prompt up.
     if (before === undefined) $.ui.log("couldn't save that turn")
     if (before !== undefined) {
       const after = keepRecord(before, record)
-      await saveTurns($, after)
-      await noteBadges($, before, after)
+      let wrote = false
+      try {
+        await saveTurns($, after)
+        wrote = true
+      } catch {
+        $.ui.log("couldn't save that turn")
+      }
+      if (wrote) {
+        await noteBadges($, before, after)
 
-      // The daily challenge, like the bonus question, needs no human verdict:
-      // it is scored the moment the turn lands, against the threshold its own
-      // history stood at before this turn (the very history `before` already is).
-      const challengeDim = isThisTurn ? bet.dailyChallengeDim : undefined
-      if (challengeDim !== undefined && !e.isAborted) {
-        const challengeToday = localDateKey(await $.clock.now())
-        const threshold = challengeThreshold(before, challengeDim)
-        const value = challengeDim === 'duration' ? e.durationMs : challengeDim === 'files' ? files : bet.toolCalls
-        const actual = dailyOutcome(value, threshold)
-        const guess = bet.saidDailyChallenge
-        const dailyLog = await loadDailyChallenges($)
-        // A failed read is not an empty log. Skip today's write so the streak
-        // the store still holds is left where it is.
-        if (dailyLog !== undefined) {
-          if (bet.isDailyChallengeDeclined === true) {
-            await saveDailyChallenges(
-              $,
-              keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isSkipped: true }),
-            )
-          } else if (guess !== undefined && challengeDim === 'files' && filesUnknown) {
-            // Answered, but the count it was judged against is not a number. The
-            // day is handled so it is not asked again; the answer is not scored.
-            await saveDailyChallenges(
-              $,
-              keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, guess, isUnmeasured: true }),
-            )
-          } else if (guess !== undefined) {
-            await saveDailyChallenges(
-              $,
-              keepDailyChallenge(dailyLog, {
-                date: challengeToday,
-                dim: challengeDim,
-                guess,
-                actual,
-                correct: guess === actual,
-              }),
-            )
-          } else {
-            // Offered, but the turn landed before it was answered or declined.
-            // Still needs a record for today, else the identical question comes
-            // back on the next turn — just not a scored one, and not one that
-            // costs the streak.
-            await saveDailyChallenges(
-              $,
-              keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isNotTaken: true }),
-            )
+        // The daily challenge, like the bonus question, needs no human verdict:
+        // it is scored the moment the turn lands, against the threshold its own
+        // history stood at before this turn (the very history `before` already is).
+        // A write that throws leaves the challenge where it is. The turn above
+        // is already saved, and the status line below still has to move on.
+        const challengeDim = isThisTurn ? bet.dailyChallengeDim : undefined
+        if (challengeDim !== undefined && !e.isAborted) {
+          try {
+            const challengeToday = localDateKey(await $.clock.now())
+            const threshold = challengeThreshold(before, challengeDim)
+            const value = challengeDim === 'duration' ? e.durationMs : challengeDim === 'files' ? files : bet.toolCalls
+            const actual = dailyOutcome(value, threshold)
+            const guess = bet.saidDailyChallenge
+            const dailyLog = await loadDailyChallenges($)
+            // A failed read is not an empty log. Skip today's write so the streak
+            // the store still holds is left where it is.
+            if (dailyLog !== undefined) {
+              if (bet.isDailyChallengeDeclined === true) {
+                await saveDailyChallenges(
+                  $,
+                  keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isSkipped: true }),
+                )
+              } else if (guess !== undefined && challengeDim === 'files' && filesUnknown) {
+                // Answered, but the count it was judged against is not a number. The
+                // day is handled so it is not asked again; the answer is not scored.
+                await saveDailyChallenges(
+                  $,
+                  keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, guess, isUnmeasured: true }),
+                )
+              } else if (guess !== undefined) {
+                await saveDailyChallenges(
+                  $,
+                  keepDailyChallenge(dailyLog, {
+                    date: challengeToday,
+                    dim: challengeDim,
+                    guess,
+                    actual,
+                    correct: guess === actual,
+                  }),
+                )
+              } else {
+                // Offered, but the turn landed before it was answered or declined.
+                // Still needs a record for today, else the identical question comes
+                // back on the next turn — just not a scored one, and not one that
+                // costs the streak.
+                await saveDailyChallenges(
+                  $,
+                  keepDailyChallenge(dailyLog, { date: challengeToday, dim: challengeDim, isNotTaken: true }),
+                )
+              }
+            }
+          } catch {
+            // The turn is saved. Today's challenge stays as it was.
           }
         }
       }
@@ -1108,6 +1146,16 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     await read($, revision)
+    if (await historyUnread($)) {
+      return (
+        <Box flexDirection="column" gap={1}>
+          <Text backgroundColor="claude" color="inverseText" weight="bold">
+            {' bet-on-your-agent '}
+          </Text>
+          <Text>{HISTORY_UNREAD}</Text>
+        </Box>
+      )
+    }
     const found = report(await turnsToShow($))
     const last = await read($, lastVerdict)
     const width = Math.max(20, e.props.bodyColumns)

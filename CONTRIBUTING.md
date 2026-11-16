@@ -5,7 +5,7 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 150 tests
+claude plugin test     ./bet-on-your-agent    # 153 tests
 
 claude plugin validate ./wait-ship
 claude plugin test     ./wait-ship            # 90 tests

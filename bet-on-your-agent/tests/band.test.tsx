@@ -803,7 +803,10 @@ test('the band yields to a survey of the engine’s own', async ($, on) => {
   await ui.unmount()
 })
 
-test('the record pane draws on every surface', async $ => {
+test('the record pane draws on every surface', async ($, on) => {
+  // A working store with no history yet. A thrown read is a different case:
+  // that one says the turns are not being saved.
+  mock.store(on)
   for (const surface of SURFACES) {
     const ui = await $.ui.mount({ plugin: 'bet-on-your-agent', surface, ...PANE })
 
@@ -974,6 +977,7 @@ const flakyStore = (on: On, entries: Record<string, unknown>) => {
   mock.clock(on)
   const data: Record<string, unknown> = { extrasFrom: '1900-01-01', ...entries }
   let failReads: (key: string) => boolean = () => false
+  let failWrites: (key: string) => boolean = () => false
   const logged: string[] = []
   const said: (string | undefined)[] = []
   on('store.get', ($, e) => {
@@ -982,6 +986,7 @@ const flakyStore = (on: On, entries: Record<string, unknown>) => {
     return { value: data[e.key] }
   })
   on('store.set', ($, e) => {
+    if (failWrites(e.key)) throw new Error('EROFS: store will not take the write')
     data[e.key] = e.value
 
     return { value: undefined }
@@ -1013,8 +1018,13 @@ const flakyStore = (on: On, entries: Record<string, unknown>) => {
     fail(match: (key: string) => boolean = () => true) {
       failReads = match
     },
+    failWrites(match: (key: string) => boolean = () => true) {
+      failWrites = match
+    },
   }
 }
+
+const HISTORY_UNREAD = "couldn't read the saved history · turns aren't being saved"
 
 // Before the other non-array tests: the note is once per process, so a
 // later test would already have spent it.
@@ -1100,6 +1110,64 @@ test('a turn that could not be saved says so', async ($, on) => {
   expect(store.logged).toContain("couldn't save that turn")
   // The status line stays blank; the log line is what explains it.
   expect(store.said.at(-1)).toBeUndefined()
+})
+
+test('a store that will not take the write says so', async ($, on) => {
+  const old = [storedTurn('old-0', 0, { landed: true })]
+  const store = flakyStore(on, { turns: old })
+  await $.turn.start({ text: 'a turn', turnId: 'unwritable' })
+  const band = await $.ui.mount({
+    plugin: 'bet-on-your-agent',
+    surface: 'terminal',
+    ...BAND,
+    props: bandProps(true),
+  })
+  await band.press({ key: 'p80' })
+  expect(store.said.at(-1)).toBe('you said 80%')
+  store.failWrites()
+  await $.turn.complete({
+    turnId: 'unwritable',
+    answer: 'done',
+    durationMs: 1000,
+    isAborted: false,
+    reason: 'answer',
+  })
+  await band.unmount()
+
+  expect(store.data.turns).toEqual(old)
+  expect(store.logged).toContain("couldn't save that turn")
+  expect(store.said.at(-1)).not.toBe('you said 80%')
+})
+
+test('an unreadable history with nothing loaded says turns are not being saved', async ($, on) => {
+  const store = flakyStore(on, {})
+  store.fail()
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: HISTORY_UNREAD })).toBeDefined()
+  expect(await pane.find({ text: /No turns yet/ })).toBeUndefined()
+  expect(await pane.find({ text: /Five calls in/ })).toBeUndefined()
+  await pane.unmount()
+
+  const reply = await $.command.run({ command: 'bet' } as never)
+  expect(reply.text).toBe(HISTORY_UNREAD)
+  // A thrown read is not a fresh start. An empty file and a bad read reject
+  // the same way, and writing [] is what used to replace a history.
+  expect(store.data.turns).toBeUndefined()
+})
+
+test('a history that is not a list says turns are not being saved', async ($, on) => {
+  const store = flakyStore(on, { turns: { not: 'a list' } })
+
+  const reply = await $.command.run({ command: 'bet' } as never)
+  expect(reply.text).toBe(HISTORY_UNREAD)
+
+  const pane = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: HISTORY_UNREAD })).toBeDefined()
+  expect(await pane.find({ text: /No turns yet/ })).toBeUndefined()
+  await pane.unmount()
+
+  expect(store.data.turns).toEqual({ not: 'a list' })
 })
 
 test('a failed read keeps the last history on the pane, the recap and the band', async ($, on) => {
