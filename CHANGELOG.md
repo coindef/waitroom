@@ -2,14 +2,6 @@
 
 ## Unreleased
 
-### wait-cards 0.1.1
-
-- **A comment in the deck only hides cards when it is its own block.** A `<!--` written on a question or an answer stays. An unclosed comment hides the cards under it, and `/card` counts them as skipped.
-- **A card waits out its box.** When nothing is due, the line stays clear. `/card got` on a card that was not due does not move it up, so the waits in the reply are the waits until it comes back: 2, 4, 8, then 16.
-- **A failed read leaves the boxes alone.** If the saved progress can't be read, that wait writes nothing, and `/card` says `couldn't read your progress · nothing was changed · try /card again`. A saved count of waits that isn't a real number continues from the cards, so the line does not stay clear for the old count. A saved card that isn't a real record is replaced once. A card with no saved record still starts at box 1.
-- **Showing a card keeps a mark from another session.** That wait updates when the card was shown. The box and the due wait stay as the later read has them.
-- **`/card` says when the deck was cut.** A deck keeps 1000 cards from the first 256 KiB. Past that, the reply says `1000 of 1001 cards · deck capped at 1000` or `deck cut at 256 KiB`.
-
 ### wait-notify 0.1.1
 
 - **The reminder waits for your answer.** A quick Read or a subagent's tool finishing alongside the one you're answering no longer cancels it.

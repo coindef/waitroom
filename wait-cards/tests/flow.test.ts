@@ -442,7 +442,7 @@ test('/card says when the deck was capped or cut', async ($, on) => {
   )
 })
 
-test('a bad tick continues from the cards, so a far due wait is not a silent deck', async ($, on) => {
+test('a corrupt wait counter resets to 0 and pulls every due wait with it', async ($, on) => {
   const one = `card/${cardId('one')}`
   const two = `card/${cardId('two')}`
   const { said, store } = engineBottom(on, {
@@ -454,12 +454,15 @@ test('a bad tick continues from the cards, so a far due wait is not a silent dec
     },
   })
   await start($)
+  // Counting does not write. The next wait is what moves the dues.
   expect(await card($, '')).toBe('2 cards · 1 due · mark an answer with /card got or /card miss')
+  expect(store[one]).toEqual({ v: 1, box: 2, due: 2001, shown: 1999 })
+  expect(store[two]).toEqual({ v: 1, box: 2, due: 2003, shown: 2001 })
   await $.turn.start(begin('t1'))
   expect(said.at(-1)).toBe('Q: one')
-  expect(store.tick).toEqual({ v: 1, n: 2003 })
-  expect(store[one]).toEqual({ v: 1, box: 2, due: 2001, shown: 2002 })
-  expect(store[two]).toEqual({ v: 1, box: 2, due: 2003, shown: 2001 })
+  expect(store.tick).toEqual({ v: 1, n: 1 })
+  expect(store[one]).toEqual({ v: 1, box: 2, due: 0, shown: 0 })
+  expect(store[two]).toEqual({ v: 1, box: 2, due: 2, shown: 0 })
 })
 
 test('/card says the progress could not be read, and writes nothing', async ($, on) => {

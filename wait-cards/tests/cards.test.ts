@@ -16,8 +16,8 @@ import {
   parseCardCommand,
   parseDeck,
   pickNext,
+  realignRecords,
   recordFromStore,
-  recoveredTick,
   sanitize,
   shownRecord,
   statusFor,
@@ -286,12 +286,17 @@ test('a stored record this mod did not write is a new card', () => {
   expect(recordFromStore({ v: 1, box: 2, due: 4, shown: 3 })).toEqual({ box: 2, due: 4, shown: 3 })
 })
 
-test('a recovered tick is one past the latest wait the cards imply, and 0 with none', () => {
-  expect(recoveredTick([])).toBe(0)
-  expect(recoveredTick([
-    { box: 2, due: 2001, shown: 1999 },
-    { box: 2, due: 2003, shown: 2001 },
-  ])).toBe(2002)
+test('a reset counter pulls every due wait with it, and the soonest is due now', () => {
+  const records = new Map<string, CardRecord>([
+    ['a', { box: 2, due: 2001, shown: 1999 }],
+    ['b', { box: 2, due: 2003, shown: 2001 }],
+  ])
+  const next = realignRecords(records, 0)
+  expect(next.get('a')).toEqual({ box: 2, due: 0, shown: -1 })
+  expect(next.get('b')).toEqual({ box: 2, due: 2, shown: 0 })
+
+  const already = new Map<string, CardRecord>([['a', { box: 1, due: 0, shown: -1 }]])
+  expect(realignRecords(already, 0).get('a')).toEqual({ box: 1, due: 0, shown: -1 })
 })
 
 test('the status line is the question after Q:, cut at 48 columns on a character boundary', () => {

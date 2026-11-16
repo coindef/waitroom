@@ -383,22 +383,28 @@ export const newRecord = (): CardRecord => ({ box: 1, due: 0, shown: -1 })
 const intervalOf = (box: number): number => INTERVALS[Math.min(TOP_BOX, Math.max(1, box)) - 1] ?? 1
 
 /**
- * The next wait after the latest one the saved cards imply.
+ * Dues counted on a counter that has just reset to `tick`.
  *
- * Used when a tick is present but unreadable. Starting over at 0 would leave
- * every real `due` in the future, and the line would stay clear until the
- * count caught up. `due` minus the box's interval is the wait the card was
- * marked; `shown` is the wait it was on screen. Continue from one past the
- * later of those.
+ * Shift every due by the same amount so the soonest card is due on this wait
+ * and the gaps between cards stay. `shown` moves with it, and never drops
+ * below -1 ("never"). A deck that already has a due card is left as it is.
  */
-export const recoveredTick = (records: Iterable<CardRecord>): number => {
-  let tick = 0
-  for (const record of records) {
-    const activity = Math.max(record.shown, record.due - intervalOf(record.box))
-    tick = Math.max(tick, activity + 1)
+export const realignRecords = (
+  records: ReadonlyMap<string, CardRecord>,
+  tick: number,
+): Map<string, CardRecord> => {
+  let soonest = Infinity
+  for (const record of records.values()) soonest = Math.min(soonest, record.due)
+  if (!Number.isFinite(soonest) || soonest <= tick) return new Map(records)
+
+  const shift = soonest - tick
+  const next = new Map<string, CardRecord>()
+  for (const [id, record] of records) {
+    const shown = record.shown < 0 ? -1 : record.shown - shift
+    next.set(id, { box: record.box, due: record.due - shift, shown: shown < -1 ? -1 : shown })
   }
 
-  return tick
+  return next
 }
 
 /** `got` moves up one box, to the top at most. `miss` goes back to box 1. Both count from wait `tick`. */

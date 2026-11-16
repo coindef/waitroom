@@ -19,8 +19,8 @@ import {
   parseDeck,
   PROGRESS_UNREAD,
   pickNext,
+  realignRecords,
   recordFromStore,
-  recoveredTick,
   shownRecord,
   statusFor,
   toStored,
@@ -83,34 +83,30 @@ const readValue = async ($: EngineInterface, key: string): Promise<Read> => {
   }
 }
 
-type TickRead = { ok: false } | { ok: true; value: number; recover: boolean }
+type TickRead = { ok: false } | { ok: true; value: number; corrupt: boolean }
 
 /**
  * Waits shown so far.
  *
  * A missing key is wait 0. A value that is present but unreadable (wrong `v`,
- * a bad or negative `n`) is `recover`: the caller starts again from the cards,
- * not from 0, so their dues are not all in the future. A thrown read is
+ * a bad or negative `n`) is `corrupt`: the counter resets to 0 and the caller
+ * pulls every saved due wait with it, so a card still shows. A thrown read is
  * `ok: false` and is not either of those.
  */
 const readTick = async ($: EngineInterface): Promise<TickRead> => {
   const read = await readValue($, TICK_KEY)
   if (!read.ok) return { ok: false }
   const raw = read.value
-  if (raw === undefined) return { ok: true, value: 0, recover: false }
-  if (typeof raw !== 'object' || raw === null) return { ok: true, value: 0, recover: true }
+  if (raw === undefined) return { ok: true, value: 0, corrupt: false }
+  if (typeof raw !== 'object' || raw === null) return { ok: true, value: 0, corrupt: true }
   const row = raw as { v?: unknown; n?: unknown }
   const n = row.n
   if (row.v !== 1 || typeof n !== 'number' || !Number.isInteger(n) || n < 0) {
-    return { ok: true, value: 0, recover: true }
+    return { ok: true, value: 0, corrupt: true }
   }
 
-  return { ok: true, value: n, recover: false }
+  return { ok: true, value: n, corrupt: false }
 }
-
-/** A readable tick is itself. An unreadable one continues from the saved cards. */
-const tickNow = (tickRead: { value: number; recover: boolean }, records: ReadonlyMap<string, CardRecord>): number =>
-  tickRead.recover ? recoveredTick(records.values()) : tickRead.value
 
 /**
  * One record per card that still reads as one this mod wrote.
@@ -166,8 +162,16 @@ const ask = async ($: EngineInterface, memory: Memory): Promise<void> => {
   if (!tickRead.ok) return
   const recordsRead = await readRecords($, deck.cards)
   if (!recordsRead.ok) return
-  const tick = tickNow(tickRead, recordsRead.value)
-  const card = pickNext(deck.cards, recordsRead.value, tick)
+  const tick = tickRead.value
+  // Write the shifted dues before the tick, so a crash in between realigns
+  // once more instead of leaving every due in the future of a fresh 0.
+  const records = tickRead.corrupt ? realignRecords(recordsRead.value, tick) : recordsRead.value
+  if (tickRead.corrupt) {
+    for (const [id, record] of records) {
+      await $.store.set(cardKey(id), toStored(record)).catch(() => undefined)
+    }
+  }
+  const card = pickNext(deck.cards, records, tick)
   // The wait still counts when nothing is due, or the promised gap never elapses.
   if (card === undefined) {
     await $.store.set(TICK_KEY, { v: 1, n: tick + 1 }).catch(() => undefined)
@@ -216,8 +220,9 @@ const describe = async ($: EngineInterface): Promise<string> => {
   if (!tickRead.ok) return PROGRESS_UNREAD
   const recordsRead = await readRecords($, deck.cards)
   if (!recordsRead.ok) return PROGRESS_UNREAD
+  const records = tickRead.corrupt ? realignRecords(recordsRead.value, tickRead.value) : recordsRead.value
 
-  return deckLine(deck, dueCount(deck.cards, recordsRead.value, tickNow(tickRead, recordsRead.value)))
+  return deckLine(deck, dueCount(deck.cards, records, tickRead.value))
 }
 
 export const register: Register = on => {
