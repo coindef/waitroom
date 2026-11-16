@@ -3,6 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import {
   BAND_PRECEDENCE,
   cardFor,
+  chooseScope,
   DISABLE_LABEL,
   DISMISS_LABEL,
   drawnBy,
@@ -31,6 +32,9 @@ import {
   turnedOffLine,
   turnedOffLocallyLine,
   turnedOnLine,
+  turnedOnUnreadLine,
+  UNREADABLE_KEPT,
+  UNREADABLE_SKIPPED,
   withEdit,
   withHints,
   yieldsBand,
@@ -85,23 +89,36 @@ test('a glob keeps * inside one folder, ** across folders, and ? to one characte
   expect(globCovers('*.map', 'axmap')).toBe(false)
 })
 
-test('a glob that names a folder covers everything inside it, and only that folder', () => {
+test('a glob that names a folder covers everything inside it, and * stays in that one folder', () => {
   expect(globCovers('src/auth', 'src/auth/login.ts')).toBe(true)
   expect(globCovers('src/auth', 'src/auth/deep/session.ts')).toBe(true)
   expect(globCovers('src/auth', 'src/auth')).toBe(true)
   expect(globCovers('src/auth', 'src/authz/login.ts')).toBe(false)
-  expect(globCovers('src/*', 'src/auth/login.ts')).toBe(true)
   expect(globCovers('docs', 'docsite/index.md')).toBe(false)
+  // `*` is the top level only. `src/*` is the files directly in src, not a folder name.
+  expect(globCovers('*', 'README.md')).toBe(true)
+  expect(globCovers('*', 'src/a.ts')).toBe(false)
+  expect(globCovers('*', 'src/auth/login.ts')).toBe(false)
+  expect(globCovers('src/*', 'src/a.ts')).toBe(true)
+  expect(globCovers('src/*', 'src/auth')).toBe(true)
+  expect(globCovers('src/*', 'src/auth/login.ts')).toBe(false)
 })
 
-test('a scope reads one glob per line or comma, drops blanks and # comments, and anchors ./ and / at the root', () => {
+test('a scope file is one glob per line, and a comma in the setting separates globs', () => {
   expect(parseGlobs('# what this task touches\nsrc/auth/**\n\n  docs/guide.md  \n./tests/auth/**\n/README.md\n')).toEqual([
     'src/auth/**',
     'docs/guide.md',
     'tests/auth/**',
     'README.md',
   ])
-  expect(parseGlobs('src/**, docs')).toEqual(['src/**', 'docs'])
+  // A comma stays on the line, so a brace glob is one pattern and matches either name.
+  expect(parseGlobs('src/**/*.{ts,tsx}\n')).toEqual(['src/**/*.{ts,tsx}'])
+  expect(globCovers('src/**/*.{ts,tsx}', 'src/a.ts')).toBe(true)
+  expect(globCovers('src/**/*.{ts,tsx}', 'src/a.tsx')).toBe(true)
+  expect(globCovers('src/**/*.{ts,tsx}', 'src/auth/a.ts')).toBe(true)
+  expect(globCovers('src/**/*.{ts,tsx}', 'src/a.js')).toBe(false)
+  expect(resolveScope('src/**/*.{ts,tsx}\n', 'docs')).toEqual({ source: 'file', globs: ['src/**/*.{ts,tsx}'] })
+  expect(resolveScope(undefined, 'src/**, docs')).toEqual({ source: 'setting', globs: ['src/**', 'docs'] })
   expect(parseGlobs('src/auth/')).toEqual(['src/auth'])
   expect(parseGlobs('# a, b\r\nlib/**\r\n')).toEqual(['lib/**'])
   expect(parseGlobs('src\\auth\\**')).toEqual(['src/auth/**'])
@@ -124,6 +141,34 @@ test('inside the scope is inside the root and under a glob: ** covers the projec
   expect(inScope('any/folder/at/all.ts', ['**'])).toBe(true)
   expect(inScope('/tmp/scratch.ts', ['**'])).toBe(false)
   expect(inScope('src/a.ts', [])).toBe(false)
+})
+
+test('a scope file that cannot be read keeps the last scope, or skips the turn', () => {
+  const last = scoped('src/**')
+
+  expect(chooseScope({ kind: 'unreadable' }, 'docs/**', last)).toEqual({
+    scope: last,
+    notice: UNREADABLE_KEPT,
+    remembered: last,
+  })
+  expect(chooseScope({ kind: 'unreadable' }, 'docs/**', undefined)).toEqual({
+    scope: undefined,
+    notice: UNREADABLE_SKIPPED,
+    remembered: undefined,
+  })
+  expect(chooseScope({ kind: 'missing' }, 'docs/**', last)).toEqual({
+    scope: fromSetting('docs/**'),
+    notice: undefined,
+    remembered: undefined,
+  })
+  expect(chooseScope({ kind: 'text', text: 'lib/**\n' }, 'docs/**', last)).toEqual({
+    scope: scoped('lib/**'),
+    notice: undefined,
+    remembered: scoped('lib/**'),
+  })
+  expect(chooseScope({ kind: 'text', text: '# none\n' }, '', last).scope).toEqual(noScope)
+  expect(UNREADABLE_KEPT).toBe("can't read .claude/wait-scope · still using the last scope")
+  expect(UNREADABLE_SKIPPED).toBe("can't read .claude/wait-scope · this turn was not checked")
 })
 
 test('the project file wins, the setting stands in without one, and neither is no scope', () => {
@@ -266,6 +311,49 @@ test('a glob in the prompt is a glob, and a bare one reaches into every folder',
   expect(outsideOf(turn)).toEqual(['src/a.ts'])
 })
 
+test('a glob typed in the prompt is read against the project root the way an edited path is', () => {
+  const atRoot = (root: string, prompt: string, edits: readonly string[]): ScopeTurn => {
+    const started = startTurn({ turnId: 'turn-glob', root, scope: noScope, hints: hintsFrom(prompt, root) })
+    const edited = edits.reduce((turn, path) => withEdit(turn, path), started)
+
+    return { ...edited, isDone: true }
+  }
+
+  expect(hintsFrom('check ./src/../lib/*.ts', '/repo')).toEqual([{ kind: 'glob', value: 'lib/*.ts' }])
+  expect(outsideOf(atRoot('/repo', 'check ./src/../lib/*.ts', ['/repo/lib/a.ts', '/repo/src/b.ts']))).toEqual(['src/b.ts'])
+  expect(hintsFrom('see /private/tmp/repo/src/*.ts', '/tmp/repo')).toEqual([{ kind: 'glob', value: 'src/*.ts' }])
+  expect(outsideOf(atRoot('/tmp/repo', 'see /private/tmp/repo/src/*.ts', ['/tmp/repo/src/a.ts', '/tmp/repo/lib/b.ts']))).toEqual([
+    'lib/b.ts',
+  ])
+  expect(hintsFrom('open C:/repo/src/*.ts', 'c:/repo')).toEqual([{ kind: 'glob', value: 'src/*.ts' }])
+  expect(outsideOf(atRoot('c:/repo', 'open C:/repo/src/*.ts', ['C:/repo/src/a.ts', 'C:/repo/lib/b.ts']))).toEqual(['lib/b.ts'])
+})
+
+test('a guess does not cover a file outside the project root', () => {
+  const turn = turnOf(noScope, 'every *.md file and README.md', [
+    '/tmp/notes.md',
+    '/tmp/README.md',
+    at('docs/a.md'),
+    at('src/a.ts'),
+  ])
+
+  expect(outsideOf(turn)).toEqual(['/tmp/notes.md', '/tmp/README.md', 'src/a.ts'])
+})
+
+test('a two-segment folder in the prompt is a folder, and a word pair is not', () => {
+  expect(mentionsIn('fix src/auth and edit lib/utils')).toEqual(['src/auth', 'lib/utils'])
+  expect(mentionsIn('and/or on/off read/write TCP/IP 1/2')).toEqual([])
+
+  const turn = turnOf(noScope, 'fix src/auth', [
+    at('src/auth/login.ts'),
+    at('src/auth/deep/session.ts'),
+    at('package.json'),
+    at('src/other.ts'),
+  ])
+  expect(turn.hints).toEqual([{ kind: 'path', value: 'src/auth' }])
+  expect(outsideOf(turn)).toEqual(['package.json', 'src/other.ts'])
+})
+
 test('the guesses are listed as (guess) once the turn ends, and never reach the status line', () => {
   const turn = turnOf(noScope, 'Fix the retry in src/client/retry.ts', [
     at('src/client/retry.ts'),
@@ -383,7 +471,14 @@ test('the command lines name the scope, do not lead with the plugin name, and of
     'still off · the setting did not change (a managed setting owns it) · ' +
       '/plugin → wait-scope → Warn when a turn edits outside the scope',
   )
-  const lines = [turnedOnLine(noScope), turnedOffLine(), turnedOffLocallyLine('locked'), toggleRefusedLine('locked')]
+  expect(turnedOnUnreadLine()).toBe("on · can't read .claude/wait-scope · /wait-scope turns it off")
+  const lines = [
+    turnedOnLine(noScope),
+    turnedOffLine(),
+    turnedOffLocallyLine('locked'),
+    toggleRefusedLine('locked'),
+    turnedOnUnreadLine(),
+  ]
   for (const line of lines) {
     // The engine prints `wait-scope:` in front. The settings path may name it; the line must not.
     expect(line).not.toMatch(/^wait-scope\b/)
