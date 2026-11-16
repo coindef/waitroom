@@ -74,11 +74,27 @@ const revision = atom({ plugin: 'bet-on-your-agent', key: 'revision' } as const,
 const badgeNote = atom({ plugin: 'bet-on-your-agent', key: 'badgeNote' } as const, null as string | null)
 /** How many turns have offered a bonus question so far; drives the rotation. */
 const bonusRotation = atom({ plugin: 'bet-on-your-agent', key: 'bonusRotation' } as const, 0)
-/** When this session began, for the recap card's "this session". */
+/** When this session began, for the recap card's "this session" when it has no id. */
 const sessionStartedAt = atom(
   { plugin: 'bet-on-your-agent', key: 'sessionStartedAt' } as const,
   null as number | null,
 )
+
+/**
+ * The id of the session now running, or undefined when the host has none.
+ *
+ * A throw is the same as none: the recap then falls back to the start time,
+ * and a turn is recorded without an id rather than not recorded.
+ */
+const sessionIdOf = async ($: EngineInterface): Promise<string | undefined> => {
+  try {
+    const id = await $.session.id()
+
+    return typeof id === 'string' && id !== '' ? id : undefined
+  } catch {
+    return undefined
+  }
+}
 
 type Config = { autoOpen: boolean }
 
@@ -308,13 +324,15 @@ const undoLastVerdict = async ($: EngineInterface) => {
 const noteFile = async ($: EngineInterface, path: string | undefined) => {
   if (path === undefined || path === '') return
   await update($, open, bet =>
-    bet.files.includes(path) ? bet : { ...bet, files: [...bet.files, path].slice(-200) },
+    bet.files.includes(path) ? bet : { ...bet, files: [...bet.files, path].slice(-WORKTREE_LIMIT) },
   )
 }
 
 /**
- * Counts every tool call the turn makes, whichever tool and whether or not it
- * was denied — the bonus question asks "how many", not "how many that ran".
+ * Counts one tool call on the open main turn, whichever tool and whether or
+ * not it was denied — the bonus question asks "how many", not "how many that
+ * ran". The caller leaves out a call that carries an agentId: that call is a
+ * subagent's, not this turn's.
  */
 const noteToolCall = async ($: EngineInterface) => {
   await update($, open, bet => ({ ...bet, toolCalls: bet.toolCalls + 1 }))
@@ -331,38 +349,79 @@ const WORKTREE_LIMIT = 500
 const runGit = async ($: EngineInterface, argv: readonly string[], cwd?: string) =>
   $.process.run(['git', ...argv], { cwd, timeoutMs: 15000 }).catch(() => undefined)
 
+/** Hashes git returned, and paths a call did not answer for. */
+type PresentHashes = { hashes: Map<string, string>; unread: Set<string> }
+
+const hashesOf = (paths: readonly string[], stdout: string) => {
+  const lines = stdout.split('\n')
+
+  return new Map(paths.map((path, at) => [path, lines[at] ?? '']))
+}
+
+/**
+ * Isolates paths git refuses without one `hash-object` per file.
+ *
+ * A call that does not answer marks its paths unread and stops. Splitting it
+ * would wait out the timeout again for each half.
+ */
+const hashSplit = async (
+  $: EngineInterface,
+  root: string,
+  paths: readonly string[],
+  hashes: Map<string, string>,
+  unread: Set<string>,
+): Promise<boolean> => {
+  if (paths.length === 0) return false
+  const ran = await runGit($, ['hash-object', '--', ...paths], root)
+  if (ran === undefined) {
+    for (const path of paths) unread.add(path)
+
+    return true
+  }
+  if (ran.exitCode === 0) {
+    for (const [path, hash] of hashesOf(paths, ran.stdout)) hashes.set(path, hash)
+
+    return true
+  }
+  if (paths.length === 1) return true
+  const mid = Math.ceil(paths.length / 2)
+  const [left, right] = await Promise.all([
+    hashSplit($, root, paths.slice(0, mid), hashes, unread),
+    hashSplit($, root, paths.slice(mid), hashes, unread),
+  ])
+
+  return left || right
+}
+
 /**
  * Content hashes for the paths still in the tree.
  *
  * One `hash-object` covers the lot. When any path in that call cannot be
  * hashed — a nested repository, a worktree — git exits non-zero for the
- * whole call, so the paths are hashed one at a time and only the one git
- * refuses is left out. Undefined only when git does not answer at all.
+ * whole call, so the list is split until the path git refuses is left out.
+ * A call that does not answer leaves those paths unread. Undefined only when
+ * the whole look gets no answer at all.
  */
 const hashPresent = async (
   $: EngineInterface,
   root: string,
   present: readonly string[],
-): Promise<Map<string, string> | undefined> => {
-  if (present.length === 0) return new Map()
+): Promise<PresentHashes | undefined> => {
+  if (present.length === 0) return { hashes: new Map(), unread: new Set() }
   const all = await runGit($, ['hash-object', '--', ...present], root)
   if (all === undefined) return undefined
-  if (all.exitCode === 0) {
-    const lines = all.stdout.split('\n')
+  if (all.exitCode === 0) return { hashes: hashesOf(present, all.stdout), unread: new Set() }
+  if (present.length === 1) return { hashes: new Map(), unread: new Set() }
+  const hashes = new Map<string, string>()
+  const unread = new Set<string>()
+  const mid = Math.ceil(present.length / 2)
+  const [left, right] = await Promise.all([
+    hashSplit($, root, present.slice(0, mid), hashes, unread),
+    hashSplit($, root, present.slice(mid), hashes, unread),
+  ])
+  if (!left && !right && hashes.size === 0 && unread.size === 0) return undefined
 
-    return new Map(present.map((path, at) => [path, lines[at] ?? '']))
-  }
-  const hashed = new Map<string, string>()
-  let answered = false
-  for (const path of present) {
-    const one = await runGit($, ['hash-object', '--', path], root)
-    if (one === undefined) continue
-    answered = true
-    if (one.exitCode !== 0) continue
-    hashed.set(path, one.stdout.split('\n')[0] ?? '')
-  }
-
-  return answered ? hashed : undefined
+  return { hashes, unread }
 }
 
 /**
@@ -373,10 +432,12 @@ const hashPresent = async (
  * paths than `WORKTREE_LIMIT` — changed or untracked, not only this turn's.
  * A first look that returns that is no baseline, and the tool calls are the
  * count. A later look, against a baseline already taken, means the count can
- * no longer be read.
+ * no longer be read. `kept` is that baseline: a path whose hash did not come
+ * back keeps it, so a timeout is not counted as a write.
  */
 const lookAtWorktree = async (
   $: EngineInterface,
+  kept?: Readonly<Record<string, string>>,
 ): Promise<Record<string, string> | 'untrusted' | undefined> => {
   const top = await runGit($, ['rev-parse', '--show-toplevel'])
   const root = top?.exitCode === 0 ? top.stdout.trim() : ''
@@ -390,13 +451,20 @@ const lookAtWorktree = async (
   if (hashed === undefined) return undefined
   const look: Record<string, string> = {}
   for (const one of entries) {
+    const full = `${root}/${one.path}`
     if (one.isDeleted) {
-      look[`${root}/${one.path}`] = 'deleted'
+      look[full] = 'deleted'
       continue
     }
-    const hash = hashed.get(one.path)
-    if (hash === undefined) continue
-    look[`${root}/${one.path}`] = hash
+    const hash = hashed.hashes.get(one.path)
+    if (hash !== undefined) {
+      look[full] = hash
+      continue
+    }
+    // No answer for this path. Dropping it would look like the file was
+    // changed back. Keep the hash from the turn's baseline when there is one.
+    const keptHash = kept?.[full]
+    if (hashed.unread.has(one.path) && typeof keptHash === 'string') look[full] = keptHash
   }
 
   return look
@@ -413,7 +481,7 @@ const lookAtWorktree = async (
 const noteWorktreeFiles = async ($: EngineInterface) => {
   const { baseline, filesUnknown } = await read($, open)
   if (filesUnknown === true || baseline === undefined) return
-  const now = await lookAtWorktree($)
+  const now = await lookAtWorktree($, baseline)
   if (now === 'untrusted') {
     await update($, open, bet => ({ ...bet, filesUnknown: true as const }))
 
@@ -424,7 +492,7 @@ const noteWorktreeFiles = async ($: EngineInterface) => {
   await update($, open, bet => {
     const added = moved.filter(path => !bet.files.includes(path))
 
-    return added.length === 0 ? bet : { ...bet, files: [...bet.files, ...added].slice(-200) }
+    return added.length === 0 ? bet : { ...bet, files: [...bet.files, ...added].slice(-WORKTREE_LIMIT) }
   })
 }
 
@@ -467,7 +535,15 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'bet-recap' }, async ($, e) => {
     const all = (await loadTurns($)) ?? []
     const startedAt = await read($, sessionStartedAt)
-    const session = startedAt === null ? all : all.filter(one => one.at >= startedAt)
+    const sessionId = await sessionIdOf($)
+    // Another window writes the same store. A record made after this session
+    // began is not this session's; the id is what says whose it is.
+    const session =
+      sessionId === undefined
+        ? startedAt === null
+          ? all
+          : all.filter(one => one.at >= startedAt)
+        : all.filter(one => one.sessionId === sessionId)
     const dailyChallenges = await loadDailyChallenges($)
     const today = localDateKey(await $.clock.now())
     const recap = recapOf(session, all, dailyChallenges, today, await extrasWait($))
@@ -499,6 +575,7 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   // A failed command can still have written files, so only a denied one is skipped.
+  // A subagent's shell counts here too: the question is how many files the turn touches.
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     const ran = await next(e)
     if (!ran.deny) await noteWorktreeFiles($)
@@ -506,11 +583,12 @@ export const register: Register = (on, options) => {
     return ran
   }).catch(($, e, next) => next(e))
 
-  // Unfiltered: every tool the turn calls, not only the ones the hooks above
-  // already watch for files, is a tool call toward the bonus question.
+  // Unfiltered: every tool the main turn calls, not only the ones the hooks
+  // above already watch for files, is a tool call toward the bonus question.
+  // A call with an agentId is a subagent's and stays off this turn's count.
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
-    await noteToolCall($)
+    if (e.agentId === undefined) await noteToolCall($)
 
     return ran
   }).catch(($, e, next) => next(e))
@@ -576,6 +654,7 @@ export const register: Register = (on, options) => {
       dim !== undefined && !(filesUnknown && dim === 'files')
         ? bonusBucketOf(dim, dim === 'duration' ? e.durationMs : dim === 'files' ? files : bet.toolCalls)
         : undefined
+    const sessionId = await sessionIdOf($)
     const record: TurnRecord = {
       turnId: e.turnId,
       at: await $.clock.now(),
@@ -584,6 +663,7 @@ export const register: Register = (on, options) => {
       filesBucket: bucketOf(files),
       ...(filesUnknown ? { filesUnknown: true as const } : {}),
       toolCalls: isThisTurn ? bet.toolCalls : 0,
+      ...(sessionId === undefined ? {} : { sessionId }),
       isAborted: e.isAborted,
       ...(ask === '' ? {} : { ask }),
       ...(isThisTurn && bet.saidConfidence !== undefined

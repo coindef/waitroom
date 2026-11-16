@@ -1046,8 +1046,8 @@ export type Recap = {
  *
  * `rank` and `badges` read `all` the history, not `session` alone: a rank
  * and a badge wall are who you are right now, not something that resets at
- * midnight. Everything else is scoped to `session`, the records since this
- * session began.
+ * midnight. Everything else is scoped to `session`, the records from this
+ * session.
  */
 export const recapOf = (
   session: readonly TurnRecord[],
