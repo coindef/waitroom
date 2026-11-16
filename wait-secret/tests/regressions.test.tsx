@@ -12,7 +12,7 @@ import { GITHUB, OPENAI } from './fake'
 
 const ROOT = '/repo'
 const TITLE = 'Possible secrets in what this turn wrote'
-const TOO_BIG = 'diff too big to scan fully'
+const TOO_BIG = 'diff too big · /wait-secret turns it off'
 const UNREAD = "couldn't finish scanning this turn's changes"
 const RANGE_UNREAD = "couldn't scan what this turn committed"
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'

@@ -55,8 +55,8 @@ test('the turn-off hint is appended only when the status line still fits', () =>
   expect(withTurnOff(fitted)).toBe(`${fitted}${TURN_OFF_HINT}`)
   expect(withTurnOff(fitted).length).toBe(STATUS_COLUMNS)
   expect(withTurnOff(over)).toBe(over)
-  expect(`${DIFF_TOO_BIG}${TURN_OFF_HINT}`.length).toBeGreaterThan(STATUS_COLUMNS)
-  expect(withTurnOff(DIFF_TOO_BIG)).toBe(DIFF_TOO_BIG)
+  expect(withTurnOff(DIFF_TOO_BIG)).toBe('diff too big · /wait-secret turns it off')
+  expect(withTurnOff(DIFF_TOO_BIG).length).toBeLessThanOrEqual(STATUS_COLUMNS)
 })
 
 test('ten rules at most', () => {

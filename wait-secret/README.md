@@ -73,10 +73,10 @@ It sees what git sees. A file git ignores (a `.env` in `.gitignore`, say) is
 not read, which is also a file that will not be committed. Outside a git
 repository it stays silent. A diff too big for one read, or a read git does
 not finish, is named on the status line instead of being treated as empty or
-as clean. That line stays up after every turn while the diff stays too big;
-`/wait-secret` turns the warning off. More than 100 new files is the same
-kind of stop (`scanned 100 of 5000 new files`), not a finished scan. Patterns
-are a guess: a key in an unusual format is missed, and a
+as clean. A diff too big shows `diff too big · /wait-secret turns it off`, and
+that line stays up after every turn while the diff stays too big. More than
+100 new files is the same kind of stop (`scanned 100 of 5000 new files`), not
+a finished scan. Patterns are a guess: a key in an unusual format is missed, and a
 random-looking test fixture is flagged.
 
 ## What it never does

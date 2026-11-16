@@ -35,7 +35,7 @@ export const statusLine = (count: number): string | undefined =>
   count === 0 ? undefined : `${count} possible secret${count === 1 ? '' : 's'}`
 
 /** The diff was longer than the host returns, so the part we hold is not the whole tree. */
-export const DIFF_TOO_BIG = 'diff too big to scan fully'
+export const DIFF_TOO_BIG = 'diff too big'
 
 /** The status line's own text. The host draws its prefix outside these columns. */
 export const STATUS_COLUMNS = 48
