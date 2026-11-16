@@ -24,6 +24,17 @@ export type Baseline = {
   turnId: string
   ok: boolean
   seen: Readonly<Record<string, readonly string[]>>
+  /**
+   * `git rev-parse HEAD` at the start of the turn, or the empty tree when
+   * the repository had no commit yet. Absent when that revision could not
+   * be read. The end of the turn diffs this through HEAD, so a commit made
+   * in the turn is still scanned.
+   */
+  startRev?: string
+  /** True when `startRev` is the empty tree because HEAD did not exist yet. */
+  unborn?: boolean
+  /** Why the start read was not a finished tree. A partial read is never `ok`. */
+  gap?: string
 }
 
 /** One line that looks like a secret: where, the masked value, and a guess at what it is. Never the value itself. */
@@ -35,6 +46,11 @@ export type SecretCard = {
   hits: readonly Hit[]
   /** Hits past the glance cap; the card says `N more…` for this. */
   overflow: number
+  /**
+   * Set when this turn's scan was not finished. The status line says this
+   * and the list is not drawn: a partial diff is not shown as the result.
+   */
+  gap?: string
 }
 
 declare module 'claude-code' {
