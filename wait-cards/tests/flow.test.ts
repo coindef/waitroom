@@ -441,3 +441,40 @@ test('/card says when the deck was capped or cut', async ($, on) => {
     '1 card · deck cut at 256 KiB · 1 due · mark an answer with /card got or /card miss',
   )
 })
+
+test('a bad tick continues from the cards, so a far due wait is not a silent deck', async ($, on) => {
+  const one = `card/${cardId('one')}`
+  const two = `card/${cardId('two')}`
+  const { said, store } = engineBottom(on, {
+    deck: 'Q: one\nA: 1\n\nQ: two\nA: 2\n',
+    store: {
+      tick: { v: 1, n: 'oops' },
+      [one]: { v: 1, box: 2, due: 2001, shown: 1999 },
+      [two]: { v: 1, box: 2, due: 2003, shown: 2001 },
+    },
+  })
+  await start($)
+  expect(await card($, '')).toBe('2 cards · 1 due · mark an answer with /card got or /card miss')
+  await $.turn.start(begin('t1'))
+  expect(said.at(-1)).toBe('Q: one')
+  expect(store.tick).toEqual({ v: 1, n: 2003 })
+  expect(store[one]).toEqual({ v: 1, box: 2, due: 2001, shown: 2002 })
+  expect(store[two]).toEqual({ v: 1, box: 2, due: 2003, shown: 2001 })
+})
+
+test('/card says the progress could not be read, and writes nothing', async ($, on) => {
+  const key = `card/${cardId('only')}`
+  const saved = {
+    tick: { v: 1, n: 7 },
+    [key]: { v: 1, box: 3, due: 12, shown: 4 },
+  }
+  const { store } = engineBottom(on, {
+    deck: 'Q: only\nA: one\n',
+    store: saved,
+    failStoreGet: () => true,
+  })
+  await start($)
+  expect(await card($, '')).toBe("couldn't read your progress · nothing was changed · try /card again")
+  expect(store.tick).toEqual({ v: 1, n: 7 })
+  expect(store[key]).toEqual({ v: 1, box: 3, due: 12, shown: 4 })
+})

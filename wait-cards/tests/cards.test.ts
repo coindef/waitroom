@@ -17,6 +17,7 @@ import {
   parseDeck,
   pickNext,
   recordFromStore,
+  recoveredTick,
   sanitize,
   shownRecord,
   statusFor,
@@ -283,6 +284,14 @@ test('a stored record this mod did not write is a new card', () => {
   expect(recordFromStore({ v: 1, box: 2, due: 1, shown: -2 })).toBeUndefined()
   expect(recordFromStore({ v: 1, box: 1, due: 0, shown: -1 })).toEqual({ box: 1, due: 0, shown: -1 })
   expect(recordFromStore({ v: 1, box: 2, due: 4, shown: 3 })).toEqual({ box: 2, due: 4, shown: 3 })
+})
+
+test('a recovered tick is one past the latest wait the cards imply, and 0 with none', () => {
+  expect(recoveredTick([])).toBe(0)
+  expect(recoveredTick([
+    { box: 2, due: 2001, shown: 1999 },
+    { box: 2, due: 2003, shown: 2001 },
+  ])).toBe(2002)
 })
 
 test('the status line is the question after Q:, cut at 48 columns on a character boundary', () => {

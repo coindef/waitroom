@@ -53,6 +53,8 @@ A: Where HEAD has been, so you can find a commit you lost. · /card got or /card
 
 Marking is optional. A card you don't mark keeps its place. A card shows when it is due. When none is due, the line stays clear. Marking a card that was not due does not move its box, and the reply names the waits still left. `/card got` on a card that was due waits 2, then 4, then 8, then 16.
 
+If the saved count of waits isn't a real number, the deck continues from the cards you already have, so the line does not stay clear for the old count. If that progress can't be read at all, `/card` says so and nothing is changed.
+
 If two sessions mark the same card, the last mark wins. Editing an answer keeps the card's progress. Editing a question starts a new card; paste the old question back and its box returns. A card you delete keeps its record, so pasting it back brings its box too.
 
 With no deck, the first turn shows `Add cards to ~/.waitroom/cards.md` once, then it stays quiet.
@@ -67,5 +69,5 @@ With no deck, the first turn shows `Add cards to ~/.waitroom/cards.md` once, the
 
 ```sh
 claude plugin validate ./wait-cards
-claude plugin test     ./wait-cards   # 52 tests
+claude plugin test     ./wait-cards   # 55 tests
 ```

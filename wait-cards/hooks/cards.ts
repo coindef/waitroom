@@ -382,6 +382,25 @@ export const newRecord = (): CardRecord => ({ box: 1, due: 0, shown: -1 })
 
 const intervalOf = (box: number): number => INTERVALS[Math.min(TOP_BOX, Math.max(1, box)) - 1] ?? 1
 
+/**
+ * The next wait after the latest one the saved cards imply.
+ *
+ * Used when a tick is present but unreadable. Starting over at 0 would leave
+ * every real `due` in the future, and the line would stay clear until the
+ * count caught up. `due` minus the box's interval is the wait the card was
+ * marked; `shown` is the wait it was on screen. Continue from one past the
+ * later of those.
+ */
+export const recoveredTick = (records: Iterable<CardRecord>): number => {
+  let tick = 0
+  for (const record of records) {
+    const activity = Math.max(record.shown, record.due - intervalOf(record.box))
+    tick = Math.max(tick, activity + 1)
+  }
+
+  return tick
+}
+
 /** `got` moves up one box, to the top at most. `miss` goes back to box 1. Both count from wait `tick`. */
 export const markCard = (record: CardRecord, mark: Mark, tick: number): CardRecord => {
   const box = mark === 'got' ? Math.min(TOP_BOX, record.box + 1) : 1
@@ -484,6 +503,9 @@ export const NOTHING_TO_MARK = 'no card to mark yet · the answer shows when a t
 export const NO_DECK = `no deck yet · ${HINT}`
 
 export const NO_CARDS = 'no cards in ~/.waitroom/cards.md yet · write a Q: line, then an A: line'
+
+/** `/card` when the saved progress cannot be read. Nothing was written. */
+export const PROGRESS_UNREAD = "couldn't read your progress · nothing was changed · try /card again"
 
 /** The `/card` reply when the deck file is there but can't be read. */
 export const CANT_READ = "can't read ~/.waitroom/cards.md"
