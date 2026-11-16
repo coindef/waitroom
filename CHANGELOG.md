@@ -10,6 +10,11 @@
 - **The file forecast counts a turn that wrote files another way.** `session.diff`, `apply_patch` text, a `patch` message part, and, when the diff call is missing, `git status`. A tool part that errors counts once, the same as one that completes.
 - **The band repaints.** The open bet and the rank-up line live in a Solid store the slot reads while it renders.
 
+### wait-notify 0.1.1
+
+- **The reminder waits for your answer.** A quick Read or a subagent's tool finishing alongside the one you're answering no longer cancels it.
+- **A session you ended stays ended.** A prompt sent right as you exit or `/clear` no longer makes other sessions think it's still open.
+
 ### wait-anchor 0.1.1
 
 - **A turn ending no longer brings back an older note.** If you clear or replace the note while a turn is ending, your change stays.
