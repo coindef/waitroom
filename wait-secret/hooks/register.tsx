@@ -15,6 +15,7 @@ import {
   rowLine,
   DIFF_TOO_BIG,
   partialFilesLine,
+  withTurnOff,
   RANGE_UNREAD,
   SCAN_UNREAD,
   statusLine,
@@ -256,7 +257,13 @@ const ensurePref = ($: EngineInterface): Promise<void> => {
 const showStatus = async ($: EngineInterface) => {
   try {
     const now = silenced() ? null : await read($, card)
-    $.ui.status(now === null ? undefined : (now.gap ?? statusLine(now.hits.length + now.overflow)))
+    const line =
+      now === null
+        ? undefined
+        : now.gap === DIFF_TOO_BIG
+          ? withTurnOff(now.gap)
+          : (now.gap ?? statusLine(now.hits.length + now.overflow))
+    $.ui.status(line)
   } catch {
     // Nothing to do: the list is still right, only unshown.
   }
