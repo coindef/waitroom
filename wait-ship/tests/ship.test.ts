@@ -334,11 +334,22 @@ test('summaryBullets: each area reads its own change kind, not the whole diff\'s
   expect(bullets.some(line => line.startsWith('- Restructures code in removed'))).toBe(true)
 })
 
-test('summaryBullets keeps Removes when one directory both adds and deletes', () => {
-  const created: FileChange = { path: 'src/new.ts', added: 4, removed: 0, kind: 'added' }
+test('a deletion in a mixed directory is a removal, and it is not listed twice', () => {
+  const created: FileChange = { path: 'src/a.ts', added: 4, removed: 0, kind: 'added' }
   const gone: FileChange = { path: 'src/old.ts', added: 0, removed: 3, kind: 'deleted' }
-  const bullets = summaryBullets([created, gone])
-  expect(bullets.some(line => line === '- Removes src/old.ts.')).toBe(true)
+  const alone = summaryBullets([created, gone])
+  expect(alone).toContain('- Removes files in src (src/old.ts)')
+  expect(alone.some(line => line.startsWith('- Restructures code'))).toBe(false)
+  expect(alone.some(line => line === '- Removes src/old.ts.')).toBe(false)
+
+  const edited: FileChange = { path: 'src/count.ts', added: 2, removed: 1, kind: 'modified' }
+  const other: FileChange = { path: 'src/b.ts', added: 3, removed: 0, kind: 'added' }
+  const dropped: FileChange = { path: 'src/new.ts', added: 0, removed: 2, kind: 'deleted' }
+  const doc: FileChange = { path: 'docs/a.md', added: 2, removed: 0, kind: 'modified' }
+  const mixed = summaryBullets([created, other, edited, dropped, doc])
+  expect(mixed).toContain('- Removes files in src (src/new.ts)')
+  expect(mixed.some(line => line.includes('src/new.ts') && line.startsWith('- Restructures'))).toBe(false)
+  expect(mixed.filter(line => line.includes('src/new.ts')).length).toBe(1)
 })
 
 test('per-action summary bullets still leave the third directory and the test line', () => {

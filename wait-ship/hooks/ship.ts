@@ -545,12 +545,15 @@ const SUMMARY_LINE: Record<ConventionalType, (area: string) => string> = {
  * single kind the whole diff reads as: an area that only deleted files reads
  * as a removal even where another area in the same diff added a new one.
  * An area that both adds a file and edits one gets a bullet per action, so
- * the edit is not described as new functionality. Those extra bullets do not
- * take the place of a later area, the test-coverage line, or Removes.
+ * the edit is not described as new functionality. A deletion in that mix is
+ * a removal, not a restructure, and it is not listed again on a Removes
+ * line. Those extra bullets do not take the place of a later area or the
+ * test-coverage line.
  */
 export const summaryBullets = (files: readonly FileChange[]): string[] => {
   const areas = [...areasOf(files).entries()].sort(([a], [b]) => a.localeCompare(b)).slice(0, 4)
   const bullets: string[] = []
+  let namedRemoval = false
   for (const [area, items] of areas) {
     const where = area === '.' ? 'the repository root' : area
     const actions = byVerb(items)
@@ -558,9 +561,12 @@ export const summaryBullets = (files: readonly FileChange[]): string[] => {
     for (const action of actions) {
       const kind = typeOf(action.files)
       const line =
-        mixed && action.verb === 'update' && kind === 'fix'
-          ? `Updates existing files in ${where}`
-          : SUMMARY_LINE[kind](where)
+        mixed && action.verb === 'remove'
+          ? `Removes files in ${where}`
+          : mixed && action.verb === 'update' && kind === 'fix'
+            ? `Updates existing files in ${where}`
+            : SUMMARY_LINE[kind](where)
+      if (mixed && action.verb === 'remove') namedRemoval = true
       bullets.push(`- ${line} (${fileList(action.files)})`)
     }
   }
@@ -568,13 +574,14 @@ export const summaryBullets = (files: readonly FileChange[]): string[] => {
   const hasTests = files.some(one => isTestFile(one.path))
   const allTests = files.every(one => isTestFile(one.path))
   // Room for the test line and for Removes follows how many areas there are,
-  // not how many action bullets those areas grew into.
+  // not how many action bullets those areas grew into. A mixed directory
+  // already named its deletions, so Removes is not added a second time.
   const wantsTest = hasTests && !allTests && areas.length < 4
   if (wantsTest) bullets.push('- Includes test coverage for the change.')
 
   const deleted = files.filter(one => one.kind === 'deleted')
   const unsplit = areas.length + (wantsTest ? 1 : 0)
-  if (unsplit < 2 && deleted.length > 0) bullets.push(`- Removes ${fileList(deleted)}.`)
+  if (unsplit < 2 && deleted.length > 0 && !namedRemoval) bullets.push(`- Removes ${fileList(deleted)}.`)
 
   return bullets.length > 0 ? bullets : ['- No changes.']
 }
