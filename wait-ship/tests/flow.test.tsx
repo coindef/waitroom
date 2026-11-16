@@ -26,6 +26,37 @@ const NEW_FILE_DIFF = [
   '',
 ].join('\n')
 
+/** What `git ls-files` prints for these names when it is not passed `-z`. */
+const quotedByGit = (path: string): string => {
+  if (path === 'café.txt') return '"caf\\303\\251.txt"'
+  if (path === 'a "quoted" name.txt') return '"a \\"quoted\\" name.txt"'
+  return path
+}
+
+/** `git diff --no-index` of an untracked café.txt with core.quotePath=false. */
+const CAFE_DIFF = [
+  'diff --git café.txt café.txt',
+  'new file mode 100644',
+  'index 0000000..cc9df8c',
+  '--- /dev/null',
+  '+++ café.txt',
+  '@@ -0,0 +1 @@',
+  '+cafe line',
+  '',
+].join('\n')
+
+/** Same, for a name git still quotes because of the quotes in it. The tab is git's. */
+const QUOTED_DIFF = [
+  'diff --git "a \\"quoted\\" name.txt" "a \\"quoted\\" name.txt"',
+  'new file mode 100644',
+  'index 0000000..ae2644f',
+  '--- /dev/null',
+  '+++ "a \\"quoted\\" name.txt"\t',
+  '@@ -0,0 +1 @@',
+  '+quoted line',
+  '',
+].join('\n')
+
 /** A file the person edits by hand, not one a turn writes. */
 const NOTES_DIFF = [
   'diff --git notes.md notes.md',
@@ -107,10 +138,19 @@ const engineBottom = (on: On, repo: Repo, fs: Record<string, string> = {}, seen:
 
       return ran(repo.diffHead ?? '')
     }
-    if (argv.includes('ls-files')) return ran((repo.untracked ?? []).join('\n'))
+    if (e.argv.includes('ls-files')) {
+      const names = repo.untracked ?? []
+      // Without -z, git C-quotes odd names. -z is the raw bytes, NUL-separated.
+      if (!e.argv.includes('-z')) return ran(names.map(quotedByGit).join('\n'))
+
+      return ran(names.map(path => `${path}\0`).join(''))
+    }
     if (argv.includes('log -20')) return ran((repo.subjects ?? []).join('\n'))
-    for (const [path, text] of Object.entries(repo.untrackedDiffs ?? {})) {
-      if (argv.includes(`--no-index -- /dev/null ${path}`)) return ran(text, 1)
+    if (e.argv.includes('--no-index')) {
+      const path = e.argv.at(-1) ?? ''
+      const text = repo.untrackedDiffs?.[path]
+      // Exit 1 and a diff: the sides differ. Exit 1 and no stdout: the path did not open.
+      return text === undefined ? ran('', 1) : ran(text, 1)
     }
 
     return ran('')
@@ -261,7 +301,9 @@ test('every key only writes drafts: no git commit and no gh is ever run, only re
   expect(seen.runs.length).toBeGreaterThan(0)
   for (const argv of seen.runs) {
     expect(argv[0]).toBe('git')
-    expect(['rev-parse', 'diff', 'ls-files', 'log']).toContain(argv[1])
+    // `-c core.quotePath=false` may precede the subcommand. It is still a read.
+    const rest = argv[1] === '-c' ? argv.slice(3) : argv.slice(1)
+    expect(['rev-parse', 'diff', 'ls-files', 'log']).toContain(rest[0] ?? '')
   }
 })
 
@@ -485,6 +527,89 @@ test('untracked new files are picked up too, not only tracked changes', async ($
   await offering.unmount()
 
   expect(fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]).toContain('src/feature.ts')
+})
+
+test('untracked files whose names git would quote stay in the kit under their real names', async ($, on) => {
+  const cafe = 'café.txt'
+  const quoted = 'a "quoted" name.txt'
+  const seen: Seen = { runs: [], logged: [] }
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  const fs = engineBottom(on, repo, {}, seen)
+  await landTurn($, 'turn-quote', () => {
+    repo.untracked = [cafe, quoted, 'missing.txt']
+    repo.untrackedDiffs = { [cafe]: CAFE_DIFF, [quoted]: QUOTED_DIFF }
+  })
+
+  const offering = await mountBand($)
+  expect(await offering.find({ text: /Drafts ready/ })).toBeDefined()
+  await offering.press({ key: 'more' })
+  await offering.press({ key: 'commit' })
+  await offering.unmount()
+
+  const commit = fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`]
+  expect(commit).toContain(cafe)
+  expect(commit).toContain(quoted)
+  expect(commit).not.toContain('missing.txt')
+  expect(commit).not.toContain('\\303')
+  expect(seen.runs.some(argv => argv.includes('ls-files') && argv.includes('-z'))).toBe(true)
+  expect(seen.runs.some(argv => argv.includes('core.quotePath=false') && argv.includes('--no-ext-diff'))).toBe(true)
+  expect(seen.runs.some(argv => argv.at(-1) === cafe)).toBe(true)
+  expect(seen.runs.some(argv => argv.at(-1) === quoted)).toBe(true)
+})
+
+/** Git C-quoting of a name that holds ESC, a newline and U+202E. */
+const CONTROL_DIFF = [
+  'diff --git "esc\\033nl\\nrtl\\342\\200\\256.txt" "esc\\033nl\\nrtl\\342\\200\\256.txt"',
+  '--- /dev/null',
+  '+++ "esc\\033nl\\nrtl\\342\\200\\256.txt"',
+  '@@ -0,0 +1 @@',
+  '+one',
+  '',
+].join('\n')
+
+const SAFE_NAME = 'esc\\x1bnl\\nrtl\\u202e.txt'
+
+test('ESC, a newline and a bidi mark show up only as visible escapes in the row and the draft', async ($, on) => {
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  const fs = engineBottom(on, repo)
+  await landTurn($, 'turn-ctrl', wrote(repo, CONTROL_DIFF))
+
+  const offering = await mountBand($)
+  expect(await offering.find({ text: /\\x1b/ })).toBeDefined()
+  expect(await offering.find({ text: /nl\\nrtl/ })).toBeDefined()
+  expect(await offering.find({ text: /\\u202e/ })).toBeDefined()
+  expect(await offering.find({ text: /\u001b/ })).toBeUndefined()
+  expect(await offering.find({ text: /\u202e/ })).toBeUndefined()
+  await offering.press({ key: 'more' })
+  await offering.press({ key: 'commit' })
+  await offering.unmount()
+
+  const commit = fs[`${ROOT}/.waitroom/ship/COMMIT_EDITMSG.txt`] ?? ''
+  expect(commit).toContain(SAFE_NAME)
+  expect(commit.includes('\u001b')).toBe(false)
+  expect(commit.includes('\u202e')).toBe(false)
+  expect(commit.split('\n')[0]).toBe(`Add ${SAFE_NAME}`)
+})
+
+test("a file git could not read is named on the row, and two are plural", async ($, on) => {
+  const repo: Repo = { root: ROOT, diffHead: '', untracked: [] }
+  engineBottom(on, repo)
+  await landTurn($, 'turn-skip-1', () => {
+    repo.untracked = ['ok.txt', 'hidden.txt']
+    repo.untrackedDiffs = { 'ok.txt': NEW_FILE_DIFF }
+  })
+  const one = await mountBand($)
+  expect(await one.find({ text: "1 file skipped: git couldn't read it" })).toBeDefined()
+  expect(await one.find({ text: /files skipped/ })).toBeUndefined()
+  await one.unmount()
+
+  await landTurn($, 'turn-skip-2', () => {
+    repo.untracked = ['ok.txt', 'hidden.txt', 'also.txt']
+    repo.untrackedDiffs = { 'ok.txt': `${NEW_FILE_DIFF}+more\n` }
+  })
+  const two = await mountBand($)
+  expect(await two.find({ text: "2 files skipped: git couldn't read them" })).toBeDefined()
+  await two.unmount()
 })
 
 const SESSION = { cwd: ROOT, surface: 'terminal', isInteractive: true } as const
