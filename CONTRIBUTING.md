@@ -29,7 +29,7 @@ claude plugin validate ./wait-anchor
 claude plugin test     ./wait-anchor          # 37 tests
 
 claude plugin validate ./wait-cards
-claude plugin test     ./wait-cards           # 47 tests
+claude plugin test     ./wait-cards           # 55 tests
 
 claude plugin validate ./wait-focus
 claude plugin test     ./wait-focus           # 48 tests
