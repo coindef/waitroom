@@ -150,10 +150,12 @@ async function runningSourceId($: EngineInterface): Promise<string | undefined> 
 }
 
 /**
- * True only when every settings file we can reach was read, and none of
- * them enable this plugin from a directory marketplace that covers its
- * folder. A missing file is not a marketplace. A read or parse failure,
- * or a directory path we cannot place, means we cannot prove it.
+ * True only when every settings file we can reach was read, and no
+ * directory marketplace that covers this folder enables this plugin. The
+ * engine merges settings, so a marketplace declared in one file (or kept in
+ * `known_marketplaces.json`) and enabled in another still counts. A missing
+ * file is not a marketplace. A read or parse failure, or a directory path we
+ * cannot place, means we cannot prove it.
  */
 async function provenInline($: EngineInterface, pluginFolder: string): Promise<boolean> {
   const home = await configHome($)
@@ -164,14 +166,28 @@ async function provenInline($: EngineInterface, pluginFolder: string): Promise<b
     files.push(`${root}/.claude/settings.json`)
     files.push(`${root}/.claude/settings.local.json`)
   }
+  const markets: [string, unknown][] = []
+  const enabled = new Set<string>()
   for (const file of files) {
     const read = await readSettings($, file)
     if (read === 'missing') continue
     if (read === 'error') return false
-    const covered = await directoryInstallCovers($, read, pluginFolder, roots)
-    if (covered !== false) return false
+    const entries = marketEntries(read)
+    if (entries === 'error') return false
+    if (entries !== 'absent') markets.push(...Object.entries(entries))
+    const enabledRaw = read.enabledPlugins
+    const on = recordOf(enabledRaw)
+    if (enabledRaw !== undefined && on === undefined) return false
+    for (const [id, value] of Object.entries(on ?? {})) if (value === true) enabled.add(id)
   }
-  return true
+  const root = await storeRoot($)
+  if (root !== undefined) {
+    const known = await readSettings($, `${root}/known_marketplaces.json`)
+    if (known === 'error') return false
+    if (known !== 'missing') markets.push(...Object.entries(known))
+  }
+  const covered = await directoryInstallCovers($, markets, enabled, pluginFolder, roots)
+  return covered === false
 }
 
 async function configHome($: EngineInterface): Promise<string | undefined> {
@@ -228,21 +244,16 @@ async function readSettings($: EngineInterface, path: string): Promise<SettingsB
  */
 async function directoryInstallCovers(
   $: EngineInterface,
-  settings: SettingsBody,
+  markets: readonly [string, unknown][],
+  enabled: ReadonlySet<string>,
   pluginFolder: string,
   roots: readonly string[],
 ): Promise<boolean | 'error'> {
-  const markets = marketEntries(settings)
-  if (markets === 'absent') return false
-  if (markets === 'error') return 'error'
-  const enabledRaw = settings.enabledPlugins
-  const enabled = recordOf(enabledRaw)
-  if (enabledRaw !== undefined && enabled === undefined) return 'error'
-  for (const [name, entry] of Object.entries(markets)) {
+  for (const [name, entry] of markets) {
     const body = recordOf(entry)
     const source = recordOf(body?.source)
     if (source?.source !== 'directory' || typeof source.path !== 'string') continue
-    if (enabled?.[`${PLUGIN}@${name}`] !== true) continue
+    if (!enabled.has(`${PLUGIN}@${name}`)) continue
     const paths = placedPaths(source.path, roots)
     if (paths === undefined) return 'error'
     for (const one of paths) {

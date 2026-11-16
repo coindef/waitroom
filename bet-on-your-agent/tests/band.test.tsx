@@ -1555,6 +1555,51 @@ test('a directory marketplace that does not enable this plugin still repairs the
   expect(store.files.has(`${WAITROOM_STORE}.bak`)).toBe(false)
 })
 
+test('a directory marketplace declared for the user and enabled for the project repairs nothing', async ($, on) => {
+  const project = '/tmp/bet-directory-split'
+  const inline = 'not json{'
+  const other = 'not json{'
+  const store = diskStore(
+    on,
+    INLINE_STORE,
+    inline,
+    {
+      [WAITROOM_STORE]: other,
+      [USER_SETTINGS]: JSON.stringify({ extraKnownMarketplaces: { waitroom: { source: { source: 'directory', path: PLUGIN_PARENT } } } }),
+      [`${project}/.claude/settings.json`]: JSON.stringify({ enabledPlugins: { 'bet-on-your-agent@waitroom': true } }),
+    },
+    {},
+    project,
+  )
+  const reply = await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.get(WAITROOM_STORE)).toBe(other)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+  expect(reply.text).not.toBe(REBUILT_NOTICE)
+})
+
+test('a directory marketplace kept only in known_marketplaces.json repairs nothing', async ($, on) => {
+  const inline = 'not json{'
+  const store = diskStore(on, INLINE_STORE, inline, {
+    [`${ISOLATED_CONFIG}/plugins/known_marketplaces.json`]: JSON.stringify({ waitroom: { source: { source: 'directory', path: PLUGIN_PARENT } } }),
+    [USER_SETTINGS]: JSON.stringify({ enabledPlugins: { 'bet-on-your-agent@waitroom': true } }),
+  })
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+})
+
+test('a known_marketplaces.json that cannot be read repairs nothing', async ($, on) => {
+  const inline = 'not json{'
+  const store = diskStore(on, INLINE_STORE, inline, { [`${ISOLATED_CONFIG}/plugins/known_marketplaces.json`]: 'not json{' })
+  await $.command.run({ command: 'bet' } as never)
+
+  expect(store.files.get(INLINE_STORE)).toBe(inline)
+  expect(store.files.has(`${INLINE_STORE}.bak`)).toBe(false)
+})
+
 test('an unreadable history with nothing loaded says turns are not being saved', async ($, on) => {
   const store = flakyStore(on, {})
   store.fail()

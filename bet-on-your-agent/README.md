@@ -244,7 +244,7 @@ It holds the last 500 turns.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 175 tests
+claude plugin test .         # 178 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested
