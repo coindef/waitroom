@@ -36,14 +36,107 @@ export type Kit = {
 
 /**
  * The file name off a `---` or `+++` line, the way `git diff --no-prefix`
- * writes it: tab-terminated when it holds a space, quoted under
- * `core.quotePath`. Neither belongs in the name.
+ * writes it: tab-terminated when it holds a space, and C-quoted when the
+ * name has a quote, a backslash, or (unless `core.quotePath` is off) a
+ * non-ASCII byte. None of that belongs in the name.
  */
+const C_ESCAPE: Record<string, number> = {
+  a: 7,
+  b: 8,
+  t: 9,
+  n: 10,
+  v: 11,
+  f: 12,
+  r: 13,
+  '\\': 92,
+  '"': 34,
+}
+
+/** Git's C-quoting, undone: `\"`, `\\`, and `\nnn` octal bytes, then UTF-8. */
+const unquoteGit = (inner: string): string => {
+  const bytes: number[] = []
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner.charAt(i)
+    if (ch !== '\\') {
+      const code = inner.charCodeAt(i)
+      if (code < 128) bytes.push(code)
+      else for (const byte of new TextEncoder().encode(ch)) bytes.push(byte)
+      continue
+    }
+    const next = inner.charAt(i + 1)
+    if (next === '') break
+    i += 1
+    const simple = C_ESCAPE[next]
+    if (simple !== undefined) {
+      bytes.push(simple)
+      continue
+    }
+    if (next >= '0' && next <= '7') {
+      let oct = next
+      for (let k = 0; k < 2; k++) {
+        const digit = inner.charAt(i + 1)
+        if (digit < '0' || digit > '7') break
+        oct += digit
+        i += 1
+      }
+      bytes.push(Number.parseInt(oct, 8))
+      continue
+    }
+    bytes.push(next.charCodeAt(0))
+  }
+
+  return new TextDecoder().decode(Uint8Array.from(bytes))
+}
+
+/** C0 controls that read better as the C escape than as `\xHH`. ESC stays `\x1b`. */
+const NAMED_CONTROL: Record<number, string> = {
+  0x07: '\\a',
+  0x08: '\\b',
+  0x09: '\\t',
+  0x0a: '\\n',
+  0x0b: '\\v',
+  0x0c: '\\f',
+  0x0d: '\\r',
+}
+
+/**
+ * A code point that must not be written into a terminal or a commit message:
+ * C0, DEL, C1, and the bidi/isolate marks that reorder the line.
+ */
+const hidesText = (code: number): boolean =>
+  code <= 0x1f ||
+  (code >= 0x7f && code <= 0x9f) ||
+  code === 0x200e ||
+  code === 0x200f ||
+  (code >= 0x202a && code <= 0x202e) ||
+  (code >= 0x2066 && code <= 0x2069)
+
+/** The same character, as text a terminal will show rather than obey. */
+const visibleEscape = (code: number): string => {
+  const named = NAMED_CONTROL[code]
+  if (named !== undefined) return named
+  if (code <= 0xff) return `\\x${code.toString(16).padStart(2, '0')}`
+
+  return `\\u${code.toString(16).padStart(4, '0')}`
+}
+
+/** After unquoting: controls and bidi marks become `\x1b`, `\n`, `\u202e`, and the like. */
+const visiblePath = (text: string): string => {
+  let out = ''
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0
+    out += hidesText(code) ? visibleEscape(code) : ch
+  }
+
+  return out
+}
+
 export const sidePath = (rest: string): string => {
   const cut = rest.indexOf('\t')
   const name = cut < 0 ? rest : rest.slice(0, cut)
+  const raw = name.length > 1 && name.startsWith('"') && name.endsWith('"') ? unquoteGit(name.slice(1, -1)) : name
 
-  return name.length > 1 && name.startsWith('"') && name.endsWith('"') ? name.slice(1, -1) : name
+  return visiblePath(raw)
 }
 
 const BINARY_LINE = /^Binary files (.+) and (.+) differ$/
@@ -92,7 +185,7 @@ export const parseDiffFiles = (output: string): FileChange[] => {
       flush()
       const [, left, right] = binary as unknown as [string, string, string]
       files.push({
-        path: right === '/dev/null' ? left : right,
+        path: visiblePath(right === '/dev/null' ? left : right),
         added: 0,
         removed: 0,
         kind: left === '/dev/null' ? 'added' : right === '/dev/null' ? 'deleted' : 'modified',
@@ -127,6 +220,60 @@ export const parseDiffFiles = (output: string): FileChange[] => {
 
   return files
 }
+
+/**
+ * Splits `git ls-files -z` output into paths. NUL is the only separator and
+ * nothing is trimmed: a name may begin or end with a space.
+ */
+export const splitNul = (output: string): string[] => output.split('\0').filter(path => path !== '')
+
+/**
+ * stdout of a diff git actually produced. Exit 1 is how `--no-index` reports
+ * "the sides differ". The same exit with nothing on stdout is git failing to
+ * open the path, which is not an empty diff.
+ */
+export const readDiff = (exitCode: number, stdout: string): string | undefined => {
+  if (exitCode === 0) return stdout
+  if (exitCode === 1 && stdout !== '') return stdout
+
+  return undefined
+}
+
+/** The dim line under a kit when git listed a file and could not read it. */
+export const skippedLine = (count: number): string =>
+  count === 1 ? "1 file skipped: git couldn't read it" : `${count} files skipped: git couldn't read them`
+
+/**
+ * The tracked-diff argv, after `git`. `core.quotePath=false` keeps a non-ASCII
+ * name raw in the headers. `--no-ext-diff` keeps a `diff.external` tool from
+ * replacing the diff this parser reads.
+ */
+export const TRACKED_DIFF_ARGS = [
+  '-c',
+  'core.quotePath=false',
+  'diff',
+  'HEAD',
+  '--no-color',
+  '--no-prefix',
+  '--no-ext-diff',
+] as const
+
+/** `git ls-files -z`: NUL-separated, never C-quoted. */
+export const UNTRACKED_LIST_ARGS = ['ls-files', '-z', '--others', '--exclude-standard'] as const
+
+/** One untracked file against `/dev/null`, the same quoting rules as the tracked diff. */
+export const untrackedDiffArgs = (path: string): string[] => [
+  '-c',
+  'core.quotePath=false',
+  'diff',
+  '--no-color',
+  '--no-prefix',
+  '--no-ext-diff',
+  '--no-index',
+  '--',
+  '/dev/null',
+  path,
+]
 
 /** `git log --format=%s` output into one subject per line, blanks dropped. */
 export const parseSubjects = (output: string): string[] =>

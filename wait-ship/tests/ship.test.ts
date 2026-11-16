@@ -29,10 +29,14 @@ import {
   parseSubjects,
   pathFromCwd,
   prBodyOf,
+  readDiff,
   writtenRelative,
   receiptLines,
   scopeOf,
   seenFrom,
+  sidePath,
+  skippedLine,
+  splitNul,
   subjectOf,
   summaryBullets,
   testPlanLines,
@@ -94,6 +98,59 @@ test('several diffs concatenated parse as one combined list', () => {
 test('a removed "-- comment" and an added "++x" stay content of the real file', () => {
   const files = parseDiffFiles(modified('src/notes.ts', ['++x'], ['-- comment']))
   expect(files).toEqual([{ path: 'src/notes.ts', added: 1, removed: 1, kind: 'modified' }])
+})
+
+test('a quoted diff header decodes to the name on disk, octal bytes included', () => {
+  expect(sidePath('café.txt')).toBe('café.txt')
+  expect(sidePath('my file.txt\t')).toBe('my file.txt')
+  expect(sidePath('"a \\"quoted\\" name.txt"\t')).toBe('a "quoted" name.txt')
+  expect(sidePath('"caf\\303\\251.txt"')).toBe('café.txt')
+  const files = parseDiffFiles(
+    diff([
+      'diff --git "a \\"quoted\\" name.txt" "a \\"quoted\\" name.txt"',
+      '--- /dev/null',
+      '+++ "a \\"quoted\\" name.txt"\t',
+      '@@ -0,0 +1 @@',
+      '+quoted line',
+    ]),
+  )
+  expect(files).toEqual([{ path: 'a "quoted" name.txt', added: 1, removed: 0, kind: 'added' }])
+})
+
+test('ESC, a newline and U+202E in a name are visible escapes in the draft, not raw controls', () => {
+  // Git's C-quoting of ESC (\033), newline (\n) and U+202E (\342\200\256).
+  const header = '"esc\\033nl\\nrtl\\342\\200\\256.txt"'
+  const safe = 'esc\\x1bnl\\nrtl\\u202e.txt'
+  expect(sidePath(header)).toBe(safe)
+  const commit = commitFileText(
+    commitOf(parseDiffFiles(diff(['diff --git a a', '--- /dev/null', `+++ ${header}`, '@@ -0,0 +1 @@', '+one'])), []),
+  )
+  expect(commit).toContain(safe)
+  expect(commit.includes('\u001b')).toBe(false)
+  expect(commit.includes('\u202e')).toBe(false)
+  expect(commit.split('\n')[0]).toBe(`Add ${safe}`)
+})
+
+test('splitNul keeps a leading space, a quote and non-ASCII exactly', () => {
+  expect(splitNul('a.ts\0café.txt\0 lead.txt \0a "quoted" name.txt\0')).toEqual([
+    'a.ts',
+    'café.txt',
+    ' lead.txt ',
+    'a "quoted" name.txt',
+  ])
+  expect(splitNul('')).toEqual([])
+})
+
+test('one skipped file, and several, are named as such', () => {
+  expect(skippedLine(1)).toBe("1 file skipped: git couldn't read it")
+  expect(skippedLine(2)).toBe("2 files skipped: git couldn't read them")
+})
+
+test('a non-zero diff with empty stdout is a failed read, not an empty diff', () => {
+  expect(readDiff(0, '')).toBe('')
+  expect(readDiff(1, 'diff --git a a\n')).toBe('diff --git a a\n')
+  expect(readDiff(1, '')).toBeUndefined()
+  expect(readDiff(128, '')).toBeUndefined()
 })
 
 test('subjects parse one per line, blanks dropped', () => {

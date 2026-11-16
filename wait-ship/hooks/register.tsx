@@ -16,9 +16,15 @@ import {
   parseDiffFiles,
   parseSubjects,
   pathFromCwd,
+  readDiff,
   receiptLines,
   seenFrom,
+  skippedLine,
+  splitNul,
+  TRACKED_DIFF_ARGS,
   treeSeenOf,
+  UNTRACKED_LIST_ARGS,
+  untrackedDiffArgs,
   writtenRelative,
   yieldsBand,
   type TreeSeen,
@@ -90,25 +96,36 @@ const placeOf = async (
  * folder is left out. `text` is the diff as read, for `treeSeenOf`.
  */
 const scanTree = async ($: EngineInterface, root: string, config: Config, stopWhenGitFails = false) => {
-  const failed = { files: [], text: '', ok: false }
-  const tracked = await runGit($, ['diff', 'HEAD', '--no-color', '--no-prefix'], root)
+  const failed = { files: [], text: '', ok: false, skipped: 0 }
+  // core.quotePath=false keeps non-ASCII names raw in the diff headers, so
+  // the path in a draft is the path on disk rather than octal escapes.
+  const tracked = await runGit($, [...TRACKED_DIFF_ARGS], root)
   // A baseline that git did not answer is not stored. Stopping here keeps one
   // unanswered read from turning into a hundred more before the turn starts.
   if (stopWhenGitFails && tracked === undefined) return failed
-  const chunks: string[] = tracked?.exitCode === 0 ? [tracked.stdout] : []
+  const chunks: string[] = []
+  const trackedText = tracked ? readDiff(tracked.exitCode, tracked.stdout) : undefined
+  if (trackedText !== undefined) chunks.push(trackedText)
 
-  const others = await runGit($, ['ls-files', '--others', '--exclude-standard'], root)
+  // -z: NUL-separated and never quoted, so a name with a space, a quote or
+  // non-ASCII characters comes back as it is on disk instead of skipped.
+  const others = await runGit($, [...UNTRACKED_LIST_ARGS], root)
   if (stopWhenGitFails && others === undefined) return failed
-  const untracked = (others?.stdout ?? '')
-    .split('\n')
-    .map(line => line.trim())
-    .filter(path => path !== '' && !isUnder(path, config.shipDir))
+  const untracked = (others?.exitCode === 0 ? splitNul(others.stdout) : [])
+    .filter(path => !isUnder(path, config.shipDir))
     .slice(0, UNTRACKED_LIMIT)
+  let skipped = 0
   for (const path of untracked) {
     // --no-index exits 1 when the two sides differ, which is the point here.
-    const one = await runGit($, ['diff', '--no-color', '--no-prefix', '--no-index', '--', '/dev/null', path], root)
+    // The same exit with an empty stdout means git could not open the path.
+    const one = await runGit($, [...untrackedDiffArgs(path)], root)
     if (stopWhenGitFails && one === undefined) return failed
-    if (one && one.exitCode <= 1) chunks.push(one.stdout)
+    const text = one ? readDiff(one.exitCode, one.stdout) : undefined
+    if (text === undefined) {
+      skipped += 1
+      continue
+    }
+    chunks.push(text)
   }
   // Each diff already ends in a newline. A second one between chunks sticks
   // to the previous file, so that file's fingerprint changes when a later
@@ -122,6 +139,7 @@ const scanTree = async ($: EngineInterface, root: string, config: Config, stopWh
     files: parseDiffFiles(text).filter(one => !isUnder(one.path, config.shipDir)),
     text,
     ok: tracked !== undefined && others !== undefined,
+    skipped,
   }
 }
 
@@ -152,7 +170,11 @@ const readTree = async ($: EngineInterface, root: string, config: Config) => {
   const before = seenFrom(await read($, lastSeen))
   await update($, lastSeen, () => seen)
 
-  return { files: filesSince(before, seen, scanned.files), hasMoved: before === null || before.tree !== seen.tree }
+  return {
+    files: filesSince(before, seen, scanned.files),
+    hasMoved: before === null || before.tree !== seen.tree,
+    skipped: scanned.skipped,
+  }
 }
 
 /**
@@ -199,12 +221,12 @@ const takeBaseline = async ($: EngineInterface, config: Config, capMs: number) =
 const buildOffer = async ($: EngineInterface, config: Config, turnId: string): Promise<ShipOffer | null> => {
   const root = await repoRoot($)
   if (root === undefined) return null
-  const { files, hasMoved } = await readTree($, root, config)
+  const { files, hasMoved, skipped } = await readTree($, root, config)
   if (!hasMoved || files.length === 0) return null
   const subjects = await recentSubjects($, root)
   const changelogContent = await loadChangelog($, root, config)
 
-  return { turnId, ...kitOf(files, subjects, changelogContent) }
+  return { turnId, ...kitOf(files, subjects, changelogContent), ...(skipped > 0 ? { skipped } : {}) }
 }
 
 const artifactsFor = (mode: ShipMode, hasChangelog: boolean): ArtifactKind[] => {
@@ -370,6 +392,11 @@ export const register: Register = (on, options) => {
           Drafts ready: <Text weight="bold">{kit.commit.subject}</Text>
           <Text dimColor> · {sizes}</Text>
         </Text>
+        {kit.skipped !== undefined && kit.skipped > 0 ? (
+          <Text dimColor wrap="truncate-end">
+            {skippedLine(kit.skipped)}
+          </Text>
+        ) : null}
         {/* columnGap, not gap: a gap holds down as well as across, and put two
             blank rows between the keys once the expanded row wrapped. */}
         <Box columnGap={2} flexWrap="wrap">
