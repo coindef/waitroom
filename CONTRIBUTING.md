@@ -108,8 +108,8 @@ fixed) were found. **wait-review-opencode** is still verified by type-checking
 against the real OpenCode/OpenTUI packages rather than a live session, since
 exercising it needs a configured model provider this environment doesn't
 have. Either way: adapter-only, not installable through this marketplace,
-not versioned, not part of a release — see each README's own "How this was
-verified" section for the full detail.
+not part of a release. bet-on-your-agent-opencode is package version `0.0.1`.
+See each README's own "How this was verified" section for the full detail.
 
 ## Repository layout
 
