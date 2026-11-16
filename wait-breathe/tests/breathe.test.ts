@@ -3,10 +3,12 @@ import { expect, test } from 'claude-code/testing'
 import {
   canPrompt,
   COOLDOWN_MS,
+  drawnBy,
   enabledRowKey,
   keepHistory,
   messageAt,
   MESSAGES,
+  rowsKept,
   sessionCountsOf,
   sessionSummaryLine,
   storeFrom,
@@ -112,6 +114,20 @@ test('no line names the plugin again: the engine already prints wait-breathe: in
   ]) {
     expect(line).not.toMatch(/^(wait-)?breathe\b/)
   }
+})
+
+test('a due nudge keeps the band ahead of a ship offer and a forecast, and an engine node names nobody', () => {
+  const breathe = { plugin: 'wait-breathe', tree: { type: 'Box' } }
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const bet = { plugin: 'bet-on-your-agent', tree: { type: 'Box' } }
+  const other = { plugin: 'some-other-plugin', tree: { type: 'Box' } }
+
+  expect(drawnBy({ plugin: 'wait-breathe', tree: { type: 'Box' } })).toBe('wait-breathe')
+  expect(drawnBy({ type: 'Box', part: { plugin: 'wait-ship' } })).toBe('wait-ship')
+  expect(drawnBy({ type: 'engine', ref: 1 })).toBeUndefined()
+  expect(rowsKept([ship, bet, breathe], true)[0]).toBe(breathe)
+  expect(rowsKept([bet, ship], false)[0]).toBe(ship)
+  expect(rowsKept([other], false)).toEqual([other])
 })
 
 test('storeFrom keeps a record this mod wrote and rejects a value it cannot read', () => {

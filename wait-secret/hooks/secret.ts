@@ -385,11 +385,21 @@ export const BAND_PRECEDENCE = [
 
 export type BandMod = (typeof BAND_PRECEDENCE)[number]
 
-/** The plugin whose hook drew a band tree, off the stamp the engine puts on its root. */
+/**
+ * Who a band drawing is owed to.
+ *
+ * On Claude Code 2.1.319 the engine stamps `part.plugin` on the root
+ * `next(e)` returns, and a hook that passes that tree on leaves the stamp.
+ * On 2.1.325 each AbovePrompt row is `{ plugin, tree }` on AbovePromptList's
+ * `e.props.rows`. `{ type: "engine", ref }` is core's own drawing and names
+ * nobody.
+ */
 export const drawnBy = (tree: unknown): string | undefined => {
-  const part = typeof tree === 'object' && tree !== null ? (tree as { part?: { plugin?: unknown } }).part : undefined
+  if (typeof tree !== 'object' || tree === null) return undefined
+  const row = tree as { plugin?: unknown; tree?: unknown; part?: { plugin?: unknown } }
+  if (typeof row.plugin === 'string' && typeof row.tree === 'object' && row.tree !== null) return row.plugin
 
-  return typeof part?.plugin === 'string' ? part.plugin : undefined
+  return typeof row.part?.plugin === 'string' ? row.part.plugin : undefined
 }
 
 /** Whether the row a mod drew beneath `mine` keeps the band: only one ahead of it does. */
@@ -397,4 +407,37 @@ export const yieldsBand = (mine: BandMod, beneath: string | undefined): boolean 
   const at = BAND_PRECEDENCE.indexOf(beneath as BandMod)
 
   return at !== -1 && at < BAND_PRECEDENCE.indexOf(mine)
+}
+
+/**
+ * Which of the rows `AbovePromptList` handed over stay on the band.
+ *
+ * Claude Code 2.1.325 asks every AbovePrompt hook for its own row and stacks
+ * whatever comes back. `next(e)` is core's `{ type: "engine", ref }` and names
+ * no plugin, so a hook cannot yield from it. Leaving rows out of
+ * AbovePromptList is how one mod yields to another: pass these same row
+ * objects on, and nothing else. 2.1.319 does not raise that event; there
+ * `drawnBy` still reads `part.plugin` off `next(e)`.
+ *
+ * One waitroom row, earliest first: breathe, ship, bet, scope, secret. While
+ * a turn runs the bet's forecast comes ahead of a ship offer and still behind
+ * a breathe nudge. A row from outside this list stays only when none of these
+ * drew.
+ */
+const ROW_ORDER = ['wait-breathe', 'wait-ship', 'bet-on-your-agent', 'wait-scope', 'wait-secret'] as const
+
+export const rowsKept = <T extends { plugin?: unknown; tree?: unknown }>(
+  rows: readonly T[],
+  isWorking: boolean,
+): readonly T[] => {
+  const present = (name: string) => rows.some(row => drawnBy(row) === name)
+  const winner = present('wait-breathe')
+    ? 'wait-breathe'
+    : isWorking && present('bet-on-your-agent')
+      ? 'bet-on-your-agent'
+      : ROW_ORDER.find(name => present(name))
+
+  if (winner === undefined) return rows
+
+  return rows.filter(row => drawnBy(row) === winner)
 }

@@ -102,7 +102,7 @@ the row the moment the kit is answered.
   body), `## Test plan` (a checkbox per test file the diff touched, plus one
   manual-verification line always).
 - **Changelog entry**, only when `CHANGELOG.md` exists in the repository
-  root and `includeChangelog` is on: 1-2 bullets under `### Added`, `###
+  root and `includeChangelog` is on: 1–2 bullets under `### Added`, `###
   Changed` or `### Fixed`, picked the same way the commit type is. It is a
   standalone snippet to paste in yourself — this plugin never edits
   `CHANGELOG.md`.
@@ -131,7 +131,7 @@ the row the moment the kit is answered.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 98 tests
+claude plugin test .         # 104 tests
 ```
 
 The diff parsing, style inference and every drafted artifact live in

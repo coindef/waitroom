@@ -32,6 +32,7 @@ import {
   dailyOutcome,
   daysBetween,
   drawnBy,
+  rowsKept,
   extrasFromFor,
   extrasIn,
   extremeCalls,
@@ -1135,6 +1136,21 @@ test('the row goes to breathe, then ship, then the bet', () => {
   expect(yieldsBand('bet-on-your-agent', 'some-other-plugin')).toBe(false)
   expect(drawnBy({ type: 'Box', part: { plugin: 'wait-ship' } })).toBe('wait-ship')
   expect(drawnBy({ type: 'Box' })).toBeUndefined()
+  expect(drawnBy({ plugin: 'wait-ship', tree: { type: 'Box' } })).toBe('wait-ship')
+  expect(drawnBy({ type: 'engine', ref: 1 })).toBeUndefined()
+})
+
+test('while a turn runs the forecast keeps the band ahead of a ship offer; a breathe nudge still comes first', () => {
+  const breathe = { plugin: 'wait-breathe', tree: { type: 'Box' } }
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const bet = { plugin: 'bet-on-your-agent', tree: { type: 'Box' } }
+  const other = { plugin: 'some-other-plugin', tree: { type: 'Box' } }
+  const outsiders = [other]
+
+  expect(rowsKept([ship, bet], true)[0]).toBe(bet)
+  expect(rowsKept([ship, bet], false)[0]).toBe(ship)
+  expect(rowsKept([ship, bet, breathe], true)[0]).toBe(breathe)
+  expect(rowsKept(outsiders, true)).toBe(outsiders)
 })
 
 test('while a turn runs only a breathe nudge holds the forecast back; between turns a ship offer does too', () => {

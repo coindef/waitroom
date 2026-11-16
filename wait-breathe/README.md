@@ -124,7 +124,7 @@ no pane to stumble into otherwise.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 34 tests
+claude plugin test .         # 35 tests
 ```
 
 The rotation, the cooldown, the session counting and the `/breathe` reply

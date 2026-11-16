@@ -11,6 +11,7 @@ import {
   commitOf,
   DRAFTS_GITIGNORE,
   drawnBy,
+  rowsKept,
   type FileChange,
   fileList,
   filesSince,
@@ -331,7 +332,54 @@ test('summaryBullets: each area reads its own change kind, not the whole diff\'s
   const bullets = summaryBullets([addedArea, fixedArea, removedArea])
   expect(bullets.some(line => line.startsWith('- Adds new functionality in added'))).toBe(true)
   expect(bullets.some(line => line.startsWith('- Fixes behavior in fixed'))).toBe(true)
-  expect(bullets.some(line => line.startsWith('- Restructures code in removed'))).toBe(true)
+  expect(bullets.some(line => line.startsWith('- Removes files in removed'))).toBe(true)
+  expect(bullets.some(line => line.startsWith('- Restructures code'))).toBe(false)
+})
+
+test('a deletion in a mixed directory is a removal, and it is not listed twice', () => {
+  const created: FileChange = { path: 'src/a.ts', added: 4, removed: 0, kind: 'added' }
+  const gone: FileChange = { path: 'src/old.ts', added: 0, removed: 3, kind: 'deleted' }
+  const alone = summaryBullets([created, gone])
+  expect(alone).toContain('- Removes files in src (src/old.ts)')
+  expect(alone.some(line => line.startsWith('- Restructures code'))).toBe(false)
+  expect(alone.some(line => line === '- Removes src/old.ts.')).toBe(false)
+
+  const edited: FileChange = { path: 'src/count.ts', added: 2, removed: 1, kind: 'modified' }
+  const other: FileChange = { path: 'src/b.ts', added: 3, removed: 0, kind: 'added' }
+  const dropped: FileChange = { path: 'src/new.ts', added: 0, removed: 2, kind: 'deleted' }
+  const doc: FileChange = { path: 'docs/a.md', added: 2, removed: 0, kind: 'modified' }
+  const mixed = summaryBullets([created, other, edited, dropped, doc])
+  expect(mixed).toContain('- Removes files in src (src/new.ts)')
+  expect(mixed.some(line => line.includes('src/new.ts') && line.startsWith('- Restructures'))).toBe(false)
+  expect(mixed.filter(line => line.includes('src/new.ts')).length).toBe(1)
+})
+
+test('a modification that removes more lines than it adds is not a restructure', () => {
+  const trimmed: FileChange = { path: 'src/count.ts', added: 1, removed: 5, kind: 'modified' }
+  const created: FileChange = { path: 'src/new.ts', added: 4, removed: 0, kind: 'added' }
+  const mixed = summaryBullets([created, trimmed])
+  expect(mixed.some(line => line.startsWith('- Restructures code'))).toBe(false)
+  expect(mixed).toContain('- Updates existing files in src (src/count.ts)')
+
+  const alone = summaryBullets([trimmed])
+  expect(alone.some(line => line.startsWith('- Restructures code'))).toBe(false)
+  expect(alone).toContain('- Updates existing files in src (src/count.ts)')
+})
+
+test('per-action summary bullets still leave the third directory and the test line', () => {
+  const files: FileChange[] = [
+    { path: 'a/new.ts', added: 4, removed: 0, kind: 'added' },
+    { path: 'a/edit.ts', added: 2, removed: 1, kind: 'modified' },
+    { path: 'a/old.ts', added: 0, removed: 3, kind: 'deleted' },
+    { path: 'b/util.ts', added: 1, removed: 1, kind: 'modified' },
+    { path: 'c/guide.md', added: 2, removed: 0, kind: 'modified' },
+    { path: 'a/new.test.ts', added: 5, removed: 0, kind: 'added' },
+  ]
+  const bullets = summaryBullets(files)
+  expect(bullets.some(line => line.includes(' in a ('))).toBe(true)
+  expect(bullets.some(line => line.includes(' in b ('))).toBe(true)
+  expect(bullets.some(line => line.includes(' in c ('))).toBe(true)
+  expect(bullets).toContain('- Includes test coverage for the change.')
 })
 
 test('testPlanLines turns each touched test file into its own checkbox, plus a manual line always', () => {
@@ -387,6 +435,61 @@ test('changelogEntryOf: areas of different kinds land under their own heading, n
   expect(fixedSection).toContain('fixed/client.ts')
   expect(addedSection).not.toContain('fixed/client.ts')
   expect(fixedSection).not.toContain('added/new.ts')
+})
+
+test('a new file and a modified file in the same directory are not both called an add', () => {
+  const edited: FileChange = { path: 'src/count.ts', added: 1, removed: 0, kind: 'modified' }
+  const created: FileChange = { path: 'src/new.ts', added: 4, removed: 0, kind: 'added' }
+  const files = [edited, created]
+
+  expect(commitOf(files, ['feat: a', 'fix: b', 'chore: c']).subject).toBe(
+    'feat(src): add src/new.ts, update src/count.ts',
+  )
+
+  const body = prBodyOf(files)
+  const summary = body.slice(body.indexOf('## Summary'), body.indexOf('## Changes'))
+  expect(summary).toContain('- Adds new functionality in src (src/new.ts)')
+  expect(summary).toContain('- Updates existing files in src (src/count.ts)')
+  expect(summary).not.toContain('src/count.ts, src/new.ts')
+
+  const sections = changelogEntryOf(files, 'plain').trim().split('\n\n')
+  const addedSection = sections.find(one => one.startsWith('### Added'))
+  const changedSection = sections.find(one => one.startsWith('### Changed'))
+  expect(addedSection).toContain('src/new.ts')
+  expect(addedSection).not.toContain('src/count.ts')
+  expect(changedSection).toContain('src/count.ts')
+  expect(changedSection).not.toContain('src/new.ts')
+
+  // Another directory forces the grouped line. count.ts was only modified.
+  const elsewhere: FileChange = { path: 'db/schema.sql', added: 0, removed: 1, kind: 'modified' }
+  expect(bodyOf([edited, created, elsewhere])).toContain('- src: add src/new.ts, update src/count.ts')
+})
+
+test('a mixed subject names paths only when three or fewer fit on the line', () => {
+  const style = inferStyle(['feat: a', 'fix: b', 'chore: c'])
+  const added = (path: string): FileChange => ({ path, added: 1, removed: 0, kind: 'added' })
+  const edited = (path: string): FileChange => ({ path, added: 1, removed: 0, kind: 'modified' })
+
+  // Three short paths fit, so the subject still names them.
+  expect(subjectOf([added('src/a.ts'), added('src/b.ts'), edited('src/c.ts')], style, 'feat', 'src')).toBe(
+    'feat(src): add src/a.ts, src/b.ts, update src/c.ts',
+  )
+
+  // Five files fit the character cap and still fall back to counts.
+  const five = [added('src/a.ts'), added('src/b.ts'), edited('src/c.ts'), edited('src/d.ts'), edited('src/e.ts')]
+  expect(subjectOf(five, style, 'feat', 'src')).toBe('feat(src): add 2 files, update 3 files')
+
+  // Three realistic paths would be cut mid-path (73 characters), so the subject counts.
+  const named =
+    'feat: add src/api/users.ts, tests/users.test.ts, update src/api/routes.ts'
+  expect(named.length).toBeGreaterThan(72)
+  const three = [added('src/api/users.ts'), added('tests/users.test.ts'), edited('src/api/routes.ts')]
+  expect(subjectOf(three, style, 'feat', undefined)).toBe('feat: add 2 files, update 1 file across several areas')
+  // The same three paths fit a freeform subject, which has no type prefix.
+  // A fourth file does not, so that subject counts too.
+  const free = inferStyle(['Add a thing', 'Fix a thing'])
+  const four = [...three, edited('src/count.ts')]
+  expect(subjectOf(four, free, 'feat', undefined)).toBe('Add 2 files, update 2 files across several areas')
 })
 
 // ---------------------------------------------------------------------------
@@ -496,6 +599,28 @@ test('drawnBy reads the plugin the engine stamped on a tree, and nothing off any
   expect(drawnBy({ type: 'Box', part: { plugin: 7 } })).toBeUndefined()
   expect(drawnBy(undefined)).toBeUndefined()
   expect(drawnBy('text')).toBeUndefined()
+  // 2.1.325 names the row on AbovePromptList. The row's plugin wins over a stamp inside the tree.
+  expect(drawnBy({ plugin: 'wait-ship', tree: { type: 'Box', part: { plugin: 'wait-breathe' } } })).toBe('wait-ship')
+  // `{ type: "engine" }` is core's drawing and names nobody.
+  expect(drawnBy({ type: 'engine', ref: 1 })).toBeUndefined()
+  expect(drawnBy({ plugin: 'wait-ship' })).toBeUndefined()
+})
+
+test('AbovePromptList keeps one waitroom row, the same object, and leaves an outsider alone', () => {
+  const breathe = { plugin: 'wait-breathe', tree: { type: 'Box' } }
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const bet = { plugin: 'bet-on-your-agent', tree: { type: 'Box' } }
+  const scope = { plugin: 'wait-scope', tree: { type: 'Box' } }
+  const secret = { plugin: 'wait-secret', tree: { type: 'Box' } }
+  const other = { plugin: 'some-other-plugin', tree: { type: 'Box' } }
+  const outsiders = [other]
+
+  expect(rowsKept([ship, bet], false)[0]).toBe(ship)
+  expect(rowsKept([bet, ship], true)[0]).toBe(bet)
+  expect(rowsKept([bet, breathe, ship], true)[0]).toBe(breathe)
+  expect(rowsKept([secret, scope, ship], false).map(row => row.plugin)).toEqual(['wait-ship'])
+  expect(rowsKept(outsiders, false)).toBe(outsiders)
+  expect(rowsKept([other, ship], true).map(row => row.plugin)).toEqual(['wait-ship'])
 })
 
 // ---------------------------------------------------------------------------

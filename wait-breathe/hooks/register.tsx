@@ -14,6 +14,7 @@ import {
   storeFrom,
   toggledLine,
   toggleRefusedLine,
+  rowsKept,
   wholePositive,
 } from './breathe'
 
@@ -207,5 +208,18 @@ export const register: Register = (on, options) => {
         </Box>
       </Box>
     )
+  }).catch(($, e, next) => next(e))
+
+  // 2.1.325 stacks every plugin's row and `next(e)` there names nobody.
+  // Leaving rows out of AbovePromptList is how one mod yields. 2.1.319
+  // does not raise this event; the hook above still reads `part.plugin`.
+  // The 2.1.319 types have no AbovePromptList. On 2.1.325 its props are the
+  // band's plus `rows`, so it is typed as the band here and `rows` added.
+  on('ui.render', { component: 'AbovePromptList', plugin: '*' } as unknown as { component: 'AbovePrompt' }, ($, e, next) => {
+    const props = e.props as typeof e.props & { readonly rows: readonly { plugin?: unknown; tree?: unknown }[] }
+    const kept = rowsKept(props.rows, props.isWorking)
+    if (kept.length === props.rows.length) return next(e)
+
+    return next({ ...e, props: { ...props, rows: kept } as typeof e.props })
   }).catch(($, e, next) => next(e))
 }
