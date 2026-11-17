@@ -37,15 +37,35 @@ const NUDGE = /posture|20-20-20|4-4-4|stretch/
 /** What the `/config` menu would answer, and every write the plugin asked of it. */
 type Settings = { refuse?: string; set: { key: string; value: unknown }[] }
 
-/** Nothing sits beneath the plugin in a test, so the test stands in for the engine. */
-const engineBottom = (on: On, settings: Settings = { set: [] }) => {
+/** What `$.session.surfaces()` answers: the REPL's terminal unless a test says otherwise. */
+type Surfaces = () => readonly ('terminal' | 'desktop')[]
+
+/**
+ * Nothing sits beneath the plugin in a test, so the test stands in for the
+ * engine.
+ *
+ * - `surfaces` is what `$.session.surfaces()` answers, `['terminal']` unless given.
+ * - `turnEnd`, when given, is awaited inside `turn.complete` the way a mod
+ *   beneath (wait-ship drafting, the bet reading git) finishes its own work
+ *   before wait-breathe's `next(e)` resolves.
+ */
+const engineBottom = (
+  on: On,
+  settings: Settings = { set: [] },
+  { surfaces = () => ['terminal'], turnEnd }: { surfaces?: Surfaces; turnEnd?: () => Promise<void> } = {},
+) => {
   const clock = mock.clock(on)
   mock.store(on)
+  on('session.surfaces', () => ({ value: surfaces() }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
-  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('turn.complete', async ($, e) => {
+    await turnEnd?.()
+
+    return { text: e.answer }
+  })
   on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
     const { Box } = $.ui.resolve(e)
 
@@ -114,6 +134,79 @@ test(
     expect(await onTime.find({ text: NUDGE })).toBeDefined()
     expect(await onTime.findAll({ type: 'Button' })).toHaveLength(1)
     await onTime.unmount()
+  },
+)
+
+test(
+  'a turn shorter than the threshold is not nudged while the hooks beneath it finish, and spends no cooldown',
+  SHORT_FUSE,
+  async ($, on) => {
+    // Fable 5.2 audit WB-1: the timer used to stay armed until every hook
+    // beneath had finished the turn, so a 4s turn could be recorded as nudged.
+    let release: () => void = () => undefined
+    const held = new Promise<void>(resolve => {
+      release = resolve
+    })
+    let reached: () => void = () => undefined
+    const parked = new Promise<void>(resolve => {
+      reached = resolve
+    })
+    let holdOnce = true
+    const { clock, logged } = engineBottom(on, { set: [] }, {
+      turnEnd: async () => {
+        if (!holdOnce) return
+        holdOnce = false
+        reached()
+        await held
+      },
+    })
+
+    await $.turn.start({ text: 'four seconds', turnId: 'short' })
+    await clock.advance(4000)
+    // The turn has ended under the 5s threshold; a hook beneath is still busy past it.
+    const completing = $.turn.complete({ turnId: 'short', answer: 'done', durationMs: 4000, isAborted: false, reason: 'answer' })
+    await parked
+    await clock.advance(1500)
+    release()
+    await completing
+
+    // No cooldown was spent: the next long turn gets the first message.
+    await $.turn.start({ text: 'a long one', turnId: 'long' })
+    await clock.advance(5000)
+    const band = await mountBand($, true)
+    expect((await band.find({ text: NUDGE }))?.text).toContain('posture check: reset how you are sitting')
+    await band.unmount()
+    await $.turn.complete({ turnId: 'long', answer: 'done', durationMs: 5000, isAborted: false, reason: 'answer' })
+
+    await $.session.end({ reason: 'other', sessionId: 's1', resume: { id: 's1' } } as never)
+    expect(logged).toEqual(['1 nudge, 0 taken this session'])
+  },
+)
+
+test(
+  'a headless run (-p or the SDK, nothing drawing) arms no timer, saves nothing and logs no line',
+  SHORT_FUSE,
+  async ($, on) => {
+    // Fable 5.2 audit WB-3: a run with nowhere to draw the band used to record
+    // a nudge nobody saw and spend the shared ten-minute cooldown.
+    let surfaces: readonly ('terminal' | 'desktop')[] = []
+    const { clock, logged } = engineBottom(on, { set: [] }, { surfaces: () => surfaces })
+
+    await $.session.start({ cwd: '/work', surface: null, isInteractive: false })
+    await $.turn.start({ text: 'a batch job', turnId: 'headless' })
+    await clock.advance(60_000)
+    await $.turn.complete({ turnId: 'headless', answer: 'done', durationMs: 60_000, isAborted: false, reason: 'answer' })
+    await $.session.end({ reason: 'other', sessionId: 'p1', resume: { id: 'p1' } } as never)
+    expect(logged).toEqual([])
+
+    // A session that draws, a minute later, still gets the first message: no cooldown was spent.
+    surfaces = ['terminal']
+    await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+    await $.turn.start({ text: 'a long one', turnId: 'repl' })
+    await clock.advance(5000)
+    const band = await mountBand($, true)
+    expect((await band.find({ text: NUDGE }))?.text).toContain('posture check: reset how you are sitting')
+    await band.unmount()
   },
 )
 

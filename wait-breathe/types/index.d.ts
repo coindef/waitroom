@@ -32,6 +32,12 @@ declare module 'claude-code' {
        * The session-end line reads them, then zeroes them.
        */
       sessionCounts: SessionCounts
+      /**
+       * Whether a turn in this session had a surface to draw the band on.
+       * False all through a `-p` run or an SDK host with nothing attached;
+       * session.end logs its line only when this is true.
+       */
+      drewThisSession: boolean
     }
   }
 }

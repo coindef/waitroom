@@ -58,11 +58,14 @@ on: it clears itself once the turn ends either way.
   long in between.
 - **Zero required keys.** Nothing here ever needs an answer — not even the
   `Took it` button, which only exists to let the count mean something.
-- **It comes first in the shared row.** The row shows one mod at a time, so
-  while the nudge is up a `bet-on-your-agent` question waits behind it rather
-  than stacking a second row of buttons on top, and has the row back the
-  moment you press `b` or the turn ends. Only a survey of Claude Code's own
-  holds the nudge back.
+- **It comes first in the shared row.** The row shows one waitroom mod at a
+  time, so while the nudge is up a `bet-on-your-agent` question waits behind
+  it rather than stacking a second row of buttons on top, and has the row back
+  the moment you press `b` or the turn ends. Only a survey of Claude Code's own
+  holds the nudge back. On Claude Code 2.1.323 and later, a row from a plugin
+  outside the waitroom suite stays beside it, whether the nudge is on or off.
+  On 2.1.319 and earlier the row holds one drawing, so a nudge still covers it
+  while it shows.
 
 When the session ends, one line goes into its transcript:
 
@@ -73,8 +76,8 @@ wait-breathe: 3 nudges, 2 taken this session
 Claude Code is closing by then, so this line is for the record rather than
 the screen. It is written only when at least one nudge actually showed. A
 quiet session — nothing ran long, or the plugin is off — writes nothing. It
-counts this session's nudges only: another Claude Code window open at the
-same time keeps its own count.
+counts this session's nudges only. With several windows open, Claude Code may
+not record the line for every window.
 
 ## Commands
 
@@ -114,6 +117,9 @@ no pane to stumble into otherwise.
 - **No sensors, no biometrics, no timers outside the turn you are already
   waiting on.** It reads nothing about you — only how long the current turn
   has been running.
+- **Nothing in a headless run.** A `claude -p` run, or an SDK session with
+  nothing attached to draw on, arms no timer, saves no nudge and writes no
+  session line, so it never uses up the cooldown your own sessions share.
 - **No health claims.** Each nudge names an action, never a benefit. This is
   not medical advice and does not pretend to be.
 - **No network, no account, no telemetry.** Everything it keeps lives in its
@@ -136,8 +142,10 @@ state contract. `tests/flow.test.tsx` drives the whole loop through the engine
 with the mock clock, arming the threshold at `turn.start` and advancing past it
 the way a real long turn would — including `/breathe` flipping the setting
 both ways, and the nudge taking the shared row from a bet question or a ship
-offer beneath it. `tests/store.test.tsx` checks that a failed store read is left unwritten, and
-that a record this mod cannot read is replaced the next time a nudge is due.
+offer beneath it. `tests/store.test.tsx` checks that a failed store read is left unwritten,
+that a failed write when a nudge is due shows nothing (so the same nudge cannot
+come twice inside ten minutes), and that a record this mod cannot read is
+replaced the next time a nudge is due.
 
 ## The first minute
 

@@ -118,6 +118,22 @@ test('a due nudge keeps the band ahead of a ship offer and a forecast, and an en
   expect(rowsKept([other], false)).toEqual([other])
 })
 
+test('a row from a plugin outside the waitroom suite stays beside the one waitroom row', () => {
+  const breathe = { plugin: 'wait-breathe', tree: { type: 'Box' } }
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const bet = { plugin: 'bet-on-your-agent', tree: { type: 'Box' } }
+  const other = { plugin: 'some-other-plugin', tree: { type: 'Box' } }
+  // An engine node names no plugin, so it is not the suite's either.
+  const unnamed: { plugin?: unknown; tree?: unknown; type: string } = { type: 'engine' }
+
+  // Fable 5.2 audit WB-4: the suite picks among its own rows and leaves every other row in place.
+  const kept = rowsKept([other, ship, bet, breathe, unnamed], true)
+  expect(kept).toEqual([other, breathe, unnamed])
+  expect(kept[0]).toBe(other)
+  expect(kept[1]).toBe(breathe)
+  expect(rowsKept([ship, other], false)).toEqual([ship, other])
+})
+
 test('storeFrom keeps a record this mod wrote and rejects a value it cannot read', () => {
   const record = { rotation: 3, lastPromptAt: 10, history: [{ at: 10, taken: true }] }
   expect(storeFrom(record)).toEqual(record)
