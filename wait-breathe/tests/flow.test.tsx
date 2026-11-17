@@ -117,6 +117,34 @@ test(
   },
 )
 
+test(
+  'a headless run (-p or the SDK, nothing drawing) arms no timer, saves nothing and logs no line',
+  SHORT_FUSE,
+  async ($, on) => {
+    // Fable 5.2 audit WB-3: a run with nowhere to draw the band used to record
+    // a nudge nobody saw and spend the shared ten-minute cooldown.
+    const { clock, logged } = engineBottom(on)
+    let surfaces: readonly ('terminal' | 'desktop')[] = []
+    on('session.surfaces', () => ({ value: surfaces }))
+
+    await $.session.start({ cwd: '/work', surface: null, isInteractive: false })
+    await $.turn.start({ text: 'a batch job', turnId: 'headless' })
+    await clock.advance(60_000)
+    await $.turn.complete({ turnId: 'headless', answer: 'done', durationMs: 60_000, isAborted: false, reason: 'answer' })
+    await $.session.end({ reason: 'other', sessionId: 'p1', resume: { id: 'p1' } } as never)
+    expect(logged).toEqual([])
+
+    // A session that draws, a minute later, still gets the first message: no cooldown was spent.
+    surfaces = ['terminal']
+    await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+    await $.turn.start({ text: 'a long one', turnId: 'repl' })
+    await clock.advance(5000)
+    const band = await mountBand($, true)
+    expect((await band.find({ text: NUDGE }))?.text).toContain('posture check: reset how you are sitting')
+    await band.unmount()
+  },
+)
+
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 
 /** The Box directly holding the first child that `holds` matches, read off the tree as drawn. */
