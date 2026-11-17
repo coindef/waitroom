@@ -80,7 +80,7 @@ on — the same switch as *Warn when a turn edits outside the scope* under
 
 ```sh
 claude plugin validate ./wait-scope
-claude plugin test     ./wait-scope   # 59 tests
+claude plugin test     ./wait-scope   # 60 tests
 ```
 
 ## The first minute

@@ -95,7 +95,7 @@ wait-secret.
 
 ```sh
 claude plugin validate ./wait-secret
-claude plugin test     ./wait-secret   # 29 tests
+claude plugin test     ./wait-secret   # 30 tests
 ```
 
 Every key in the tests is fake and built by concatenation

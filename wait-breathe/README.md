@@ -75,9 +75,11 @@ wait-breathe: 3 nudges, 2 taken this session
 
 Claude Code is closing by then, so this line is for the record rather than
 the screen. It is written only when at least one nudge actually showed. A
-quiet session — nothing ran long, or the plugin is off — writes nothing. It
-counts this session's nudges only. With several windows open, Claude Code may
-not record the line for every window.
+quiet session — nothing ran long, or the plugin is off — writes nothing. Each
+window counts only the nudges it showed itself. All windows share the
+ten-minute cooldown, though, so after a nudge in one window, the others wait
+out the same ten minutes. A window that never showed a nudge gets no line, not
+even a zero.
 
 ## Commands
 
@@ -132,7 +134,7 @@ no pane to stumble into otherwise.
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 35 tests
+claude plugin test .         # 50 tests
 ```
 
 The rotation, the cooldown, the session counting and the `/breathe` reply
