@@ -25,6 +25,7 @@ const sessionStartedAt = atom(
   { plugin: 'wait-breathe', key: 'sessionStartedAt' } as const,
   null as number | null,
 )
+const drewThisSession = atom({ plugin: 'wait-breathe', key: 'drewThisSession' } as const, false as boolean)
 
 type Config = { enabled: boolean; longTurnSeconds: number }
 
@@ -111,6 +112,25 @@ const commitAndClear = async ($: EngineInterface, turnId: string) => {
   }
 }
 
+/**
+ * Whether anything can draw the band. A `-p` run, or an SDK host with no
+ * client attached, draws nowhere: `$.session.surfaces()` is empty there. It
+ * is asked per turn because a desktop or mobile client can attach later.
+ *
+ * Asked at turn.start only. At session.end even the REPL's terminal has
+ * already detached and the answer is empty, so session.end goes by what the
+ * turns saw (`drewThisSession`).
+ *
+ * Documented never to reject; if it does, the turn is treated as drawn.
+ * The test harness has no default answer for it, so a test that does not
+ * mock it takes this path.
+ */
+const drawsSomewhere = ($: EngineInterface): Promise<boolean> =>
+  $.session.surfaces().then(
+    surfaces => surfaces.length > 0,
+    () => true,
+  )
+
 export const register: Register = (on, options) => {
   const config: Config = {
     enabled: options.enabled === true,
@@ -174,7 +194,11 @@ export const register: Register = (on, options) => {
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) return next(e)
     cancelPending()
-    if (config.enabled) {
+    // Nothing draws the band in a headless run, so a nudge there would only
+    // spend the cooldown the person's own sessions share: no flag, no armed
+    // turn, no timer.
+    if (config.enabled && (await drawsSomewhere($))) {
+      await update($, drewThisSession, () => true)
       const turnId = e.turnId
       armedTurn = turnId
       pending = $.clock.after(config.longTurnSeconds * 1000, () =>
@@ -198,7 +222,9 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('session.end', async ($, e, next) => {
-    if (config.enabled) {
+    // A session none of whose turns had anywhere to draw (a -p run, an SDK
+    // host with nothing attached) writes nothing here, not even a read.
+    if (config.enabled && (await read($, drewThisSession))) {
       const store = await loadStore($)
       if (store !== undefined) {
         const counts = sessionCountsOf(store.history, await read($, sessionStartedAt))

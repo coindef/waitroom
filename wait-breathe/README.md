@@ -115,6 +115,9 @@ no pane to stumble into otherwise.
 - **No sensors, no biometrics, no timers outside the turn you are already
   waiting on.** It reads nothing about you — only how long the current turn
   has been running.
+- **Nothing in a headless run.** A `claude -p` run, or an SDK session with
+  nothing attached to draw on, arms no timer, saves no nudge and writes no
+  session line, so it never uses up the cooldown your own sessions share.
 - **No health claims.** Each nudge names an action, never a benefit. This is
   not medical advice and does not pretend to be.
 - **No network, no account, no telemetry.** Everything it keeps lives in its
