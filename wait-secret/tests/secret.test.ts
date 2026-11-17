@@ -226,6 +226,22 @@ test('the settings row, and its place in the shared row: last', () => {
   expect(rowsKept([other], false)).toEqual([other])
 })
 
+test('a row from a plugin outside the waitroom suite stays beside the one waitroom row', () => {
+  const breathe = { plugin: 'wait-breathe', tree: { type: 'Box' } }
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const bet = { plugin: 'bet-on-your-agent', tree: { type: 'Box' } }
+  const other = { plugin: 'some-other-plugin', tree: { type: 'Box' } }
+  // An engine node names no plugin, so it is not the suite's either.
+  const unnamed: { plugin?: unknown; tree?: unknown; type: string } = { type: 'engine' }
+
+  // Fable 5.2 audit WB-4: the suite picks among its own rows and leaves every other row in place.
+  const kept = rowsKept([other, ship, bet, breathe, unnamed], true)
+  expect(kept).toEqual([other, breathe, unnamed])
+  expect(kept[0]).toBe(other)
+  expect(kept[1]).toBe(breathe)
+  expect(rowsKept([ship, other], false)).toEqual([ship, other])
+})
+
 test('splitNul keeps names with spaces, quotes and non-ASCII exactly as git wrote them', () => {
   expect(splitNul('a.ts\0notes/café key ☕.ts\0 lead and trail \0say "hi".ts\0')).toEqual([
     'a.ts',
