@@ -37,10 +37,14 @@ const NUDGE = /posture|20-20-20|4-4-4|stretch/
 /** What the `/config` menu would answer, and every write the plugin asked of it. */
 type Settings = { refuse?: string; set: { key: string; value: unknown }[] }
 
+/** What `$.session.surfaces()` answers: the REPL's terminal unless a test says otherwise. */
+type Surfaces = () => readonly ('terminal' | 'desktop')[]
+
 /** Nothing sits beneath the plugin in a test, so the test stands in for the engine. */
-const engineBottom = (on: On, settings: Settings = { set: [] }) => {
+const engineBottom = (on: On, settings: Settings = { set: [] }, surfaces: Surfaces = () => ['terminal']) => {
   const clock = mock.clock(on)
   mock.store(on)
+  on('session.surfaces', () => ({ value: surfaces() }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
@@ -123,9 +127,8 @@ test(
   async ($, on) => {
     // Fable 5.2 audit WB-3: a run with nowhere to draw the band used to record
     // a nudge nobody saw and spend the shared ten-minute cooldown.
-    const { clock, logged } = engineBottom(on)
     let surfaces: readonly ('terminal' | 'desktop')[] = []
-    on('session.surfaces', () => ({ value: surfaces }))
+    const { clock, logged } = engineBottom(on, { set: [] }, () => surfaces)
 
     await $.session.start({ cwd: '/work', surface: null, isInteractive: false })
     await $.turn.start({ text: 'a batch job', turnId: 'headless' })
