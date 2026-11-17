@@ -2567,7 +2567,9 @@ test(
     await $.turn.start({ text: 'add the retry logic', turnId: 'turn-q4' })
     const band = await $.ui.mount({ plugin: 'bet-on-your-agent', surface: 'terminal', ...BAND, props: bandProps(true) })
     expect(await band.find({ text: /land first try/ })).toBeDefined()
-    expect(await band.find({ text: /another plugin's row/ })).toBeUndefined()
+    // Whether the outside row also shows is the engine's call: 2.1.319 draws
+    // the bet alone, 2.1.325 stacks the outside row beside it, and the suite
+    // no longer removes it there (rowsKept, Fable 5.2 audit WB-4).
     await band.unmount()
   },
 )

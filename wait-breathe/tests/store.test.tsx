@@ -6,7 +6,8 @@ import { expect, mock, test } from 'claude-code/testing'
  * A failed `$.store.get` is not written back: the saved cooldown, rotation,
  * and history stay, and the raise shows nothing. A value that is present but
  * not a record this mod wrote is expired. The next due nudge replaces it, so
- * the nudges come back.
+ * the nudges come back. A failed `$.store.set` when a nudge is due shows
+ * nothing: a nudge is shown only once its cooldown and rotation are saved.
  */
 
 const BAND = {
@@ -31,10 +32,11 @@ const mountBand = ($: Engine, isWorking = true) =>
 
 const NUDGE = /posture|20-20-20|4-4-4|stretch/
 
-const wire = (on: On, opts: { failGetAt?: number; seed?: unknown } = {}) => {
+const wire = (on: On, opts: { failGetAt?: number; failSetAt?: number; seed?: unknown } = {}) => {
   const store: Record<string, unknown> = {}
   if ('seed' in opts) store.state = opts.seed
   let gets = 0
+  let sets = 0
   const writes = { count: 0 }
   const clock = mock.clock(on)
   on('store.get', ($, e) => {
@@ -45,6 +47,8 @@ const wire = (on: On, opts: { failGetAt?: number; seed?: unknown } = {}) => {
     return { value: value === undefined ? undefined : JSON.parse(JSON.stringify(value)) }
   })
   on('store.set', ($, e) => {
+    sets += 1
+    if (opts.failSetAt === sets) throw new Error('ENOSPC')
     writes.count += 1
     store[e.key] = JSON.parse(JSON.stringify(e.value))
 
@@ -210,5 +214,70 @@ test(
     await band.unmount()
     expect(writes.count).toBe(1)
     expect(store.state).toEqual({ rotation: 1, lastPromptAt: 5000, history: [] })
+  },
+)
+
+test(
+  'a rejected store write when the nudge is raised shows nothing, so the same nudge cannot come twice inside ten minutes',
+  SHORT_FUSE,
+  async ($, on) => {
+    // Fable 5.2 audit WB-5: the nudge used to show before its cooldown and
+    // rotation were saved, so a failed write left neither and the next long
+    // turn showed the same message again.
+    const { clock, store, writes } = wire(on, { failSetAt: 1 })
+    const done = (turnId: string) =>
+      ({ turnId, answer: 'done', durationMs: 5000, isAborted: false, reason: 'answer' }) as const
+
+    await $.turn.start({ text: 'long', turnId: 'w1' })
+    await clock.advance(5000)
+    const failed = await mountBand($)
+    expect(await failed.find({ text: NUDGE })).toBeUndefined()
+    await failed.unmount()
+    await $.turn.complete(done('w1'))
+    expect(writes.count).toBe(0)
+    expect(store.state).toBeUndefined()
+
+    // The store works again: the next long turn gets the first message, once.
+    await $.turn.start({ text: 'long again', turnId: 'w2' })
+    await clock.advance(5000)
+    const shown = await mountBand($)
+    expect((await shown.find({ text: NUDGE }))?.text).toContain('posture check: reset how you are sitting')
+    await shown.unmount()
+    await $.turn.complete(done('w2'))
+
+    // Inside the ten minutes, nothing, and certainly not the same line again.
+    await $.turn.start({ text: 'and again', turnId: 'w3' })
+    await clock.advance(5000)
+    const third = await mountBand($)
+    expect(await third.find({ text: NUDGE })).toBeUndefined()
+    await third.unmount()
+  },
+)
+
+test(
+  'a rejected store write at turn end still clears the nudge, so it does not come back on the next turn',
+  SHORT_FUSE,
+  async ($, on) => {
+    // Write 1 saves the nudge's cooldown. Write 2, the history entry at turn
+    // end, fails. The nudge used to stay in state and draw again from the
+    // first second of the next turn.
+    const { clock, store } = wire(on, { failSetAt: 2 })
+    const done = (turnId: string) =>
+      ({ turnId, answer: 'done', durationMs: 5000, isAborted: false, reason: 'answer' }) as const
+
+    await $.turn.start({ text: 'long', turnId: 'end-1' })
+    await clock.advance(5000)
+    const shown = await mountBand($)
+    expect((await shown.find({ text: NUDGE }))?.text).toContain('posture check: reset how you are sitting')
+    await shown.unmount()
+    await $.turn.complete(done('end-1'))
+    // The cooldown from the raise stands; only the history entry is missing.
+    expect(store.state).toEqual({ rotation: 1, lastPromptAt: 5000, history: [] })
+
+    await $.turn.start({ text: 'short', turnId: 'end-2' })
+    await clock.advance(1000)
+    const next = await mountBand($)
+    expect(await next.find({ text: NUDGE })).toBeUndefined()
+    await next.unmount()
   },
 )

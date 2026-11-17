@@ -421,8 +421,8 @@ export const yieldsBand = (mine: BandMod, beneath: string | undefined): boolean 
  *
  * One waitroom row, earliest first: breathe, ship, bet, scope, secret. While
  * a turn runs the bet's forecast comes ahead of a ship offer and still behind
- * a breathe nudge. A row from outside this list stays only when none of these
- * drew.
+ * a breathe nudge. A row drawn by a plugin outside this list is not the
+ * suite's to give away: it always stays, in its place.
  */
 const ROW_ORDER = ['wait-breathe', 'wait-ship', 'bet-on-your-agent', 'wait-scope', 'wait-secret'] as const
 
@@ -439,5 +439,9 @@ export const rowsKept = <T extends { plugin?: unknown; tree?: unknown }>(
 
   if (winner === undefined) return rows
 
-  return rows.filter(row => drawnBy(row) === winner)
+  return rows.filter(row => {
+    const by = drawnBy(row)
+
+    return by === winner || !(ROW_ORDER as readonly (string | undefined)[]).includes(by)
+  })
 }
