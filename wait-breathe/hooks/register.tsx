@@ -77,19 +77,28 @@ const takeBreak = async ($: EngineInterface, turnId: string) => {
   )
 }
 
-/** Folds the turn's prompt, if it raised one, into the persisted history and clears it. */
+/**
+ * Folds the turn's prompt, if it raised one, into the persisted history and
+ * clears it. The clear always runs: a prompt left in state would draw again
+ * from the first second of the next turn.
+ */
 const commitAndClear = async ($: EngineInterface, turnId: string) => {
-  const current = await read($, activePrompt)
-  if (current && current.turnId === turnId) {
-    const store = await loadStore($)
-    // A failed read skips the write. An unreadable value arrives empty, and
-    // this write replaces it.
-    if (store !== undefined) {
-      const event: PromptEvent = { at: current.shownAt, taken: current.takenAt !== null }
-      await $.store.set(STORE_KEY, { ...store, history: keepHistory(store.history, event) })
+  try {
+    const current = await read($, activePrompt)
+    if (current && current.turnId === turnId) {
+      const store = await loadStore($)
+      // A failed read skips the write. An unreadable value arrives empty, and
+      // this write replaces it.
+      if (store !== undefined) {
+        const event: PromptEvent = { at: current.shownAt, taken: current.takenAt !== null }
+        // A failed write loses this one history entry and nothing else: the
+        // cooldown and rotation were saved when the nudge was raised.
+        await $.store.set(STORE_KEY, { ...store, history: keepHistory(store.history, event) }).catch(() => undefined)
+      }
     }
+  } finally {
+    await update($, activePrompt, () => null)
   }
-  await update($, activePrompt, () => null)
 }
 
 export const register: Register = (on, options) => {

@@ -253,3 +253,31 @@ test(
     await third.unmount()
   },
 )
+
+test(
+  'a rejected store write at turn end still clears the nudge, so it does not come back on the next turn',
+  SHORT_FUSE,
+  async ($, on) => {
+    // Write 1 saves the nudge's cooldown. Write 2, the history entry at turn
+    // end, fails. The nudge used to stay in state and draw again from the
+    // first second of the next turn.
+    const { clock, store } = wire(on, { failSetAt: 2 })
+    const done = (turnId: string) =>
+      ({ turnId, answer: 'done', durationMs: 5000, isAborted: false, reason: 'answer' }) as const
+
+    await $.turn.start({ text: 'long', turnId: 'end-1' })
+    await clock.advance(5000)
+    const shown = await mountBand($)
+    expect((await shown.find({ text: NUDGE }))?.text).toContain('posture check: reset how you are sitting')
+    await shown.unmount()
+    await $.turn.complete(done('end-1'))
+    // The cooldown from the raise stands; only the history entry is missing.
+    expect(store.state).toEqual({ rotation: 1, lastPromptAt: 5000, history: [] })
+
+    await $.turn.start({ text: 'short', turnId: 'end-2' })
+    await clock.advance(1000)
+    const next = await mountBand($)
+    expect(await next.find({ text: NUDGE })).toBeUndefined()
+    await next.unmount()
+  },
+)
