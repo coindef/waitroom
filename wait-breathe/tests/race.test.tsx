@@ -32,8 +32,8 @@ declare const setTimeout: (callback: () => void, ms: number) => unknown
 
 const NUDGE = /posture|20-20-20|4-4-4|stretch/
 
-/** A store whose first read is held open until the test releases it. */
-const holdingFirstRead = (on: On) => {
+/** A store whose first read, or first write, is held open until the test releases it. */
+const holdingFirst = (on: On, hold: 'get' | 'set') => {
   const store: Record<string, unknown> = {}
   let release: () => void = () => undefined
   const held = new Promise<void>(resolve => {
@@ -44,10 +44,11 @@ const holdingFirstRead = (on: On) => {
     reached = resolve
   })
   let gets = 0
+  let sets = 0
   const clock = mock.clock(on)
   on('store.get', async ($, e) => {
     gets += 1
-    if (gets === 1) {
+    if (hold === 'get' && gets === 1) {
       reached()
       await held
     }
@@ -55,7 +56,12 @@ const holdingFirstRead = (on: On) => {
 
     return { value: value === undefined ? undefined : JSON.parse(JSON.stringify(value)) }
   })
-  on('store.set', ($, e) => {
+  on('store.set', async ($, e) => {
+    sets += 1
+    if (hold === 'set' && sets === 1) {
+      reached()
+      await held
+    }
     store[e.key] = JSON.parse(JSON.stringify(e.value))
 
     return { value: undefined }
@@ -89,7 +95,7 @@ test(
     // check is parked inside its store read; the turn ends; then the read
     // comes back. Without the re-check the nudge was saved and drew again in
     // the next turn.
-    const { clock, store, release, parked } = holdingFirstRead(on)
+    const { clock, store, release, parked } = holdingFirst(on, 'get')
     await $.turn.start({ text: 'five seconds', turnId: 'ended' })
     const firing = clock.advance(5000)
     await parked
@@ -104,5 +110,35 @@ test(
     const shown = (await band.find({ text: NUDGE }))?.text
     await band.unmount()
     expect({ shown: shown ?? null, saved: store.state ?? null }).toEqual({ shown: null, saved: null })
+  },
+)
+
+test(
+  'a check still saving its nudge when its turn ends shows nothing, then or in the next turn',
+  { options: { enabled: true, longTurnSeconds: 5 } },
+  async ($, on) => {
+    // The nudge is saved before it is shown (WB-5), and that write is a round
+    // trip of its own. The turn ends while it is in flight; the check must ask
+    // again once the write lands, or it raises a prompt for a turn that is over
+    // and the next turn opens with it.
+    const { clock, store, release, parked } = holdingFirst(on, 'set')
+    await $.turn.start({ text: 'five seconds', turnId: 'ended' })
+    const firing = clock.advance(5000)
+    await parked
+    await $.turn.complete({ turnId: 'ended', answer: 'done', durationMs: 5000, isAborted: false, reason: 'answer' })
+    release()
+    await firing
+    await new Promise<void>(resolve => setTimeout(resolve, 20))
+
+    const after = await mountBand($)
+    expect(await after.find({ text: NUDGE })).toBeUndefined()
+    await after.unmount()
+
+    await $.turn.start({ text: 'next', turnId: 'next' })
+    const band = await mountBand($)
+    expect(await band.find({ text: NUDGE })).toBeUndefined()
+    await band.unmount()
+    // The write had already landed, so its cooldown stands, as for any raise.
+    expect(store.state).toEqual({ rotation: 1, lastPromptAt: 5000, history: [] })
   },
 )
