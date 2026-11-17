@@ -29,10 +29,14 @@ export const COOLDOWN_MS = 10 * 60 * 1000
 export const canPrompt = (lastPromptAt: number | null, now: number): boolean =>
   lastPromptAt === null || now - lastPromptAt >= COOLDOWN_MS
 
-/** One prompt's outcome, kept only long enough to count it in a session's summary. */
+/** One prompt's outcome, as saved in the store's capped history. */
 export type PromptEvent = { at: number; taken: boolean }
 
-/** The one record in `$.store`: rotation, cooldown, and the history the summary counts. */
+/**
+ * The one record in `$.store`: rotation, cooldown, and a capped history of
+ * shown prompts. The store is shared by every session of the install, so the
+ * session-end line does not count from this history; it reads `$.state`.
+ */
 export type BreatheStore = { rotation: number; lastPromptAt: number | null; history: PromptEvent[] }
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
@@ -65,16 +69,6 @@ export const keepHistory = (
   event: PromptEvent,
   limit = 500,
 ): PromptEvent[] => [...history, event].slice(-limit)
-
-/** Prompts shown and taken from `sessionStartedAt` on, for the session-end line. */
-export const sessionCountsOf = (
-  history: readonly PromptEvent[],
-  sessionStartedAt: number | null,
-): { shown: number; taken: number } => {
-  const inSession = sessionStartedAt === null ? history : history.filter(one => one.at >= sessionStartedAt)
-
-  return { shown: inSession.length, taken: inSession.filter(one => one.taken).length }
-}
 
 /**
  * The session-end line, in wait-review's style. The engine already puts

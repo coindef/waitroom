@@ -70,9 +70,14 @@ const wire = (on: On, opts: { failGetAt?: number; failSetAt?: number; seed?: unk
 
     return <Box />
   })
-  on('ui.log', () => ({ value: undefined }))
+  const logged: string[] = []
+  on('ui.log', ($, e) => {
+    logged.push(e.text)
 
-  return { clock, store, writes }
+    return { value: undefined }
+  })
+
+  return { clock, store, writes, logged }
 }
 
 const SHORT_FUSE = { options: { enabled: true, longTurnSeconds: 5 } }
@@ -279,5 +284,66 @@ test(
     const next = await mountBand($)
     expect(await next.find({ text: NUDGE })).toBeUndefined()
     await next.unmount()
+  },
+)
+
+test(
+  "the session-end line counts this session's nudges only, not another session's sharing the store",
+  SHORT_FUSE,
+  async ($, on) => {
+    // Fable 5.2 audit WB-2: the line used to count every entry in the shared
+    // history saved after this session began, whichever window showed it.
+    const { clock, store, logged } = wire(on)
+    const end = (sessionId: string) =>
+      $.session.end({ reason: 'other', sessionId, resume: { id: sessionId } } as never)
+    await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+
+    // Another window, same install, shows two nudges and takes one.
+    await clock.advance(500)
+    store.state = {
+      rotation: 2,
+      lastPromptAt: 900,
+      history: [
+        { at: 500, taken: true },
+        { at: 900, taken: false },
+      ],
+    }
+
+    // This session's own long turn, past that window's cooldown.
+    await clock.advance(11 * 60 * 1000)
+    await $.turn.start({ text: 'long', turnId: 'mine' })
+    await clock.advance(5000)
+    const band = await mountBand($)
+    expect(await band.find({ text: NUDGE })).toBeDefined()
+    await band.unmount()
+    await $.turn.complete({ turnId: 'mine', answer: 'done', durationMs: 5000, isAborted: false, reason: 'answer' })
+
+    await end('s1')
+    expect(logged).toEqual(['1 nudge, 0 taken this session'])
+
+    // A session that starts after that one ends (a /clear) has shown nothing yet.
+    await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+    await end('s2')
+    expect(logged).toEqual(['1 nudge, 0 taken this session'])
+  },
+)
+
+test(
+  'a nudge whose history write fails at turn end still counts in the session-end line',
+  SHORT_FUSE,
+  async ($, on) => {
+    // The count is kept in session state before the history write, inside
+    // the try whose finally clears the nudge, so a failed write loses the
+    // history entry only.
+    const { clock, logged } = wire(on, { failSetAt: 2 })
+    await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+    await $.turn.start({ text: 'long', turnId: 'count-1' })
+    await clock.advance(5000)
+    const band = await mountBand($)
+    expect(await band.find({ text: NUDGE })).toBeDefined()
+    await band.unmount()
+    await $.turn.complete({ turnId: 'count-1', answer: 'done', durationMs: 5000, isAborted: false, reason: 'answer' })
+    await $.session.end({ reason: 'other', sessionId: 's1', resume: { id: 's1' } } as never)
+    expect(logged).toEqual(['1 nudge, 0 taken this session'])
   },
 )

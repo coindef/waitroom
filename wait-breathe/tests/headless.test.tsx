@@ -178,3 +178,50 @@ test(
     expect(logged).toEqual(['1 nudge, 0 taken this session'])
   },
 )
+
+/**
+ * The session-end decision reads `drewThisSession` before anything else.
+ * The engine's `$.state` is answered here from a map the test controls, so a
+ * session that never drew can be given counts it should never report.
+ */
+const stateFrom = (on: On, seed: Record<string, unknown>) => {
+  const values = new Map<string, unknown>(Object.entries(seed))
+  const versions = new Map<string, number>()
+  const reads: string[] = []
+  on('state.get', ($, e) => {
+    const { key } = e as { key: string }
+    reads.push(key)
+
+    return { value: { value: values.get(key), version: versions.get(key) ?? 0 } }
+  })
+  on('state.set', ($, e) => {
+    const { key, value } = e as { key: string; value: unknown }
+    values.set(key, value)
+    const version = (versions.get(key) ?? 0) + 1
+    versions.set(key, version)
+
+    return { value: { isSet: true as const, version } }
+  })
+
+  return { values, reads }
+}
+
+test(
+  'session end asks whether any turn drew before it reads the counts, and a session that never drew logs nothing',
+  SHORT_FUSE,
+  async ($, on) => {
+    const { logged } = bottom(on)
+    const { reads } = stateFrom(on, { drewThisSession: false, sessionCounts: { shown: 2, taken: 1 } })
+    await end($, 'p1')
+    expect(logged).toEqual([])
+    expect(reads[0]).toBe('drewThisSession')
+  },
+)
+
+test('the same counts in a session that drew are logged at session end', SHORT_FUSE, async ($, on) => {
+  const { logged } = bottom(on)
+  const { reads } = stateFrom(on, { drewThisSession: true, sessionCounts: { shown: 2, taken: 1 } })
+  await end($, 's1')
+  expect(logged).toEqual(['2 nudges, 1 taken this session'])
+  expect(reads.slice(0, 2)).toEqual(['drewThisSession', 'sessionCounts'])
+})
