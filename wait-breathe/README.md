@@ -62,8 +62,10 @@ on: it clears itself once the turn ends either way.
   time, so while the nudge is up a `bet-on-your-agent` question waits behind
   it rather than stacking a second row of buttons on top, and has the row back
   the moment you press `b` or the turn ends. Only a survey of Claude Code's own
-  holds the nudge back. A row drawn by a plugin outside the waitroom suite is
-  left where it is, whether the nudge is on or off.
+  holds the nudge back. On Claude Code 2.1.323 and later, a row from a plugin
+  outside the waitroom suite stays beside it, whether the nudge is on or off.
+  On 2.1.319 and earlier the row holds one drawing, so a nudge still covers it
+  while it shows.
 
 When the session ends, one line goes into its transcript:
 
