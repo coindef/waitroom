@@ -17,15 +17,21 @@ export type ActivePrompt = {
   takenAt: number | null
 }
 
+/** Nudges shown and taken in this session, for the session-end line. */
+export type SessionCounts = {
+  shown: number
+  taken: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'wait-breathe': {
       activePrompt: ActivePrompt | null
       /**
-       * When this session began, epoch milliseconds; null until `session.start`
-       * has set it once. The session-end line counts from here.
+       * Nudges this session showed and had taken, counted as each turn ends.
+       * The session-end line reads them, then zeroes them.
        */
-      sessionStartedAt: number | null
+      sessionCounts: SessionCounts
     }
   }
 }

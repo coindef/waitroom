@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
-import type { ActivePrompt } from '../types'
+import type { ActivePrompt, SessionCounts } from '../types'
 import {
   type BreatheStore,
   canPrompt,
@@ -9,7 +9,6 @@ import {
   keepHistory,
   messageAt,
   type PromptEvent,
-  sessionCountsOf,
   sessionSummaryLine,
   storeFrom,
   toggledLine,
@@ -21,9 +20,14 @@ import {
 const STORE_KEY = 'state'
 
 const activePrompt = atom({ plugin: 'wait-breathe', key: 'activePrompt' } as const, null as ActivePrompt | null)
-const sessionStartedAt = atom(
-  { plugin: 'wait-breathe', key: 'sessionStartedAt' } as const,
-  null as number | null,
+/**
+ * What this session has shown and had taken, for its session-end line. Kept
+ * in `$.state`, not counted off the store's history: that history is shared
+ * by every session of the install and does not say which one showed what.
+ */
+const sessionCounts = atom(
+  { plugin: 'wait-breathe', key: 'sessionCounts' } as const,
+  { shown: 0, taken: 0 } as SessionCounts,
 )
 
 type Config = { enabled: boolean; longTurnSeconds: number }
@@ -70,15 +74,23 @@ const takeBreak = async ($: EngineInterface, turnId: string) => {
   )
 }
 
-/** Folds the turn's prompt, if it raised one, into the persisted history and clears it. */
+/**
+ * Counts the turn's prompt, if it raised one, for this session, folds it into
+ * the persisted history, and clears it.
+ */
 const commitAndClear = async ($: EngineInterface, turnId: string) => {
   const current = await read($, activePrompt)
   if (current && current.turnId === turnId) {
+    const taken = current.takenAt !== null
+    await update($, sessionCounts, counts => ({
+      shown: counts.shown + 1,
+      taken: counts.taken + (taken ? 1 : 0),
+    }))
     const store = await loadStore($)
     // A failed read skips the write. An unreadable value arrives empty, and
     // this write replaces it.
     if (store !== undefined) {
-      const event: PromptEvent = { at: current.shownAt, taken: current.takenAt !== null }
+      const event: PromptEvent = { at: current.shownAt, taken }
       await $.store.set(STORE_KEY, { ...store, history: keepHistory(store.history, event) })
     }
   }
@@ -110,13 +122,8 @@ export const register: Register = (on, options) => {
       name: 'breathe',
       description: 'Turn the breathing nudges on or off',
     })
-    // Guarded: session.start fires again on every hot reload while $.state
-    // survives it, so an unconditional write would move "this session" to
-    // whatever moment the reload happened rather than when it truly began.
-    if ((await read($, sessionStartedAt)) === null) {
-      const now = await $.clock.now()
-      await update($, sessionStartedAt, () => now)
-    }
+    // The session's counts are not reset here: session.start fires again on
+    // every hot reload while $.state survives it. session.end resets them.
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -162,13 +169,11 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('session.end', async ($, e, next) => {
-    if (config.enabled) {
-      const store = await loadStore($)
-      if (store !== undefined) {
-        const counts = sessionCountsOf(store.history, await read($, sessionStartedAt))
-        if (counts.shown > 0) $.ui.log(sessionSummaryLine(counts.shown, counts.taken))
-      }
-    }
+    const counts = await read($, sessionCounts)
+    // Zeroed once read, so a session begun after this one (a /clear in the
+    // same process) does not report these again.
+    await update($, sessionCounts, () => ({ shown: 0, taken: 0 }))
+    if (config.enabled && counts.shown > 0) $.ui.log(sessionSummaryLine(counts.shown, counts.taken))
 
     return next(e)
   }).catch(($, e, next) => next(e))

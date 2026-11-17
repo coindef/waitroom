@@ -9,7 +9,6 @@ import {
   messageAt,
   MESSAGES,
   rowsKept,
-  sessionCountsOf,
   sessionSummaryLine,
   storeFrom,
   toggledLine,
@@ -47,17 +46,6 @@ test('history is capped from the oldest end, not the newest', () => {
   for (let at = 0; at < 5; at++) history = keepHistory(history, { at, taken: false }, 3)
 
   expect(history.map(one => one.at)).toEqual([2, 3, 4])
-})
-
-test('session counts only include what happened at or after the session began', () => {
-  const history = [
-    { at: 100, taken: true },
-    { at: 200, taken: false },
-    { at: 300, taken: true },
-  ]
-
-  expect(sessionCountsOf(history, 200)).toEqual({ shown: 2, taken: 1 })
-  expect(sessionCountsOf(history, null)).toEqual({ shown: 3, taken: 2 })
 })
 
 test('the summary line counts a singular nudge correctly and pluralizes past it', () => {

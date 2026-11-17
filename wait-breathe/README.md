@@ -72,7 +72,9 @@ wait-breathe: 3 nudges, 2 taken this session
 
 Claude Code is closing by then, so this line is for the record rather than
 the screen. It is written only when at least one nudge actually showed. A
-quiet session — nothing ran long, or the plugin is off — writes nothing.
+quiet session — nothing ran long, or the plugin is off — writes nothing. It
+counts this session's nudges only: another Claude Code window open at the
+same time keeps its own count.
 
 ## Commands
 
