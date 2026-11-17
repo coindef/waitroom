@@ -1155,6 +1155,22 @@ test('while a turn runs the forecast keeps the band ahead of a ship offer; a bre
   expect(rowsKept(outsiders, true)).toBe(outsiders)
 })
 
+test('a row from a plugin outside the waitroom suite stays beside the one waitroom row', () => {
+  const breathe = { plugin: 'wait-breathe', tree: { type: 'Box' } }
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const bet = { plugin: 'bet-on-your-agent', tree: { type: 'Box' } }
+  const other = { plugin: 'some-other-plugin', tree: { type: 'Box' } }
+  // An engine node names no plugin, so it is not the suite's either.
+  const unnamed: { plugin?: unknown; tree?: unknown; type: string } = { type: 'engine' }
+
+  // Fable 5.2 audit WB-4: the suite picks among its own rows and leaves every other row in place.
+  const kept = rowsKept([other, ship, bet, breathe, unnamed], true)
+  expect(kept).toEqual([other, breathe, unnamed])
+  expect(kept[0]).toBe(other)
+  expect(kept[1]).toBe(breathe)
+  expect(rowsKept([ship, other], false)).toEqual([ship, other])
+})
+
 test('a store file is named the way the engine names it', () => {
   expect(storeFileName('bet-on-your-agent@waitroom')).toBe('bet-on-your-agent_waitroom-34ea4b598520.json')
   expect(storeFileName('bet-on-your-agent@inline')).toBe('bet-on-your-agent_inline-b4b76a335767.json')

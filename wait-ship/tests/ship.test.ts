@@ -620,7 +620,23 @@ test('AbovePromptList keeps one waitroom row, the same object, and leaves an out
   expect(rowsKept([bet, breathe, ship], true)[0]).toBe(breathe)
   expect(rowsKept([secret, scope, ship], false).map(row => row.plugin)).toEqual(['wait-ship'])
   expect(rowsKept(outsiders, false)).toBe(outsiders)
-  expect(rowsKept([other, ship], true).map(row => row.plugin)).toEqual(['wait-ship'])
+  expect(rowsKept([other, ship], true).map(row => row.plugin)).toEqual(['some-other-plugin', 'wait-ship'])
+})
+
+test('a row from a plugin outside the waitroom suite stays beside the one waitroom row', () => {
+  const breathe = { plugin: 'wait-breathe', tree: { type: 'Box' } }
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const bet = { plugin: 'bet-on-your-agent', tree: { type: 'Box' } }
+  const other = { plugin: 'some-other-plugin', tree: { type: 'Box' } }
+  // An engine node names no plugin, so it is not the suite's either.
+  const unnamed: { plugin?: unknown; tree?: unknown; type: string } = { type: 'engine' }
+
+  // Fable 5.2 audit WB-4: the suite picks among its own rows and leaves every other row in place.
+  const kept = rowsKept([other, ship, bet, breathe, unnamed], true)
+  expect(kept).toEqual([other, breathe, unnamed])
+  expect(kept[0]).toBe(other)
+  expect(kept[1]).toBe(breathe)
+  expect(rowsKept([ship, other], false)).toEqual([ship, other])
 })
 
 // ---------------------------------------------------------------------------

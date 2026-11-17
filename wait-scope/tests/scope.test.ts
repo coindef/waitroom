@@ -512,6 +512,22 @@ test('the row goes to every other waitroom mod first, as their own lists already
   expect(rowsKept([scope], false)[0]).toBe(scope)
 })
 
+test('a row from a plugin outside the waitroom suite stays beside the one waitroom row', () => {
+  const breathe = { plugin: 'wait-breathe', tree: { type: 'Box' } }
+  const ship = { plugin: 'wait-ship', tree: { type: 'Box' } }
+  const bet = { plugin: 'bet-on-your-agent', tree: { type: 'Box' } }
+  const other = { plugin: 'some-other-plugin', tree: { type: 'Box' } }
+  // An engine node names no plugin, so it is not the suite's either.
+  const unnamed: { plugin?: unknown; tree?: unknown; type: string } = { type: 'engine' }
+
+  // Fable 5.2 audit WB-4: the suite picks among its own rows and leaves every other row in place.
+  const kept = rowsKept([other, ship, bet, breathe, unnamed], true)
+  expect(kept).toEqual([other, breathe, unnamed])
+  expect(kept[0]).toBe(other)
+  expect(kept[1]).toBe(breathe)
+  expect(rowsKept([ship, other], false)).toEqual([ship, other])
+})
+
 test('a root and a path that differ only by drive-letter case, path case on Windows, or /private on macOS are one tree', () => {
   expect(projectPath('C:\\repo', 'c:\\repo\\src\\a.ts')).toBe('src/a.ts')
   expect(projectPath('c:/repo', 'C:/repo/src/a.ts')).toBe('src/a.ts')
