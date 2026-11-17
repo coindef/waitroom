@@ -50,14 +50,21 @@ const loadStore = async ($: EngineInterface): Promise<BreatheStore | undefined> 
   return storeFrom(read.value) ?? emptyStore()
 }
 
-/** The one check a long turn gets: past the threshold, cooldown allowing, show it. */
-const fire = async ($: EngineInterface, turnId: string) => {
+/**
+ * The one check a long turn gets: past the threshold, cooldown allowing, show it.
+ *
+ * `stillArmed` is asked after the reads and again after the write: a turn
+ * that ended while this check was reading the store raises nothing and
+ * spends no cooldown; one that ended while it was saving shows nothing.
+ */
+const fire = async ($: EngineInterface, turnId: string, stillArmed: () => boolean) => {
   const store = await loadStore($)
   // The read failed: show nothing. A nudge here could be the second inside ten
   // minutes, and writing would replace a record this read does not have.
   if (store === undefined) return
   const now = await $.clock.now()
   if (!canPrompt(store.lastPromptAt, now)) return
+  if (!stillArmed()) return
   const message = messageAt(store.rotation)
   // Saved first, shown second. A nudge whose cooldown and rotation did not
   // land would show again, the same message, inside the ten minutes; a failed
@@ -67,6 +74,9 @@ const fire = async ($: EngineInterface, turnId: string) => {
     () => false,
   )
   if (!saved) return
+  // The write is a round trip of its own: a turn that ended during it shows
+  // nothing. Its cooldown is already saved and stays, as for any raise.
+  if (!stillArmed()) return
   await update($, activePrompt, () => ({ turnId, message, shownAt: now, takenAt: null }))
 }
 
@@ -115,10 +125,13 @@ export const register: Register = (on, options) => {
    * `turn.complete` share it to start and stop the one check a turn gets.
    */
   let pending: Timer | null = null
+  /** The turn the pending timer belongs to; null once it is cancelled. */
+  let armedTurn: string | null = null
 
   const cancelPending = () => {
     pending?.cancel()
     pending = null
+    armedTurn = null
   }
 
   on('session.start', async ($, e, next) => {
@@ -162,16 +175,23 @@ export const register: Register = (on, options) => {
     if (e.agentId !== undefined) return next(e)
     cancelPending()
     if (config.enabled) {
-      pending = $.clock.after(config.longTurnSeconds * 1000, () => fire($, e.turnId).catch(() => undefined))
+      const turnId = e.turnId
+      armedTurn = turnId
+      pending = $.clock.after(config.longTurnSeconds * 1000, () =>
+        fire($, turnId, () => armedTurn === turnId).catch(() => undefined),
+      )
     }
 
     return next(e)
   }).catch(($, e, next) => next(e))
 
+  // The turn has ended when this event is raised, so its timer stops here,
+  // before the hooks beneath do their own end-of-turn work: a turn under the
+  // threshold is never nudged while they finish.
   on('turn.complete', async ($, e, next) => {
-    const done = await next(e)
-    if (e.agentId !== undefined) return done
+    if (e.agentId !== undefined) return next(e)
     cancelPending()
+    const done = await next(e)
     await commitAndClear($, e.turnId)
 
     return done
