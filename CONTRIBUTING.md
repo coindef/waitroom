@@ -5,22 +5,22 @@ Each mod is a self-contained plugin folder. From the repository root:
 
 ```
 claude plugin validate ./bet-on-your-agent
-claude plugin test     ./bet-on-your-agent    # 178 tests
+claude plugin test     ./bet-on-your-agent    # 179 tests
 
 claude plugin validate ./wait-ship
-claude plugin test     ./wait-ship            # 104 tests
+claude plugin test     ./wait-ship            # 105 tests
 
 claude plugin validate ./wait-breathe
-claude plugin test     ./wait-breathe         # 35 tests
+claude plugin test     ./wait-breathe         # 50 tests
 
 claude plugin validate ./wait-ping
 claude plugin test     ./wait-ping            # 36 tests
 
 claude plugin validate ./wait-scope
-claude plugin test     ./wait-scope           # 59 tests
+claude plugin test     ./wait-scope           # 60 tests
 
 claude plugin validate ./wait-secret
-claude plugin test     ./wait-secret          # 29 tests
+claude plugin test     ./wait-secret          # 30 tests
 
 claude plugin validate ./wait-notify
 claude plugin test     ./wait-notify          # 95 tests

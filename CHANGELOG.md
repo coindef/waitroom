@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### wait-breathe 0.2.3
+
+- **A row from a plugin outside the suite stays.** On 2.1.323 and later, the waitroom mods pick one row among their own and leave other plugins' rows in place, even with wait-breathe off.
+- **A nudge that could not be saved is not shown.** If the cooldown can't be written, that turn shows nothing, so the same message does not come back inside ten minutes.
+- **A nudge always clears when its turn ends.** If saving it to the history fails at turn end, the nudge still goes away, and the next turn does not start with it on screen. That one history entry is not kept.
+- **A short turn is never counted as nudged.** The threshold timer now stops as soon as the turn ends, before other mods finish their own end-of-turn work. Before, a turn under the threshold could be recorded as nudged while wait-ship or the bet was still finishing, and that used up the ten-minute cooldown and added one to the session-end count.
+- **Nothing happens in a headless run.** A `claude -p` run, or an SDK session with nothing attached to draw on, no longer times its turns, saves a nudge or logs the session-end line. Before, a long scripted run used up the ten-minute cooldown your own sessions share. A desktop or mobile client that attaches later gets nudges from its next turn.
+- **The session-end line counts this session only.** With two Claude Code windows open, each window's line now counts only the nudges it showed. Before, it counted every nudge any window had saved since the session began.
+
+### wait-ship 0.1.8
+
+- **A row from a plugin outside the suite stays.** On 2.1.323 and later, the waitroom mods pick one row among their own and leave other plugins' rows in place, even with wait-breathe off.
+
+### bet-on-your-agent 0.6.7
+
+- **A row from a plugin outside the suite stays.** On 2.1.323 and later, the waitroom mods pick one row among their own and leave other plugins' rows in place, even with wait-breathe off.
+
+### wait-scope 0.1.3
+
+- **A row from a plugin outside the suite stays.** On 2.1.323 and later, the waitroom mods pick one row among their own and leave other plugins' rows in place, even with wait-breathe off.
+
+### wait-secret 0.1.3
+
+- **A row from a plugin outside the suite stays.** On 2.1.323 and later, the waitroom mods pick one row among their own and leave other plugins' rows in place, even with wait-breathe off.
+
 ### wait-ship 0.1.7
 
 - **The shared row is one row again on Claude Code 2.1.323 and later.** Those versions ask every mod for its own row and stack the answers, and `next()` no longer says who drew. wait-ship leaves the other rows out of `AbovePromptList`, in the same order as before: breathe, then this offer, then the bet. While a turn runs, the bet's forecast comes before this offer, and a breathe nudge still comes first. On 2.1.319 and earlier it still yields from the stamp on `next()`.
@@ -381,7 +406,8 @@ a long turn. Off by default.
 - **Yields to a real survey** already asking something else, the same
   convention every mod in this marketplace follows.
 - **A session-end summary line** — `breathe: 3 prompts, 2 taken this
-  session` — said only once at least one nudge actually showed.
+  session` — logged only once at least one nudge actually showed. It goes to
+  the debug log, not the screen; start Claude Code with `--debug` to read it.
 
 ## 0.5.0 — playability, phase 2
 
