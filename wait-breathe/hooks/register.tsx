@@ -59,8 +59,15 @@ const fire = async ($: EngineInterface, turnId: string) => {
   const now = await $.clock.now()
   if (!canPrompt(store.lastPromptAt, now)) return
   const message = messageAt(store.rotation)
+  // Saved first, shown second. A nudge whose cooldown and rotation did not
+  // land would show again, the same message, inside the ten minutes; a failed
+  // write therefore shows nothing, and the next long turn tries again.
+  const saved = await $.store.set(STORE_KEY, { ...store, rotation: store.rotation + 1, lastPromptAt: now }).then(
+    () => true,
+    () => false,
+  )
+  if (!saved) return
   await update($, activePrompt, () => ({ turnId, message, shownAt: now, takenAt: null }))
-  await $.store.set(STORE_KEY, { ...store, rotation: store.rotation + 1, lastPromptAt: now })
 }
 
 const takeBreak = async ($: EngineInterface, turnId: string) => {
@@ -146,7 +153,7 @@ export const register: Register = (on, options) => {
     if (e.agentId !== undefined) return next(e)
     cancelPending()
     if (config.enabled) {
-      pending = $.clock.after(config.longTurnSeconds * 1000, () => fire($, e.turnId))
+      pending = $.clock.after(config.longTurnSeconds * 1000, () => fire($, e.turnId).catch(() => undefined))
     }
 
     return next(e)
