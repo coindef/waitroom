@@ -67,19 +67,20 @@ on: it clears itself once the turn ends either way.
   On 2.1.319 and earlier the row holds one drawing, so a nudge still covers it
   while it shows.
 
-When the session ends, one line goes into its transcript:
+When a session that showed a nudge ends, wait-breathe logs one line:
 
 ```
-wait-breathe: 3 nudges, 2 taken this session
+3 nudges, 2 taken this session
 ```
 
-Claude Code is closing by then, so this line is for the record rather than
-the screen. It is written only when at least one nudge actually showed. A
-quiet session — nothing ran long, or the plugin is off — writes nothing. Each
-window counts only the nudges it showed itself. All windows share the
-ten-minute cooldown, though, so after a nudge in one window, the others wait
-out the same ten minutes. A window that never showed a nudge gets no line, not
-even a zero.
+Claude Code is closing by then, so the line is not shown on screen and is
+usually not saved in the session transcript. To read it, start Claude Code
+with `--debug`. The line is in that session's debug log,
+`~/.claude/debug/<session-id>.txt`, as
+`[wait-breathe] $.ui.log: 3 nudges, 2 taken this session`. Each window counts
+only the nudges it showed itself. All windows share the ten-minute cooldown,
+though, so after a nudge in one window, the others wait out the same ten
+minutes. A session that never showed a nudge logs nothing, not even a zero.
 
 ## Commands
 
@@ -120,8 +121,8 @@ no pane to stumble into otherwise.
   waiting on.** It reads nothing about you — only how long the current turn
   has been running.
 - **Nothing in a headless run.** A `claude -p` run, or an SDK session with
-  nothing attached to draw on, arms no timer, saves no nudge and writes no
-  session line, so it never uses up the cooldown your own sessions share.
+  nothing attached to draw on, arms no timer, saves no nudge and logs no
+  session-end line, so it never uses up the cooldown your own sessions share.
 - **No health claims.** Each nudge names an action, never a benefit. This is
   not medical advice and does not pretend to be.
 - **No network, no account, no telemetry.** Everything it keeps lives in its

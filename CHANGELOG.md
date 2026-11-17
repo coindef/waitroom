@@ -8,7 +8,7 @@
 - **A nudge that could not be saved is not shown.** If the cooldown can't be written, that turn shows nothing, so the same message does not come back inside ten minutes.
 - **A nudge always clears when its turn ends.** If saving it to the history fails at turn end, the nudge still goes away, and the next turn does not start with it on screen. That one history entry is not kept.
 - **A short turn is never counted as nudged.** The threshold timer now stops as soon as the turn ends, before other mods finish their own end-of-turn work. Before, a turn under the threshold could be recorded as nudged while wait-ship or the bet was still finishing, and that used up the ten-minute cooldown and added one to the session-end count.
-- **Nothing happens in a headless run.** A `claude -p` run, or an SDK session with nothing attached to draw on, no longer times its turns, saves a nudge or writes the session-end line. Before, a long scripted run used up the ten-minute cooldown your own sessions share. A desktop or mobile client that attaches later gets nudges from its next turn.
+- **Nothing happens in a headless run.** A `claude -p` run, or an SDK session with nothing attached to draw on, no longer times its turns, saves a nudge or logs the session-end line. Before, a long scripted run used up the ten-minute cooldown your own sessions share. A desktop or mobile client that attaches later gets nudges from its next turn.
 - **The session-end line counts this session only.** With two Claude Code windows open, each window's line now counts only the nudges it showed. Before, it counted every nudge any window had saved since the session began.
 
 ### wait-ship 0.1.8
@@ -406,7 +406,8 @@ a long turn. Off by default.
 - **Yields to a real survey** already asking something else, the same
   convention every mod in this marketplace follows.
 - **A session-end summary line** — `breathe: 3 prompts, 2 taken this
-  session` — said only once at least one nudge actually showed.
+  session` — logged only once at least one nudge actually showed. It goes to
+  the debug log, not the screen; start Claude Code with `--debug` to read it.
 
 ## 0.5.0 — playability, phase 2
 
