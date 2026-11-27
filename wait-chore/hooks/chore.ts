@@ -119,12 +119,12 @@ export const parseMergedBranches = (
   for (const raw of stdout.split('\n')) {
     const line = raw.trim()
     if (line === '') continue
-    const starred = line.startsWith('*')
-    const name = (starred ? line.slice(1) : line).trim()
+    const marked = line.startsWith('*') || line.startsWith('+')
+    const name = (marked ? line.slice(1) : line).trim()
     if (name === '' || name.startsWith('(')) continue
     if (name === defaultName) continue
     if (current !== undefined && current !== '' && name === current) continue
-    if (starred) continue
+    if (marked) continue
     names.push(name)
   }
 
@@ -165,7 +165,14 @@ export const statusFor = (todoText: string | undefined, branch: string | undefin
 
 export const todoLogLine = (hit: TodoHit, nowMs: number): string => `${hit.path}:${hit.line} · ${ageLine(hit.at, nowMs)}`
 
-export const branchLogLine = (name: string): string => `git branch -d ${name}`
+const SAFE_BRANCH = /^[A-Za-z0-9._/][A-Za-z0-9._/-]*$/
+
+/** Ordinary names stay bare. Unusual names, including one that starts with -, are quoted. */
+export const branchLogLine = (name: string): string => {
+  if (SAFE_BRANCH.test(name)) return `git branch -d ${name}`
+
+  return `git branch -d -- '${name.replace(/'/g, "'\\''")}'`
+}
 
 export const parseChoreCommand = (args: unknown): 'seen' | 'skip' | 'invalid' => {
   const word = typeof args === 'string' ? args.trim().toLowerCase() : ''

@@ -344,6 +344,34 @@ test('the current branch is not suggested even when --merged lists it', async ($
   expect(logged).toEqual([])
 })
 
+test('a branch checked out in another worktree is not suggested', async ($, on) => {
+  const { said, logged } = engineBottom(on, {
+    merged: '  leftover\n* develop\n+ also-gone\n',
+    current: 'develop',
+    grep: '',
+    grepExit: 1,
+  })
+  await start($)
+  await $.turn.start(begin('turn-1'))
+  expect(said.at(-1)).toBe('leftover')
+  await $.turn.complete(finish('turn-1'))
+  expect(logged).toEqual(['git branch -d leftover'])
+})
+
+test('an unusual branch name is suggested in the quoted form', async ($, on) => {
+  const { logged } = engineBottom(on, {
+    merged: "  -oops\n  foo'bar\n* develop\n",
+    current: 'develop',
+    grep: '',
+    grepExit: 1,
+  })
+  await start($)
+  await $.turn.start(begin('turn-1'))
+  await $.turn.complete(finish('turn-1'))
+  // Alphabetical: -oops before foo'bar. Both need quoting.
+  expect(logged).toEqual(["git branch -d -- '-oops'"])
+})
+
 test('the prompt goes through unchanged', async ($, on) => {
   engineBottom(on)
   await start($)

@@ -145,6 +145,11 @@ test('parseMergedBranches is empty when origin/HEAD is missing, because there is
   expect(parseMergedBranches('', 'develop', 'develop')).toEqual([])
 })
 
+test('parseMergedBranches skips a branch checked out in another worktree, same as the current branch', () => {
+  const stdout = '  leftover\n* develop\n+ other-tree\n  also-gone\n'
+  expect(parseMergedBranches(stdout, 'develop', 'develop')).toEqual(['also-gone', 'leftover'])
+})
+
 test('pickDeadBranch returns one name, stably by alphabet', () => {
   expect(pickDeadBranch(['zeta', 'alpha', 'mu'])).toBe('alpha')
   expect(pickDeadBranch([])).toBeUndefined()
@@ -169,6 +174,17 @@ test('todoLogLine is file, line and age, and branchLogLine is git branch -d', ()
   const item = hit('src/a.ts', 12, 'fix the flaky test', NOW - 12 * 86400000)
   expect(todoLogLine(item, NOW)).toBe('src/a.ts:12 · 12 days old')
   expect(branchLogLine('leftover')).toBe('git branch -d leftover')
+  expect(branchLogLine('feature/x')).toBe('git branch -d feature/x')
+  expect(branchLogLine('release-1.2')).toBe('git branch -d release-1.2')
+})
+
+test('branchLogLine quotes an unusual name, including one that starts with - or holds ; & $ \'', () => {
+  expect(branchLogLine('-oops')).toBe("git branch -d -- '-oops'")
+  expect(branchLogLine('feat;x')).toBe("git branch -d -- 'feat;x'")
+  expect(branchLogLine('a&b')).toBe("git branch -d -- 'a&b'")
+  expect(branchLogLine('a$b')).toBe("git branch -d -- 'a$b'")
+  expect(branchLogLine("foo'bar")).toBe("git branch -d -- 'foo'\\''bar'")
+  expect(branchLogLine("weird;x&y$z'w")).toBe("git branch -d -- 'weird;x&y$z'\\''w'")
 })
 
 test('parseChoreCommand accepts only seen and skip', () => {

@@ -43,9 +43,9 @@ The item is the file, the line, and the text. Editing the comment makes it a new
 
 The default branch is read from `origin/HEAD`. It is never assumed to be `master` or `main`. If `origin/HEAD` is not set, no dead-branch card is shown. You can set it with `git remote set-head origin -a`.
 
-Only local branches that `git branch --merged` reports as merged into that default branch are considered. The default branch itself is not suggested, and neither is the branch you are on. If more than one remains, the first in alphabetical order is shown.
+Only local branches that `git branch --merged` reports as merged into that default branch are considered. The default branch itself is not suggested, and neither is the branch you are on, or a branch checked out in another worktree. If more than one remains, the first in alphabetical order is shown.
 
-The suggested command is always `git branch -d <name>`, never `-D`. This mod does not run it.
+The suggested command for an ordinary name is `git branch -d leftover`, or `git branch -d feature/x`. A name that starts with `-`, or that isn't only letters, digits, `/`, `.`, `_`, and `-`, is quoted, as in `git branch -d -- '-oops'`. An apostrophe in the name is written as `'\''`. The command is never `-D`, and this mod does not run it.
 
 Squash-merged branches are not supported for now. A branch whose unique commits were squash-merged into the default branch is usually not listed by `--merged`, so it will not be suggested.
 
@@ -77,7 +77,7 @@ A subagent's turn does not count and does not clear the line.
 
 ```sh
 claude plugin validate ./wait-chore
-claude plugin test     ./wait-chore   # 43 tests
+claude plugin test     ./wait-chore   # 47 tests
 ```
 
 `hooks/chore.ts` is the selection, the seen and skip records, and the status and log lines, with no engine. `hooks/register.ts` is the hooks. `tests/flow.test.ts` is the engine run, with git answered by the test. `tests/real-git.mjs` uses real git in a temporary repository (`node wait-chore/tests/real-git.mjs`). `tests/load-shape.test.ts` checks that `$` is only passed to a top-level helper, which is the rule that kept a hooks module from loading on Claude Code 2.1.318.

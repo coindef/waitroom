@@ -35,7 +35,7 @@ claude plugin validate ./wait-focus
 claude plugin test     ./wait-focus           # 48 tests
 
 claude plugin validate ./wait-chore
-claude plugin test     ./wait-chore           # 43 tests
+claude plugin test     ./wait-chore           # 47 tests
 
 claude plugin validate ./waitroom
 claude plugin test     ./waitroom             # 6 tests

@@ -4,7 +4,7 @@
 
 ### wait-chore 0.1.0
 
-- **The oldest TODO in your repo shows while Claude works.** After the turn, the file, line and age are logged. A local branch already merged into the default branch is named during the wait, and `git branch -d` is suggested after, never run. `/chore seen` and `/chore skip` remember that item in plugin storage. Optional. Squash-merged branches are not supported for now.
+- **The oldest TODO in your repo shows while Claude works.** After the turn, the file, line and age are logged. A local branch already merged into the default branch is named during the wait, and `git branch -d` is suggested after, never run. Ordinary names are printed as `git branch -d leftover`. Unusual names are quoted, as in `git branch -d -- '-oops'`. A branch checked out in another worktree is not suggested. `/chore seen` and `/chore skip` remember that item in plugin storage. Optional. Squash-merged branches are not supported for now.
 
 ### bet-on-your-agent 0.6.8
 
