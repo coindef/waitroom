@@ -104,10 +104,11 @@ export const parseOriginHead = (stdout: string): string | undefined => {
   return ref
 }
 
+/** `refs/remotes/origin/release/1.0` -> `release/1.0`: drop only the remote prefix. */
 export const defaultBranchName = (originHead: string): string => {
-  const parts = originHead.split('/')
+  const match = /^refs\/remotes\/[^/\s]+\/(.+)$/.exec(originHead)
 
-  return parts[parts.length - 1] ?? originHead
+  return match?.[1] ?? originHead
 }
 
 export const parseMergedBranches = (

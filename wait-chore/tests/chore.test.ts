@@ -130,9 +130,11 @@ test('parseOriginHead reads a remote symbolic ref and nothing else', () => {
   expect(parseOriginHead('master\n')).toBeUndefined()
 })
 
-test('defaultBranchName is the last segment of origin/HEAD, not a guessed name', () => {
+test('defaultBranchName is origin/HEAD without refs/remotes/<remote>/, not a guessed name', () => {
   expect(defaultBranchName('refs/remotes/origin/develop')).toBe('develop')
   expect(defaultBranchName('refs/remotes/origin/main')).toBe('main')
+  expect(defaultBranchName('refs/remotes/origin/release/1.0')).toBe('release/1.0')
+  expect(defaultBranchName('refs/remotes/upstream/team/a/main')).toBe('team/a/main')
 })
 
 test('parseMergedBranches keeps only local names, not the default and not the current branch', () => {
@@ -213,4 +215,9 @@ test('mutatingGitArgv is true only for a git write or delete, not for grep or bl
   expect(mutatingGitArgv(['git', 'branch', '-D', 'leftover'])).toBe(true)
   expect(mutatingGitArgv(['git', 'checkout', 'leftover'])).toBe(true)
   expect(mutatingGitArgv(['git', 'commit', '-m', 'x'])).toBe(true)
+})
+
+test('a slashed default branch is never suggested, but its last segment as a branch still can be', () => {
+  const merged = '  release/1.0\n  1.0\n'
+  expect(parseMergedBranches(merged, defaultBranchName('refs/remotes/origin/release/1.0'), undefined)).toEqual(['1.0'])
 })

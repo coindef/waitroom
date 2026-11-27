@@ -77,7 +77,7 @@ A subagent's turn does not count and does not clear the line.
 
 ```sh
 claude plugin validate ./wait-chore
-claude plugin test     ./wait-chore   # 47 tests
+claude plugin test     ./wait-chore   # 48 tests
 ```
 
 `hooks/chore.ts` is the selection, the seen and skip records, and the status and log lines, with no engine. `hooks/register.ts` is the hooks. `tests/flow.test.ts` is the engine run, with git answered by the test. `tests/real-git.mjs` uses real git in a temporary repository (`node wait-chore/tests/real-git.mjs`). `tests/load-shape.test.ts` checks that `$` is only passed to a top-level helper, which is the rule that kept a hooks module from loading on Claude Code 2.1.318.
