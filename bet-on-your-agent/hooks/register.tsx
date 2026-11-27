@@ -2,6 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement } from 'claude-code'
 
 import { REBUILT_NOTICE, repairPluginStore } from './store-file'
+import { TURNS_STORE_KEY } from './store-keys'
 
 import type { BonusBucket, DailyChallengeRecord, DailyGuess, FileBucket, LastVerdict, OpenBet, TurnRecord } from '../types'
 import {
@@ -59,7 +60,6 @@ import {
 } from './bet'
 
 const PANE = 'bet-on-your-agent'
-const STORE_KEY = 'turns'
 const DAILY_CHALLENGE_STORE_KEY = 'dailyChallenges'
 /** The local day, `YYYY-MM-DD`, from which the extras surface on their own. */
 const EXTRAS_FROM_STORE_KEY = 'extrasFrom'
@@ -181,7 +181,7 @@ const loadTurns = async ($: EngineInterface): Promise<TurnRecord[] | undefined> 
   // Kept until `/bet` shows it. A later read of the rebuilt file must not
   // clear the notice before that command runs.
   if ((await repairPluginStore($)) === 'rebuilt') rebuiltNotice = true
-  const stored = await $.store.get(STORE_KEY).then(
+  const stored = await $.store.get(TURNS_STORE_KEY).then(
     value => ({ value }),
     () => undefined,
   )
@@ -247,7 +247,7 @@ const historyUnread = async ($: EngineInterface): Promise<boolean> => {
  * and pane would keep showing the history as it stood when last drawn.
  */
 const saveTurns = async ($: EngineInterface, records: readonly TurnRecord[]) => {
-  await $.store.set(STORE_KEY, records)
+  await $.store.set(TURNS_STORE_KEY, records)
   await rememberTurns($, records)
   await update($, revision, at => at + 1)
 }
@@ -292,7 +292,7 @@ const loadExtrasFrom = async ($: EngineInterface): Promise<string | undefined> =
  */
 const fixExtrasFrom = async ($: EngineInterface) => {
   if ((await loadExtrasFrom($)) !== undefined) return
-  const history = await $.store.get(STORE_KEY).then(
+  const history = await $.store.get(TURNS_STORE_KEY).then(
     value => ({ value }),
     () => undefined,
   )
