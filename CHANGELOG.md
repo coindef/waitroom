@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### waitroom 0.1.3
+
+- **`/waitroom doctor` checks that the installed rooms look healthy.** When they do, it prints one line, such as `all 12 rooms ok · claude 2.1.319`, with the real room count and the Claude Code version it detected. On Claude Code 2.1.323 and later, a room that is too old for the status-row yield prints one line: what is wrong, then a command you can copy to update that plugin. The command is not run for you. The check does not write the store or anything under the Claude configuration directory.
+
 ### wait-chore 0.1.0
 
 - **The oldest TODO in your repo shows while Claude works.** After the turn, the file, line and age are logged. A local branch already merged into the default branch is named during the wait, and `git branch -d` is suggested after, never run. Ordinary names are printed as `git branch -d leftover`. Unusual names are quoted, as in `git branch -d -- '-oops'`. A branch checked out in another worktree is not suggested. `/chore seen` and `/chore skip` remember that item in plugin storage. Optional. Squash-merged branches are not supported for now.
