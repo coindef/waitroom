@@ -34,6 +34,7 @@ claude plugin install wait-ping@waitroom
 claude plugin install wait-anchor@waitroom
 claude plugin install wait-cards@waitroom
 claude plugin install wait-focus@waitroom
+claude plugin install wait-chore@waitroom
 ```
 
 wait-scope warns when a turn edits outside the globs in `.claude/wait-scope` (or *Files in scope*). Only warns. [What it shows](../wait-scope).
@@ -47,6 +48,8 @@ wait-anchor keeps a note you set: the goal, and what to check when you come back
 wait-cards shows one flashcard from a deck you write in `~/.waitroom/cards.md`, and stays quiet until that file has cards. [One card per wait](../wait-cards).
 
 wait-focus watches one to three paths you name with `/wait-focus`. After a turn, the status line says whether each one was touched. It only reports. It needs a git repository to have anything to say, and Claude Code 2.1.318 or later. [Name it](../wait-focus).
+
+wait-chore shows the oldest TODO or FIXME in your repo while Claude works, then the file, line and age when the turn ends. A local branch already merged into the default branch is named during the wait, and `git branch -d` is suggested after, never run. It needs a git repository, and Claude Code 2.1.319 or later. [One old TODO](../wait-chore).
 
 Then start Claude Code (restart it, if it was already running). Each room runs
 on its defaults — no key, no service, nothing written to your repository.
@@ -108,6 +111,7 @@ disk straight away but only loaded by the next session:
 /plugin update wait-anchor@waitroom
 /plugin update wait-cards@waitroom
 /plugin update wait-focus@waitroom
+/plugin update wait-chore@waitroom
 ```
 
 `/plugin update waitroom@waitroom` picks up a room newly added to that install.
@@ -195,6 +199,7 @@ so your calibration starts fresh under the new name.
   - 2.1.281 to 2.1.290 accept the module but were not run live.
 - **wait-anchor needs Claude Code 2.1.318 or later.**
 - **wait-focus needs Claude Code 2.1.318 or later**, and a git repository. Outside one, the list can still be saved and a turn stays quiet.
+- **wait-chore needs Claude Code 2.1.319 or later**, and a git repository. Outside one, a turn stays quiet.
 - **A git repository** for wait-ship. It reads the diff, so outside one it has
   nothing to show. bet-on-your-agent, wait-breathe, and wait-ping work anywhere.
 - Plugins that hook Claude Code's own events are **early access**. See

@@ -37,9 +37,10 @@ claude plugin install wait-ping@waitroom
 claude plugin install wait-anchor@waitroom
 claude plugin install wait-cards@waitroom
 claude plugin install wait-focus@waitroom
+claude plugin install wait-chore@waitroom
 ```
 
-wait-ping is the legacy notifier. It sends a desktop notification when a long turn ends or a permission prompt is waiting. wait-anchor keeps a note you set, the goal and what to check when you come back, and stays quiet until you set one. wait-cards shows one flashcard from a deck you write in `~/.waitroom/cards.md`, and stays quiet until that file has cards. wait-focus watches one to three paths you name and, after a turn, says whether each one was touched.
+wait-ping is the legacy notifier. It sends a desktop notification when a long turn ends or a permission prompt is waiting. wait-anchor keeps a note you set, the goal and what to check when you come back, and stays quiet until you set one. wait-cards shows one flashcard from a deck you write in `~/.waitroom/cards.md`, and stays quiet until that file has cards. wait-focus watches one to three paths you name and, after a turn, says whether each one was touched. wait-chore shows the oldest TODO or FIXME in your repo while Claude works, and names a local branch already merged into the default branch.
 
 Restart Claude Code once you're done. If `waitroom@waitroom` fails to load with `Dependency "wait-review@waitroom" is not installed` after a marketplace update, run `claude plugin marketplace update waitroom`, then `claude plugin update waitroom@waitroom`, and restart. You do not uninstall or reinstall the bundle. `wait-review`, `wait-changed`, and `wait-shell` stay installed and disabled. While they are, `claude plugin prune` refuses to run, so uninstall those three first. See [docs/install.md](docs/install.md#if-waitroom-fails-after-a-marketplace-update).
 
@@ -81,6 +82,7 @@ You run long Claude Code turns. You alt-tab. Now you call the turn instead.
 | <img src="docs/brand/plugin-icons/anchor.png" width="52" alt="wait-anchor icon"><br>[wait-anchor](./wait-anchor) | **Leave a note for future you.**<br>You set the goal and what to check when you come back. The status line, only while a note is set. |
 | <img src="docs/brand/plugin-icons/cards.png" width="52" alt="wait-cards icon"><br>[wait-cards](./wait-cards) | **Learn something while it cooks.**<br>A question from your own deck while Claude works, the answer when the turn ends. Mark it with `/card got` or `/card miss`. The status line, only while you have cards. |
 | <img src="docs/brand/plugin-icons/focus.png" width="52" alt="wait-focus icon"><br>[wait-focus](./wait-focus) | **Did it touch auth?**<br>Name up to three files or folders. When the turn ends, the status line says which ones Claude touched. |
+| <img src="docs/brand/plugin-icons/chore.png" width="52" alt="wait-chore icon"><br>[wait-chore](./wait-chore) | **That TODO is still there.**<br>The oldest TODO or FIXME while Claude works; the file, line and age when the turn ends. A merged local branch is named too, and `git branch -d` is suggested, never run. |
 
 How the rooms share the screen is in [docs/design.md](docs/design.md).
 
