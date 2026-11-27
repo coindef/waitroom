@@ -47,15 +47,15 @@ lands.
 answered a moment before, so "Did it land?" has the row.*
 
 It lives just above the prompt, which is where you are already looking
-while you wait. **Type 1 to 5 into an empty composer and it answers** — no
+while you wait. **Type 1 to 5 into an empty composer to answer** — no
 pane to place, no focus to manage, nothing to click. (`0: Skip` is the one key
 that wants the row's focus first, `ctrl+x tab` or a click: on 2.1.311 a bare
 `0` stays in the composer.)
 
-The row appears about 0.1–0.3 seconds after you press Enter (measured on
-2.1.319 and 2.1.325). A digit typed before then goes into the composer
-(`❯ 3`) and does not answer. Wait for the row, and delete a digit that went in
-too soon.
+The row appears about a quarter second after you press Enter, but digits
+only answer from about 0.8 seconds after Enter (measured on 2.1.319 and
+2.1.325). A digit typed sooner goes into the composer (`❯ 3`) and does
+not answer; delete it and press it again.
 
 <img src="../docs/bet-forecast.svg" width="600" alt="The row above the prompt while a turn runs: a bet tag, Will &quot;In src/retry.ts, rewrite retry to take an options…&quot; land first try?, and 1: 50%  2: 65%  3: 80%  4: 90%  5: 95%  0: Skip">
 
