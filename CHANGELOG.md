@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### wait-chore 0.1.0
+
+- **The oldest TODO in your repo shows while Claude works.** After the turn, the file, line and age are logged. A local branch already merged into the default branch is named during the wait, and `git branch -d` is suggested after, never run. `/chore seen` and `/chore skip` remember that item in plugin storage. Optional. Squash-merged branches are not supported for now.
+
 ### bet-on-your-agent 0.6.8
 
 - **No change to how the bet works.** The bet history now has one read-only reader for features still to come. It shows the same numbers as `/bet`, reads a missing or unreadable history as empty, and never changes what is saved.

@@ -28,6 +28,13 @@ a main-loop turn, its status line says whether the turn touched each one.
 With no paths named, it sets no line. It does not open a pane, and it does
 not cover the bet's question or its keys.
 
+wait-chore does not take that row either. While a main-loop turn runs, its
+status line is the oldest TODO or FIXME in the repo, and the name of a local
+branch already merged into the default branch. When the turn ends, the line
+clears and the file, line and age are one log line; a suggested
+`git branch -d` is another, and is never run. With no TODO and no merged
+branch, it sets no line.
+
 ## The idea
 
 The cost of waiting on a coding agent is not boredom, it is context collapse. A
