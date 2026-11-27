@@ -4,7 +4,7 @@
 
 ### bet-on-your-agent 0.6.8
 
-- **The bet history has a shared, read-only reader.** `hooks/record.ts` gives each turn's call, whether it landed or needed fixing, and when it ended, with the same Brier score, rank, calibration table and "Calibrating" count `/bet` shows. A missing, empty or unreadable history reads as no turns. It never throws, and never writes to or repairs the store. Features still to come read the history from here. The bet itself works as before.
+- **No change to how the bet works.** The bet history now has one read-only reader for features still to come. It shows the same numbers as `/bet`, reads a missing or unreadable history as empty, and never changes what is saved.
 
 ### wait-breathe 0.2.3
 

@@ -14,9 +14,7 @@ import type { EngineInterface } from 'claude-code'
 import type { Rank, TurnRecord } from '../types'
 import type { CalibrationRow } from './bet'
 import { isCalibrating, report } from './bet'
-
-/** Where register.tsx keeps the turn history. */
-const STORE_KEY = 'turns'
+import { TURNS_STORE_KEY } from './store-keys'
 
 /** How a turn came out, by the person's own verdict: `1: Landed` or `2: Needed fixing`. */
 export type BetOutcome = 'landed' | 'needed-fixing'
@@ -38,7 +36,10 @@ export type BetCall = {
  * what `/bet` says.
  */
 export type BetRecord = {
-  /** The turn history as stored, oldest first, for whatever a call leaves out. */
+  /**
+   * The turn history as stored, oldest first, for whatever a call leaves out.
+   * A copy, without any entry that is not a turn.
+   */
   turns: readonly TurnRecord[]
   /** One per turn, bet on or not, in the same order as `turns`. */
   calls: readonly BetCall[]
@@ -76,16 +77,30 @@ const callOf = (one: TurnRecord): BetCall => {
 }
 
 /**
+ * Whether an entry is a turn at all: an object, and not a list. The hooks
+ * module only ever saves whole turns. `null`, a string or a number among
+ * them is not one, and `null` is what `report()` throws on. A turn missing a
+ * field still reads, as it does in `report()`.
+ */
+const isTurn = (one: unknown): one is TurnRecord => typeof one === 'object' && one !== null && !Array.isArray(one)
+
+/**
  * The record from turns already loaded. No turns is the empty record, the
  * numbers `report([])` gives: nothing scored, no Brier, `Unranked`, no rows,
  * still calibrating.
+ *
+ * An entry that is not a turn is left out on its own, so one bad entry never
+ * empties the record. `turns` is a copy, never the list passed in: sorting it
+ * or pushing onto it leaves that list, and the store's, as they were.
  */
 export const betRecordOf = (records: readonly TurnRecord[]): BetRecord => {
-  const found = report(records)
+  // The filter is the copy too: `readonly` holds only in the types.
+  const turns = records.filter(isTurn)
+  const found = report(turns)
 
   return {
-    turns: records,
-    calls: records.map(callOf),
+    turns,
+    calls: turns.map(callOf),
     scored: found.scored,
     recorded: found.recorded,
     ...(found.brier === undefined ? {} : { brier: found.brier }),
@@ -101,13 +116,14 @@ type StoreReader = { readonly store: Pick<EngineInterface['store'], 'get'> }
 /**
  * The record as the store holds it now: no key yet is no turns.
  *
- * A read that throws, a stored value that is not a list, or a list that
- * cannot be scored is the empty record too, never a throw. Whatever is
- * stored stays exactly as it was.
+ * An entry in the list that is not a turn costs only itself. A read that
+ * throws, a stored value that is not a list, or a list that still cannot be
+ * scored is the empty record, never a throw. Whatever is stored stays
+ * exactly as it was.
  */
 export const readBetRecord = async ($: StoreReader): Promise<BetRecord> => {
   try {
-    const stored = await $.store.get(STORE_KEY)
+    const stored = await $.store.get(TURNS_STORE_KEY)
 
     return betRecordOf(Array.isArray(stored) ? (stored as TurnRecord[]) : [])
   } catch {

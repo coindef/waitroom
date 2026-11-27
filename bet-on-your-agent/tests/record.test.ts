@@ -213,9 +213,68 @@ test('a stored history that is not a list reads as empty, and is left where it i
   }
 })
 
-test('a list holding something other than turns reads as empty rather than throwing', async () => {
-  const { $, writes } = storeOf({ turns: [turn({ saidConfidence: 0.8, landed: true }), null] })
+test('a null in the list is dropped on its own, and the turns around it still read', async () => {
+  const first = turn({ turnId: 'first', saidConfidence: 0.8, landed: true })
+  const owed = turn({ turnId: 'owed', saidConfidence: 0.6 })
+  const last = turn({ turnId: 'last', saidConfidence: 0.7, landed: false })
+  const good = [first, owed, last]
+  // report() throws on the null: one bad entry used to cost the whole history.
+  const stored = [first, null, owed, last]
+  const { $, writes } = storeOf({ turns: stored })
 
-  expect(await readBetRecord($)).toStrictEqual(betRecordOf([]))
+  const view = await readBetRecord($)
+
+  expect(view).toStrictEqual(betRecordOf(good))
+  expect(view.calls).toStrictEqual([
+    { turnId: 'first', at: first.at, saidConfidence: 0.8, outcome: 'landed' },
+    { turnId: 'owed', at: owed.at, saidConfidence: 0.6 },
+    { turnId: 'last', at: last.at, saidConfidence: 0.7, outcome: 'needed-fixing' },
+  ])
+  expect(view.recorded).toBe(3)
+  expect(view.scored).toBe(2)
+  expectReportNumbers(view, good)
+  // Nothing repaired, nothing written over: the null stays where it was.
+  expect(stored).toStrictEqual([first, null, owed, last])
   expect(writes).toEqual([])
+
+  // Turns already loaded read the same, for a caller with a list of its own.
+  expect(betRecordOf(stored as TurnRecord[])).toStrictEqual(view)
+})
+
+test('anything else in the list that is not a turn object is dropped the same way', async () => {
+  const first = turn({ saidConfidence: 0.9, landed: true })
+  const last = turn({ saidConfidence: 0.6, landed: false })
+
+  // `undefined` throws as `null` does; the others would each read as a turn with nothing on it.
+  for (const stray of [undefined, 'not a turn', 42, true, []]) {
+    const { $, writes } = storeOf({ turns: [first, stray, last] })
+
+    expect(await readBetRecord($)).toStrictEqual(betRecordOf([first, last]))
+    expect(writes).toEqual([])
+  }
+})
+
+test('the turns it hands back are a copy: pushing onto them or sorting them changes nothing stored', async () => {
+  const records = [turn({ saidConfidence: 0.8, landed: true }), turn({ saidConfidence: 0.6, landed: false })]
+  const stored = [...records]
+  const { $, writes } = storeOf({ turns: stored })
+
+  // `readonly` is only the type's word for it: at run time a caller can still push and sort.
+  const handedBack = (await readBetRecord($)).turns as TurnRecord[]
+  handedBack.push(turn({ saidConfidence: 0.9, landed: true }))
+  handedBack.sort((a, b) => b.at - a.at)
+
+  expect(stored).toStrictEqual(records)
+  // The next read is the store's own history, not the one a caller changed.
+  const again = await readBetRecord($)
+  expect(again.turns).toStrictEqual(records)
+  expect(again).toStrictEqual(betRecordOf(records))
+  expect(writes).toEqual([])
+
+  // From turns already loaded, the caller's own list is left alone the same way.
+  const mine = [...records]
+  const fromLoaded = betRecordOf(mine).turns as TurnRecord[]
+  fromLoaded.push(turn())
+  fromLoaded.sort((a, b) => b.at - a.at)
+  expect(mine).toStrictEqual(records)
 })

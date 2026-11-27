@@ -258,7 +258,7 @@ you fix or delete that file by hand. Installed from GitHub
 
 ```
 claude plugin validate .     # manifest and hooks, as the engine reads them
-claude plugin test .         # 188 tests
+claude plugin test .         # 190 tests
 ```
 
 The scoring lives in `hooks/bet.ts` with no engine dependency and is tested
