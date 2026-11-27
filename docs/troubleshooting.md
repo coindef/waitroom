@@ -63,3 +63,12 @@ rollout switch. The end of the line says which state it is in:
 
 Either way the switch is not about these mods in particular: it holds back
 every installed plugin that carries a hooks module, whoever made it.
+
+## /waitroom doctor
+
+`/waitroom doctor` is a local, read-only check that the installed rooms
+look healthy. When they do, it prints one line such as
+`all 12 rooms ok · claude 2.1.319`. On Claude Code 2.1.323 and later, a
+room that still stacks the status row prints one line with a command you
+can copy to update it. The command is not run for you. See the
+[waitroom README](../waitroom/README.md).
